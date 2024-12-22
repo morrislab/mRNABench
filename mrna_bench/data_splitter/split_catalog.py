@@ -3,6 +3,6 @@ from mrna_bench.data_splitter.sklearn_split import SklearnSplitter
 
 
 SPLIT_CATALOG = {
-    "default_split": SklearnSplitter,
-    "homology_split": HomologySplitter
+    "default": SklearnSplitter,
+    "homology": HomologySplitter
 }

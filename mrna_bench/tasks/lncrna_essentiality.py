@@ -13,6 +13,7 @@ class LNCRNAEssentiality(BenchmarkDataset):
             dataset_name="lncRNA Essentiality",
             short_name="lncrna-ess",
             description="TODO",
+            species=["human"],
             raw_data_src_path=LNCRNA_URL
         )
 

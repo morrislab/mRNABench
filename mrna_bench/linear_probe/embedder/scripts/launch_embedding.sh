@@ -1,11 +1,11 @@
 #!/bin/bash
 
-max_index=10
+max_index=0
 script_name="embed.sh"
-seq_overlap=511
+seq_overlap=0
 dataset_name="go-mf"
-model_name="AIDO.RNA"
-model_version="aido_rna_1b600m_cds"
+model_name="Orthrus"
+model_version="orthrus_large_6_track"
 
 # Loop through indices from 1 to max_index
 for i in $(seq 0 $max_index)

@@ -38,6 +38,6 @@ class DataSplitter(ABC):
         test_split_size = split_ratios[2] / tv_split_size
 
         train_df, tv_df = self.split_df(df, tv_split_size, random_seed)
-        val_df, test_df = self.split_df(df, test_split_size, random_seed)
+        val_df, test_df = self.split_df(tv_df, test_split_size, random_seed)
 
         return train_df, val_df, test_df

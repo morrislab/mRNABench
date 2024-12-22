@@ -18,3 +18,29 @@ def ohe_to_str(
     sequences = ["".join(nucs[i] for i in row) for row in indices]
     sequences = [seq.rstrip("N") for seq in sequences]
     return sequences
+
+
+def str_to_ohe(
+    sequence: str,
+    nucs: list[str] = ["A", "C", "T", "G"]
+) -> np.ndarray:
+    """Convert sequence to OHE.
+
+    Args:
+        sequence: Sequence to convert.
+        nucs: Nucleotides corresponding to their one hot position.
+
+    Returns:
+        One hot encoded sequence.
+    """
+    mapping = {nuc: i for i, nuc in enumerate(nucs)}
+    num_classes = len(mapping)
+
+    # Convert sequence to indices
+    indices = np.array([mapping[base] for base in sequence])
+
+    # Create one-hot encoding
+    one_hot = np.zeros((len(sequence), num_classes), dtype=int)
+    one_hot[np.arange(len(sequence)), indices] = 1
+
+    return one_hot

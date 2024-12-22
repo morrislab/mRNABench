@@ -29,7 +29,9 @@ class EmbeddingModel(ABC):
         self,
         sequence: str,
         cds: np.ndarray,
-        splice: np.ndarray
+        splice: np.ndarray,
+        overlap: int,
+        agg_fn: Callable | None = None,
     ) -> torch.Tensor:
         pass
 

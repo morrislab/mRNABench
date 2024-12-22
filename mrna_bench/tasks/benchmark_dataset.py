@@ -22,11 +22,11 @@ class BenchmarkDataset(ABC):
         dataset_name: str,
         short_name: str,
         description: str,
+        species: list[str],
         data_storage_path: str | None = None,
         raw_data_src_url: str | None = None,
         force_redownload: bool = False,
         raw_data_src_path: str | None = None,
-
     ):
         """Initialize BenchmarkDataset.
 
@@ -35,6 +35,7 @@ class BenchmarkDataset(ABC):
             short_name: Shortened name of benchmark dataset. Should have no
                 spaces, use '-' instead.
             description: Description of the dataset.
+            species: Species dataset is collected from.
             data_storage_path: Path where downloaded data is stored.
             raw_data_src_url: URL where raw data can be downloaded.
             force_redownload: Forces raw data redownload.
@@ -52,6 +53,8 @@ class BenchmarkDataset(ABC):
         self.raw_data_src_path = raw_data_src_path
 
         self.description = description
+        self.species = species
+
         self.force_redownload = force_redownload
         self.data_storage_path = data_storage_path
         self.first_download = False
@@ -65,7 +68,7 @@ class BenchmarkDataset(ABC):
                 self.download_raw_data()
 
             self.data_df = self.process_raw_data()
-            self.save_processed_df()
+            self.save_processed_df(self.data_df)
 
     def init_folders(self):
         """Initialize folders for storing raw data.
@@ -115,11 +118,11 @@ class BenchmarkDataset(ABC):
         self.raw_data_path = raw_data_path
 
     def save_processed_df(self, df: pd.DataFrame):
-        df.to_pickle(self.raw_data_dir + "/data_df.pkl")
+        df.to_pickle(self.dataset_path + "/data_df.pkl")
 
     def load_processed_df(self) -> bool:
         try:
-            self.data_df = pd.read_pickle(self.raw_data_dir + "/data_df.pkl")
+            self.data_df = pd.read_pickle(self.dataset_path + "/data_df.pkl")
         except FileNotFoundError:
             print("Processed data frame not found.")
             return False

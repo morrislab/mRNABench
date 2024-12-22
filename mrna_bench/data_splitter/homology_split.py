@@ -1,4 +1,5 @@
 from pathlib import Path
+import shutil
 import zipfile
 
 import pandas as pd
@@ -95,7 +96,8 @@ class HomologySplitter(DataSplitter):
         super().__init__()
 
         if homology_map_path is None:
-            self.homology_map_path = "./homology_maps"
+            current_file_path = Path(__file__).parent.resolve()
+            self.homology_map_path = str(current_file_path / "homology_maps")
             if not Path(self.homology_map_path).exists():
                 Path(self.homology_map_path).mkdir(exist_ok=True)
                 force_redownload = True
@@ -103,10 +105,16 @@ class HomologySplitter(DataSplitter):
             self.homology_map_path = homology_map_path
 
         if force_redownload:
-            out = download_file(self.HOMO_URL, self.homology_map_path, True)
+            out = download_file(self.HOMO_URL, self.homology_map_path, True)[0]
 
             with zipfile.ZipFile(out, "r") as zip_ref:
-                zip_ref.extractall(self.homology_map_path)
+                for file in zip_ref.namelist():
+                    if not file.endswith("/"):
+                        source = zip_ref.open(file)
+                        path = Path(self.homology_map_path) / Path(file).name
+
+                        with open(path, "wb") as target:
+                            shutil.copyfileobj(source, target)
 
             Path(out).unlink()
 

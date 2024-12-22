@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 import torch
-from modelgenerator.tasks import Embed
 
 from mrna_bench.models.embedding_model import EmbeddingModel
 
@@ -17,10 +16,10 @@ class AIDORNA(EmbeddingModel):
     def __init__(self, model_version, device):
         super().__init__(model_version, device)
 
+        from modelgenerator.tasks import Embed
         model = Embed.from_config({"model.backbone": model_version}).eval()
 
         self.model = model.to(device)
-        self.model_version = model_version
 
     def get_model_short_name(self):
         return self.SHORT_NAME_DICT[self.model_version]

@@ -1,5 +1,3 @@
-import os
-
 import numpy as np
 import pandas as pd
 from scipy.stats import pearsonr
@@ -16,36 +14,6 @@ from mrna_bench.tasks.benchmark_dataset import BenchmarkDataset
 from mrna_bench.tasks.dataset_catalog import DATASET_CATALOG
 
 from mrna_bench.linear_probe.embedder.embedder_utils import get_output_filename
-
-
-def auprc_mc(true_label: list[int], pred_probs: np.ndarray) -> float:
-    """Calculate macro-average multiclass AUPRC.
-    
-    This method can also be used for multilabel classification, as long as
-    the array of true values are structured as: [0, 1, 0, .., 1, 0], etc.
-
-    Args:
-        true_label: One hot encoded class labels.
-        pred_probs: Predicted class probabilities.
-    
-    Returns:
-        Macro-average multiclass AUPRC.
-    """
-    average_precision_per_class = []
-
-    for i in range(pred_probs.shape[1]):
-        class_lab = (true_label == i).astype(int)
-        class_prob = pred_probs[:, i]
-
-        class_auprc = average_precision_score(class_lab, class_prob)
-
-        average_precision_per_class.append(class_auprc)
-    return np.mean(average_precision_per_class)
-
-
-def flatten(arr: list[np.ndarray], n_class: int) -> np.ndarray:
-    """Flatten multilabel probability output. Takes probability of positive."""
-    return np.hstack([arr[c][:, 1] for c in range(n_class)])
 
 
 class LinearProbe:
@@ -78,11 +46,19 @@ class LinearProbe:
             self.seq_overlap,
         ) + ".npz"
 
-        self.embeddings = np.load(self.embeddings_fn)
+        self.embeddings = np.load(self.embeddings_fn)["embedding"]
         self.data_df = self.dataset.data_df
         self.merge_embeddings()
 
-        self.splitter: DataSplitter = SPLIT_CATALOG[split_type]()
+        self.splitter: DataSplitter
+
+        if split_type == "homology":
+            self.splitter = SPLIT_CATALOG[split_type](
+                self.dataset.species
+            )
+        else:
+            self.splitter = SPLIT_CATALOG["default"]
+
         self.split_ratios = split_ratios
         self.target_col = target_col
         self.eval_all_splits = eval_all_splits
@@ -92,7 +68,7 @@ class LinearProbe:
 
         Assumes that the dataframe rows and embedding order is identical.
         """
-        self.data_df["embeddings"] = self.embeddings
+        self.data_df["embeddings"] = list(self.embeddings)
 
     def get_df_splits(self, random_seed: int) -> dict[str, pd.DataFrame]:
         train_df, val_df, test_df = self.splitter.get_all_splits_df(
@@ -101,14 +77,21 @@ class LinearProbe:
             random_seed
         )
 
-        return {
-            "train_X": np.array(train_df["embeddings"]),
-            "val_X": np.array(val_df["embeddings"]),
-            "test_X": np.array(test_df["embeddings"]),
+        splits = {
+            "train_X": np.vstack(train_df["embeddings"]),
+            "val_X": np.vstack(val_df["embeddings"]),
+            "test_X": np.vstack(test_df["embeddings"]),
             "train_y": train_df[self.target_col],
             "val_y": val_df[self.target_col],
             "test_y": test_df[self.target_col],
         }
+
+        if self.target_task == "multilabel":
+            splits["train_y"] = np.vstack(splits["train_y"])
+            splits["val_y"] = np.vstack(splits["val_y"])
+            splits["test_y"] = np.vstack(splits["test_y"])
+
+        return splits
 
     def run_linear_probe(self, random_seed: int = 2541, full: bool = False):
         splits = self.get_df_splits(random_seed)
@@ -149,10 +132,10 @@ class LinearProbe:
 
         metrics = {}
 
-        for split_name, split_pred in outputs.items():
-            split_y = splits[split_name + "_y"]
-            metrics["{}_mse"] = np.mean((split_pred - split_y) ** 2)
-            metrics["{}_r"] = pearsonr(split_pred, split_y).statistic
+        for s_name, split_pred in outputs.items():
+            split_y = splits[s_name + "_y"]
+            metrics[s_name + "_mse"] = np.mean((split_pred - split_y) ** 2)
+            metrics[s_name + "_r"] = pearsonr(split_pred, split_y).statistic
 
         return metrics
 
@@ -161,17 +144,20 @@ class LinearProbe:
         model: ClassifierMixin,
         splits: dict[str, np.ndarray]
     ) -> dict[str, float]:
-        outputs = {"val": model.predict_proba(splits["val_X"])}
+        outputs = {"val": model.predict_proba(splits["val_X"])[:, 1]}
         if self.eval_all_splits:
-            outputs["train"] = model.predict(splits["train_X"])
-            outputs["test"] = model.predict(splits["test_X"])
+            outputs["train"] = model.predict_proba(splits["train_X"])[:, 1]
+            outputs["test"] = model.predict_proba(splits["test_X"])[:, 1]
 
         metrics = {}
 
-        for split_name, split_pred in outputs.items():
-            split_y = splits[split_name + "_y"]
-            metrics["{}_auroc"] = roc_auc_score(split_y, split_pred)
-            metrics["{}_auprc"] = average_precision_score(split_y, split_pred)
+        for s_name, split_pred in outputs.items():
+            split_y = splits[s_name + "_y"]
+            metrics[s_name + "_auroc"] = roc_auc_score(split_y, split_pred)
+            metrics[s_name + "_auprc"] = average_precision_score(
+                split_y,
+                split_pred
+            )
 
         return metrics
 
@@ -180,7 +166,6 @@ class LinearProbe:
         model: MultiOutputClassifier,
         splits: dict[str, np.ndarray]
     ) -> dict[str, float]:
-
         outputs = {"val": model.predict_proba(splits["val_X"])}
         if self.eval_all_splits:
             outputs["train"] = model.predict_proba(splits["train_X"])
@@ -188,9 +173,44 @@ class LinearProbe:
 
         metrics = {}
 
-        for split_name, split_pred in outputs.items():
-            split_y = splits[split_name + "_y"]
-            #metrics["{}_auroc"] = roc_auc_score(split_y, split_pred)
-            metrics["{}_auprc"] = auprc_mc(split_y, split_pred)
+        for s_name, split_pred in outputs.items():
+            split_pred = np.swapaxes(np.array(split_pred), 0, 1)[:, :, 1]
+
+            split_y = splits[s_name + "_y"]
+            metrics[s_name + "_auroc"] = roc_auc_score(
+                split_y,
+                split_pred,
+                average="micro"
+            )
+            metrics[s_name + "_auprc"] = average_precision_score(
+                split_y,
+                split_pred,
+                average="micro"
+            )
 
         return metrics
+
+    def linear_probe_multirun(
+        self,
+        random_seeds: list[int],
+        full_eval: bool
+    ) -> dict[int, dict[str, float]]:
+        metrics = {}
+        for random_seed in random_seeds:
+            metric = self.run_linear_probe(random_seed, full_eval)
+            metrics[random_seed] = metric
+        return metrics
+
+    def print_multirun_results(self, metrics: dict[int, dict[str, float]]):
+        metric_vals = {}
+
+        for metric_dict in metrics.values():
+            for metric_name, metric_val in metric_dict.items():
+                metric_vals.setdefault(metric_name, []).append(metric_val)
+
+        metric_mean = {k: np.mean(v) for k, v in metric_vals.items()}
+        metric_std = {k: np.std(v) for k, v in metric_vals.items()}
+
+        for k in metric_vals.keys():
+            se = 1.96 * (metric_std[k] / (np.sqrt(len(metrics))))
+            print("{}: {} ± {}".format(k, metric_mean[k], se))

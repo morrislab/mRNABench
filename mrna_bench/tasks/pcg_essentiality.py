@@ -13,6 +13,7 @@ class PCGEssentiality(BenchmarkDataset):
             dataset_name="PCG Essentiality",
             short_name="pcg-ess",
             description="TODO",
+            species=["human"],
             raw_data_src_path=LNCRNA_URL
         )
 

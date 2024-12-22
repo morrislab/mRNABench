@@ -62,9 +62,14 @@ class DatasetEmbedder:
         dataset_chunk = self.get_dataset_chunk()
 
         dataset_embeddings = []
-        for i, row in dataset_chunk.iterrows():
+        for _, row in dataset_chunk.iterrows():
             if self.model.is_sixtrack:
-                self.model.embed_sequence_sixtrack()
+                embedding = self.model.embed_sequence_sixtrack(
+                    row["sequence"],
+                    row["cds"],
+                    row["splice"],
+                    self.s_chunk_overlap,
+                )
             else:
                 embedding = self.model.embed_sequence(
                     row["sequence"],

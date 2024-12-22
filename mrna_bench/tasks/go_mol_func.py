@@ -15,6 +15,7 @@ class GOMolecularFunction(BenchmarkDataset):
             dataset_name="GO Molecular Function",
             short_name="go-mf",
             description="TODO",
+            species=["human"],
             raw_data_src_url=GOMF_URL,
         )
 
