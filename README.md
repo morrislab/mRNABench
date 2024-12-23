@@ -51,6 +51,6 @@ The current datasets catalogued are:
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
 |---|---|---|---|---|
 | GO Molecular Function | `go-mf` | Classification of the molecular function of a transcript's  product as defined by the GO Resource. | `multilabel` |  |
-| Mean Ribosome Load (Sugimoto) | `mrl_sugimoto` | Mean Ribosome Load per transcript isoform as measure in Sugimoto et al. 2022. | `regression` |  |
+| Mean Ribosome Load (Sugimoto) | `mrl-sugimoto` | Mean Ribosome Load per transcript isoform as measure in Sugimoto et al. 2022. | `regression` |  |
 | RNA Half-life (Human) | `rnahl-human` | RNA half-life of human transcripts collected by Agarwal et al. 2022. | `regression` |  |
 | RNA Half-life (Mouse) | `rnahl-mouse` | RNA half-life of mouse transcripts collected by Agarwal et al. 2022. | `regression` |  |
