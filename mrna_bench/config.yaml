@@ -1,2 +1,1 @@
-data_storage_path: /data1/morrisq/ian/rna_benchmarks
-embedding_path: /data1/morrisq/ian/lp_embeddings
+data_path: /data1/morrisq/ian/rna_benchmarks

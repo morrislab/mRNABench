@@ -4,9 +4,8 @@ import shutil
 import os
 
 import pandas as pd
-import yaml
 
-from mrna_bench.utils import download_file
+from mrna_bench.utils import download_file, get_data_path
 
 
 class BenchmarkDataset(ABC):
@@ -15,15 +14,16 @@ class BenchmarkDataset(ABC):
     Sequences are internally represented as strings. This is less storage
     efficient, but easier to handle as most parts of the pipeline like to
     use raw text.
+
+    TODO: The inheritance pattern here is kind of wonky. Probably best to
+    make it so each task has a BenchmarkDataset, but inherits from something
+    else.
     """
 
     def __init__(
         self,
         dataset_name: str,
-        short_name: str,
-        description: str,
         species: list[str],
-        data_storage_path: str | None = None,
         raw_data_src_url: str | None = None,
         force_redownload: bool = False,
         raw_data_src_path: str | None = None,
@@ -31,12 +31,9 @@ class BenchmarkDataset(ABC):
         """Initialize BenchmarkDataset.
 
         Args:
-            dataset_name: Name of the benchmark dataset.
-            short_name: Shortened name of benchmark dataset. Should have no
+            dataset_name: Name of the benchmark dataset. Should have no
                 spaces, use '-' instead.
-            description: Description of the dataset.
             species: Species dataset is collected from.
-            data_storage_path: Path where downloaded data is stored.
             raw_data_src_url: URL where raw data can be downloaded.
             force_redownload: Forces raw data redownload.
             raw_data_src_path: Path where raw data is located.
@@ -47,21 +44,19 @@ class BenchmarkDataset(ABC):
             raise ValueError("Only one data source must be defined.")
 
         self.dataset_name = dataset_name
-        self.short_name = short_name
 
         self.raw_data_src_url = raw_data_src_url
         self.raw_data_src_path = raw_data_src_path
 
-        self.description = description
         self.species = species
 
         self.force_redownload = force_redownload
-        self.data_storage_path = data_storage_path
         self.first_download = False
 
+        self.data_storage_path = get_data_path()
         self.init_folders()
 
-        if not self.load_processed_df():
+        if force_redownload or not self.load_processed_df():
             if self.raw_data_src_url is None:
                 self.collect_raw_data()
             else:
@@ -75,26 +70,23 @@ class BenchmarkDataset(ABC):
 
         Creates a structure with:
 
-        - data_storage_path
+        - data_path
         |    - dataset_name
         |    |    - raw_data
+        |    |    - embeddings
         """
-        if self.data_storage_path is None:
-            curr_dir = os.path.dirname(os.path.abspath(__file__))
-            with open(curr_dir + "/../config.yaml") as stream:
-                storage_path = yaml.safe_load(stream)["data_storage_path"]
-            self.data_storage_path = storage_path
-
-        self.fs_dataset_name = "_".join(self.dataset_name.lower().split(" "))
-
-        ds_path = Path(self.data_storage_path) / self.fs_dataset_name
+        ds_path = Path(self.data_storage_path) / self.dataset_name
         ds_path.mkdir(exist_ok=True)
 
         raw_data_dir = Path(ds_path) / "raw_data"
         raw_data_dir.mkdir(exist_ok=True)
 
+        emb_dir = Path(ds_path) / "embeddings"
+        emb_dir.mkdir(exist_ok=True)
+
         self.dataset_path = str(ds_path)
         self.raw_data_dir = str(raw_data_dir)
+        self.embedding_dir = str(emb_dir)
 
     def download_raw_data(self):
         """Download the raw data from given web source."""

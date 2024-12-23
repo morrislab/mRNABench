@@ -1,8 +1,8 @@
 import numpy as np
 import pandas as pd
 
-from mrna_bench.tasks.benchmark_dataset import BenchmarkDataset
-from mrna_bench.tasks.dataset_utils import ohe_to_str
+from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.dataset_utils import ohe_to_str
 
 
 GOMF_URL = "https://zenodo.org/records/13910050/files/go_dna_dataset.npz"
@@ -10,13 +10,12 @@ GOMF_URL = "https://zenodo.org/records/13910050/files/go_dna_dataset.npz"
 
 class GOMolecularFunction(BenchmarkDataset):
     """GO Molecular Function Dataset."""
-    def __init__(self):
+    def __init__(self, force_redownload: bool = False):
         super().__init__(
-            dataset_name="GO Molecular Function",
-            short_name="go-mf",
-            description="TODO",
+            dataset_name="go-mf",
             species=["human"],
             raw_data_src_url=GOMF_URL,
+            force_redownload=force_redownload
         )
 
     def reformat_raw_data(self):

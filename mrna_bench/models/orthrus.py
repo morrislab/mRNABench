@@ -6,14 +6,10 @@ import torch
 
 from mrna_bench.models.embedding_model import EmbeddingModel
 
-from mrna_bench.tasks.dataset_utils import str_to_ohe
+from mrna_bench.datasets.dataset_utils import str_to_ohe
 
 
 class Orthrus(EmbeddingModel):
-    SHORT_NAME_DICT = {
-        "orthrus_large_6_track": "orthrus-large-6",
-    }
-
     CKPT_DICT = {
         "orthrus_large_6_track": "epoch=22-step=20000.ckpt"
     }
@@ -22,6 +18,7 @@ class Orthrus(EmbeddingModel):
         super().__init__(model_version, device)
 
         from mrna_bench.models.orthrus_src import load_model
+
         model_repository = "/home/shir2/mRNABench/model_weights/"
         model = load_model(
             f"{model_repository}{model_version}",
@@ -35,8 +32,8 @@ class Orthrus(EmbeddingModel):
 
         self.model = model.to(device)
 
-    def get_model_short_name(self):
-        return self.SHORT_NAME_DICT[self.model_version]
+    def get_model_short_name(model_version: str) -> str:
+        return model_version.replace("_track", "").replace("_", "-")
 
     def embed_sequence(
         self,

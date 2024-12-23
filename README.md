@@ -11,6 +11,9 @@ import mrna_bench as mb
 mb.update_data_path(path_to_dir_to_store_data)
 ```
 
+Unfortunately, there's no good way to setup each individual model at the moment. The best approach seems to be to create a conda environment, install the dependencies for the models used for embedding, and then call the above code to install mrna_bench into
+each conda environment.
+
 ## Usage
 Datasets can be retrieved using:
 
@@ -26,22 +29,31 @@ device = torch.device("cuda")
 dataset = mb.load_dataset("go-mf")
 model = mb.load_model("Orthrus", "orthrus_large_6_track", device)
 
-# TODO
-embedder = DatasetEmbedder()
-prober = LinearProbe()
+embedder = DatasetEmbedder(model, dataset)
+embeddings = embedder.embed_dataset()
 
-metrics = prober.run()
-prober.print_metrics(metrics)
+prober = LinearProbe(
+    model_name="Orthrus",
+    model_version="orthrus_large_6_track",
+    dataset_name="go-mf",
+    seq_chunk_overlap=0,
+    target_col="target",
+    target_task="multilabel",
+    split_type="homology"
+)
+
+metrics = prober.run_linear_probe()
+print(metrics)
 ```
-
+Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
 
 ## Model Catalog
 The current models catalogued are:
 
-| Model Name |  Model Versions         | Description   | Conda Env | Citation |
-| ---------- |  ---------------------- | --------  | ------------- | -------- |
-| `Orthrus` | `orthrus_large_6_track`<br> `orthrus_base_4_track` | Mamba-based RNA FM trained using contrastive learning. | `orthrus` | [paper](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
-| `AIDO.RNA` | `aido_rna_650m` <br> `aido_rna_1b600m` <br> `aido_rna_1b600m_cds` | Encoder Transformer-based RNA FM trained using MLM on 42M ncRNA sequences. Version that is domain adapted to CDS is available. | `aido` | [paper](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) |
+| Model Name |  Model Versions         | Description   | Citation |
+| ---------- |  ---------------------- | --------  |  -------- |
+| `Orthrus` | `orthrus_large_6_track`<br> `orthrus_base_4_track` | Mamba-based RNA FM trained using contrastive learning. | [paper](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
+| `AIDO.RNA` | `aido_rna_650m` <br> `aido_rna_1b600m` <br> `aido_rna_1b600m_cds` | Encoder Transformer-based RNA FM trained using MLM on 42M ncRNA sequences. Version that is domain adapted to CDS is available. | [paper](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) |
 
 
 ## Dataset Catalog

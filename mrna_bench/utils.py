@@ -1,5 +1,6 @@
 import os
 import requests
+import yaml
 
 
 def download_file(
@@ -31,3 +32,52 @@ def download_file(
             f.write(chunk)
 
     return (output_path, True)
+
+
+class DataManager:
+    """Helper class that keeps track of directory where data is stored."""
+
+    def __init__(self):
+        self.curr_dir = os.path.dirname(os.path.abspath(__file__))
+        self.config_path = self.curr_dir + "/config.yaml"
+
+    def update_data_path(self, data_dir_path: str):
+        data_dir_path = os.path.normpath(data_dir_path)
+
+        config = {"data_path": data_dir_path}
+
+        if not os.path.exists(self.config_path):
+            with open(self.config_path, "w") as f:
+                yaml.dump(config, f, default_flow_style=False)
+        else:
+            with open(self.config_path, "r") as f:
+                data = yaml.safe_load(f)
+
+            data["data_path"] = data_dir_path
+
+            with open(self.config_path, "w") as f:
+                yaml.dmp(data, f, default_flow_style=False)
+
+    def get_data_path(self) -> str:
+        """Load data_dir_path from config.
+
+        Throws exception if config is not yet initialized.
+        """
+        if os.path.exists(self.config_path):
+            with open(self.config_path) as stream:
+                return yaml.safe_load(stream)["data_path"]
+        else:
+            raise RuntimeError((
+                "Data storage path is not set."
+                "mrna_bench.update_data_path(path_to_store_data)"
+            ))
+
+
+def update_data_path(path_to_data: str):
+    dm = DataManager()
+    dm.update_data_path(path_to_data)
+
+
+def get_data_path() -> str:
+    dm = DataManager()
+    return dm.get_data_path()

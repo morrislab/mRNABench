@@ -1,4 +1,3 @@
-import argparse
 from pathlib import Path
 
 import pandas as pd
@@ -6,22 +5,9 @@ import numpy as np
 
 import torch
 
-from mrna_bench.models.embedding_model import EmbeddingModel
-from mrna_bench.models.model_catalog import MODEL_CATALOG
-from mrna_bench.tasks.benchmark_dataset import BenchmarkDataset
-from mrna_bench.tasks.dataset_catalog import DATASET_CATALOG
-from mrna_bench.linear_probe.embedder.embedder_utils import get_output_filename
-
-parser = argparse.ArgumentParser()
-parser.add_argument("--model_class", type=str)
-parser.add_argument("--model_version", type=str)
-parser.add_argument("--dataset", type=str)
-parser.add_argument("--embedding_dir", type=str)
-parser.add_argument("--s_chunk_overlap", type=int, default=0)
-parser.add_argument("--d_chunk_ind", type=int, default=0)
-parser.add_argument("--d_chunk_max_ind", type=int, default=0)
-parser.add_argument("--force_recompute", action="store_true")
-args = parser.parse_args()
+from mrna_bench.models import EmbeddingModel
+from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.embedder.embedder_utils import get_output_filename
 
 
 class DatasetEmbedder:
@@ -29,7 +15,6 @@ class DatasetEmbedder:
         self,
         model: EmbeddingModel,
         dataset: BenchmarkDataset,
-        embedding_output_dir: str,
         s_chunk_overlap: int = 0,
         d_chunk_ind: int = 0,
         d_chunk_max_ind: int = 0,
@@ -37,7 +22,6 @@ class DatasetEmbedder:
         self.model = model
         self.dataset = dataset
         self.data_df = dataset.data_df
-        self.embedding_output_dir = embedding_output_dir
         self.s_chunk_overlap = s_chunk_overlap
 
         self.d_chunk_ind = d_chunk_ind
@@ -82,9 +66,9 @@ class DatasetEmbedder:
 
     def persist_embeddings(self, embeddings: torch.Tensor):
         out_path = get_output_filename(
-            self.embedding_output_dir,
-            self.model.get_model_short_name(),
-            self.dataset.short_name,
+            self.dataset.embedding_dir,
+            self.model.short_name,
+            self.dataset.dataset_name,
             self.s_chunk_overlap,
             self.d_chunk_ind,
             self.d_chunk_max_ind
@@ -99,16 +83,16 @@ class DatasetEmbedder:
         processed_chunk_inds = []
 
         # Check that all chunks are processed
-        for file in Path(self.embedding_output_dir).iterdir():
+        for file in Path(self.dataset.embedding_dir).iterdir():
             if not file.is_file():
                 continue
 
             file_name = file.stem
             file_name_arr = file_name.split("_")
 
-            if file_name_arr[0] != self.dataset.short_name:
+            if file_name_arr[0] != self.dataset.dataset_name:
                 continue
-            if file_name_arr[1] != self.model.get_model_short_name():
+            if file_name_arr[1] != self.model.short_name:
                 continue
             if int(file_name_arr[2][1:]) != self.s_chunk_overlap:
                 continue
@@ -138,9 +122,9 @@ class DatasetEmbedder:
         all_embeddings = np.concatenate(embeddings, axis=0)
 
         out_fn = get_output_filename(
-            self.embedding_output_dir,
-            self.model.get_model_short_name(),
-            self.dataset.short_name,
+            self.dataset.embedding_dir,
+            self.model.short_name,
+            self.dataset.dataset_name,
             self.s_chunk_overlap
         )
 
@@ -148,40 +132,3 @@ class DatasetEmbedder:
 
         for file in processed_files_paths:
             Path(file).unlink()
-
-
-if __name__ == "__main__":
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    model_class = MODEL_CATALOG[args.model_class]
-    model: EmbeddingModel = model_class(args.model_version, device)
-
-    dataset_class = DATASET_CATALOG[args.dataset]
-    dataset: BenchmarkDataset = dataset_class()
-
-    out_fn = get_output_filename(
-        args.embedding_dir,
-        model.get_model_short_name(),
-        dataset.short_name,
-        args.s_chunk_overlap,
-        d_chunk_ind=args.d_chunk_ind,
-        d_chunk_max_ind=args.d_chunk_max_ind
-    )
-
-    embedder = DatasetEmbedder(
-        model=model,
-        dataset=dataset,
-        embedding_output_dir=args.embedding_dir,
-        s_chunk_overlap=args.s_chunk_overlap,
-        d_chunk_ind=args.d_chunk_ind,
-        d_chunk_max_ind=args.d_chunk_max_ind
-    )
-
-    if Path(out_fn + ".npz").exists() and not args.force_recompute:
-        print("Embedding already computed.")
-    else:
-        embeddings = embedder.embed_dataset()
-        embedder.persist_embeddings(embeddings)
-
-    if args.d_chunk_max_ind != 0:
-        embedder.merge_embeddings()

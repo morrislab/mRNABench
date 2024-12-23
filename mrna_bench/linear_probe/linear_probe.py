@@ -7,48 +7,61 @@ from sklearn.linear_model import RidgeCV, LinearRegression, LogisticRegression
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.metrics import average_precision_score, roc_auc_score
 
+from mrna_bench import load_dataset
 from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
-
-from mrna_bench.tasks.benchmark_dataset import BenchmarkDataset
-from mrna_bench.tasks.dataset_catalog import DATASET_CATALOG
-
-from mrna_bench.linear_probe.embedder.embedder_utils import get_output_filename
+from mrna_bench.embedder import get_output_filename
+from mrna_bench.models import MODEL_CATALOG
 
 
 class LinearProbe:
+    """Linear Probe Evaluation Module.
+
+    TODO: Add multiple ways to initialize:
+        - Using just string to save on time
+        - Using dataset and model objects
+    """
     def __init__(
         self,
-        embedding_dir: str,
+        model_name: str,
+        model_version: str,
         dataset_name: str,
-        model_short_name: str,
         seq_chunk_overlap: int,
         target_col: str,
         target_task: str,
-        split_type: str,
-        split_ratios: tuple[float, float, float],
-        eval_all_splits: bool
+        split_type: str = "homology",
+        split_ratios: tuple[float, float, float] = [0.7, 0.15, 0.15],
+        eval_all_splits: bool = False
     ):
         self.target_task = target_task
 
-        valid_tasks = ["reg_lin", "reg_ridge", "classif", "multilabel"]
+        valid_tasks = [
+            "regression",
+            "reg_lin",
+            "reg_ridge",
+            "classification",
+            "multilabel"
+        ]
+
         assert self.target_task in valid_tasks
 
-        self.embedding_dir = embedding_dir
-        self.dataset: BenchmarkDataset = DATASET_CATALOG[dataset_name]()
-        self.model_name = model_short_name
+        self.dataset = load_dataset(dataset_name)
+
+        model_class = MODEL_CATALOG[model_name]
+        self.model_short_name = model_class.get_model_short_name(model_version)
+
         self.seq_overlap = seq_chunk_overlap
 
         self.embeddings_fn = get_output_filename(
-            self.embedding_dir,
-            self.model_name,
-            self.dataset.short_name,
+            self.dataset.embedding_dir,
+            self.model_short_name,
+            self.dataset.dataset_name,
             self.seq_overlap,
         ) + ".npz"
 
         self.embeddings = np.load(self.embeddings_fn)["embedding"]
         self.data_df = self.dataset.data_df
-        self.merge_embeddings()
+        self.concat_embeddings()
 
         self.splitter: DataSplitter
 
@@ -63,7 +76,7 @@ class LinearProbe:
         self.target_col = target_col
         self.eval_all_splits = eval_all_splits
 
-    def merge_embeddings(self):
+    def concat_embeddings(self):
         """Merge embeddings with benchmark dataframe.
 
         Assumes that the dataframe rows and embedding order is identical.
@@ -93,13 +106,14 @@ class LinearProbe:
 
         return splits
 
-    def run_linear_probe(self, random_seed: int = 2541, full: bool = False):
+    def run_linear_probe(self, random_seed: int = 2541):
         splits = self.get_df_splits(random_seed)
 
         models = {
+            "regression": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
             "reg_lin": LinearRegression(),
             "reg_ridge": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-            "classif": LogisticRegression(max_iter=5000),
+            "classification": LogisticRegression(max_iter=5000),
             "multilabel": MultiOutputClassifier(
                 LogisticRegression(max_iter=5000)
             )
@@ -109,10 +123,10 @@ class LinearProbe:
         np.random.seed(random_seed)
         model.fit(splits["train_X"], splits["train_y"])
 
-        if self.target_task in ["reg_lin", "reg_ridge"]:
+        if self.target_task in ["regression", "reg_lin", "reg_ridge"]:
             metrics = self.eval_regression(model, splits)
-        elif self.target_task == "classif":
-            metrics = self.eval_classif(model, splits)
+        elif self.target_task == "classification":
+            metrics = self.eval_classification(model, splits)
         elif self.target_task == "multilabel":
             metrics = self.eval_multilabel(model, splits)
         else:
@@ -139,7 +153,7 @@ class LinearProbe:
 
         return metrics
 
-    def eval_classif(
+    def eval_classification(
         self,
         model: ClassifierMixin,
         splits: dict[str, np.ndarray]
@@ -193,11 +207,10 @@ class LinearProbe:
     def linear_probe_multirun(
         self,
         random_seeds: list[int],
-        full_eval: bool
     ) -> dict[int, dict[str, float]]:
         metrics = {}
         for random_seed in random_seeds:
-            metric = self.run_linear_probe(random_seed, full_eval)
+            metric = self.run_linear_probe(random_seed)
             metrics[random_seed] = metric
         return metrics
 

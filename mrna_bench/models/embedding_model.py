@@ -8,6 +8,7 @@ import torch
 class EmbeddingModel(ABC):
     def __init__(self, model_version: str, device: torch.device):
         self.model_version = model_version
+        self.short_name = self.__class__.get_model_short_name(model_version)
         self.device = device
 
         self.is_sixtrack = False
@@ -35,8 +36,9 @@ class EmbeddingModel(ABC):
     ) -> torch.Tensor:
         pass
 
+    @staticmethod
     @abstractmethod
-    def get_model_short_name(self):
+    def get_model_short_name(model_version: str) -> str:
         pass
 
     def chunk_sequence(

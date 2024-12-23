@@ -7,7 +7,7 @@ long_description = (this_directory / "README.md").read_text()
 
 setup(
     name="mrna_bench",
-    version="0.0.0",
+    version="0.0.1",
     author="IanShi1996",
     description="Benchmarking suite for mRNA.",
     long_description_content_type="text/markdown",

@@ -7,22 +7,17 @@ from mrna_bench.models.embedding_model import EmbeddingModel
 
 class AIDORNA(EmbeddingModel):
     MAX_LENGTH = 1024
-    SHORT_NAME_DICT = {
-        "aido_rna_1b600m_cds": "aido-1b600m-cds",
-        "aido_rna_1b600m": "aido-1b600m",
-        "aido_rna_650m": "aido-650m",
-    }
 
     def __init__(self, model_version, device):
         super().__init__(model_version, device)
-
         from modelgenerator.tasks import Embed
+
         model = Embed.from_config({"model.backbone": model_version}).eval()
 
         self.model = model.to(device)
 
-    def get_model_short_name(self):
-        return self.SHORT_NAME_DICT[self.model_version]
+    def get_model_short_name(model_version: str) -> str:
+        return model_version.replace("rna_", "").replace("_", "-")
 
     def embed_sequence(
         self,

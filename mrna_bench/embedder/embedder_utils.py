@@ -1,6 +1,6 @@
 def get_output_filename(
     output_dir: str,
-    model_name: str,
+    model_version: str,
     dataset_name: str,
     sequence_chunk_overlap: int,
     d_chunk_ind: int = 0,
@@ -12,7 +12,7 @@ def get_output_filename(
 
     Args:
         output_dir: Directory to store embeddings.
-        model_name: Name of embedding model.
+        model_version: Name of embedding model version.
         dataset_name: Dataset which is embedded.
         sequence_chunk_overlap: Number of tokens overlapped in sequence chunks.
         d_chunk_ind: Index of current dataset chunk.
@@ -21,7 +21,7 @@ def get_output_filename(
     out_path = "{}/{}_{}_o{}".format(
         output_dir,
         dataset_name,
-        model_name,
+        model_version,
         sequence_chunk_overlap
     )
 

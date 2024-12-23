@@ -5,6 +5,7 @@ import zipfile
 import pandas as pd
 import numpy as np
 
+from mrna_bench import get_data_path
 from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.utils import download_file
 
@@ -96,8 +97,8 @@ class HomologySplitter(DataSplitter):
         super().__init__()
 
         if homology_map_path is None:
-            current_file_path = Path(__file__).parent.resolve()
-            self.homology_map_path = str(current_file_path / "homology_maps")
+            data_storage_path = get_data_path()
+            self.homology_map_path = data_storage_path + "/homology_maps"
             if not Path(self.homology_map_path).exists():
                 Path(self.homology_map_path).mkdir(exist_ok=True)
                 force_redownload = True
