@@ -15,15 +15,16 @@ mb.update_data_path(path_to_dir_to_store_data)
 Datasets can be retrieved using:
 
 ```python
+import torch
+
 import mrna_bench as mb
 from mb.embedder import DatasetEmbedder
 from mb.linear_probe import LinearProbe
 
-# NOTE: This needs to be called once after setup
-mb.update_data_path(path_to_dir_to_store_data)
+device = torch.device("cuda")
 
 dataset = mb.load_dataset("go-mf")
-model = md.load_model("Orthrus", "orthrus_large_6_track")
+model = mb.load_model("Orthrus", "orthrus_large_6_track", device)
 
 # TODO
 embedder = DatasetEmbedder()
@@ -37,20 +38,19 @@ prober.print_metrics(metrics)
 ## Model Catalog
 The current models catalogued are:
 
-| Model Name | Model Version          | Conda Env | Description   | Citation |
-| ---------- | ---------------------- | --------  | ------------- | -------- |
-| `AIDO.RNA` | `aido_rna_650m`        | aido      | Small AIDO.RNA model trained on ncRNA | |
-|            | `aido_rna_1b600m`      |           | Large AIDO.RNA model trained on ncRNA | |
-|            | `aido_rna_1b600m_cds`  |           | Large AIDO.RNA model with domain adaptation on mRNA with CDS.| |
-| `Orthrus`  | `orthrus_large_6_track`| `orthrus` | Large Orthrus model | |
-|            | `orthrus_base_4_track` |           | Base Orthrus model  | |
+| Model Name |  Model Versions         | Description   | Conda Env | Citation |
+| ---------- |  ---------------------- | --------  | ------------- | -------- |
+| `Orthrus` | `orthrus_large_6_track`<br> `orthrus_base_4_track` | Mamba-based RNA FM trained using contrastive learning. | `orthrus` | [paper](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
+| `AIDO.RNA` | `aido_rna_650m` <br> `aido_rna_1b600m` <br> `aido_rna_1b600m_cds` | Encoder Transformer-based RNA FM trained using MLM on 42M ncRNA sequences. Version that is domain adapted to CDS is available. | `aido` | [paper](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) |
 
 
 ## Dataset Catalog
 The current datasets catalogued are:
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
 |---|---|---|---|---|
-| GO Molecular Function | `go-mf` | Classification of the molecular function of a transcript's  product as defined by the GO Resource. | `multilabel` |  |
-| Mean Ribosome Load (Sugimoto) | `mrl-sugimoto` | Mean Ribosome Load per transcript isoform as measure in Sugimoto et al. 2022. | `regression` |  |
-| RNA Half-life (Human) | `rnahl-human` | RNA half-life of human transcripts collected by Agarwal et al. 2022. | `regression` |  |
-| RNA Half-life (Mouse) | `rnahl-mouse` | RNA half-life of mouse transcripts collected by Agarwal et al. 2022. | `regression` |  |
+| GO Molecular Function | `go-mf` | Classification of the molecular function of a transcript's  product as defined by the GO Resource. | `multilabel` | [website](https://geneontology.org/) |
+| Mean Ribosome Load (Sugimoto) | `mrl-sugimoto` | Mean Ribosome Load per transcript isoform as measured in Sugimoto et al. 2022. | `regression` | [paper](https://www.nature.com/articles/s41594-022-00819-2) |
+| RNA Half-life (Human) | `rnahl-human` | RNA half-life of human transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
+| RNA Half-life (Mouse) | `rnahl-mouse` | RNA half-life of mouse transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
+| Protein Subcellular Localization | `prot-loc` | Subcellular localization of transcript protein product defined in Protein Atlas. | `multilabel` | [website](https://www.proteinatlas.org/) |
+| Protein Coding Gene Essentiality | `pcg-ess` | Essentiality of PCGs as measured by CRISPR knockdown. Log-fold expression and binary essentiality available on several cell lines. | `regression` `classification`| [paper](https://www.cell.com/cell/fulltext/S0092-8674(24)01203-0)|
