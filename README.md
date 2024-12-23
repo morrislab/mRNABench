@@ -1,5 +1,7 @@
 # mRNABench
-This repository contains a workflow to benchmark the embedding quality of genomic foundation models on (m)RNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models 
+This repository contains a workflow to benchmark the embedding quality of genomic foundation models on (m)RNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
+
+**Jump to:** [Model Catalog](#model-catalog) [Dataset Catalog](#dataset-catalog)
 
 ## Setup
 The mRNA bench can be installed by cloning this repository and running:
@@ -55,14 +57,19 @@ The current models catalogued are:
 | `Orthrus` | `orthrus_large_6_track`<br> `orthrus_base_4_track` | Mamba-based RNA FM trained using contrastive learning. | [paper](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
 | `AIDO.RNA` | `aido_rna_650m` <br> `aido_rna_1b600m` <br> `aido_rna_1b600m_cds` | Encoder Transformer-based RNA FM trained using MLM on 42M ncRNA sequences. Version that is domain adapted to CDS is available. | [paper](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) |
 
+### Adding a new model
+All models should inherit from the template `EmbeddingModel`. Each model file should lazily load dependencies within its `__init__` methods so each model can be used individually without install all other models. Models must implement `get_model_short_name(model_version)` which fetches the internal name for the model. This must be unique for every model version and must not contain underscores. Models should implement either `embed_sequence` or `embed_sequence_sixtrack` (see code for method signature). New models should be added to `MODEL_CATALOG`.
 
 ## Dataset Catalog
 The current datasets catalogued are:
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
 |---|---|---|---|---|
-| GO Molecular Function | `go-mf` | Classification of the molecular function of a transcript's  product as defined by the GO Resource. | `multilabel` | [website](https://geneontology.org/) |
-| Mean Ribosome Load (Sugimoto) | `mrl-sugimoto` | Mean Ribosome Load per transcript isoform as measured in Sugimoto et al. 2022. | `regression` | [paper](https://www.nature.com/articles/s41594-022-00819-2) |
-| RNA Half-life (Human) | `rnahl-human` | RNA half-life of human transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
-| RNA Half-life (Mouse) | `rnahl-mouse` | RNA half-life of mouse transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
-| Protein Subcellular Localization | `prot-loc` | Subcellular localization of transcript protein product defined in Protein Atlas. | `multilabel` | [website](https://www.proteinatlas.org/) |
-| Protein Coding Gene Essentiality | `pcg-ess` | Essentiality of PCGs as measured by CRISPR knockdown. Log-fold expression and binary essentiality available on several cell lines. | `regression` `classification`| [paper](https://www.cell.com/cell/fulltext/S0092-8674(24)01203-0)|
+| GO Molecular Function | <code>go-mf</code> | Classification of the molecular function of a transcript's  product as defined by the GO Resource. | `multilabel` | [website](https://geneontology.org/) |
+| Mean Ribosome Load (Sugimoto) | <code>mrl&#8209;sugimoto</code> | Mean Ribosome Load per transcript isoform as measured in Sugimoto et al. 2022. | `regression` | [paper](https://www.nature.com/articles/s41594-022-00819-2) |
+| RNA Half-life (Human) | <code>rnahl&#8209;human</code> | RNA half-life of human transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
+| RNA Half-life (Mouse) | <code>rnahl&#8209;mouse</code> | RNA half-life of mouse transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
+| Protein Subcellular Localization | <code>prot&#8209;loc</code> | Subcellular localization of transcript protein product defined in Protein Atlas. | `multilabel` | [website](https://www.proteinatlas.org/) |
+| Protein Coding Gene Essentiality | <code>pcg&#8209;ess</code> | Essentiality of PCGs as measured by CRISPR knockdown. Log-fold expression and binary essentiality available on several cell lines. | `regression` `classification`| [paper](https://www.cell.com/cell/fulltext/S0092-8674(24)01203-0)|
+
+### Adding a new dataset
+New datasets should inherit from `BenchmarkDataset`. Dataset names cannot contain underscores. Each new dataset should download raw data and process it into a dataframe by overriding `process_raw_data`. This dataframe should store transcript as rows, using string encoding in the `sequence` column. If homology splitting is required, a column `gene` containing gene names is required. Six track embedding also requires columns `cds` and `splice`. The target column can have any name, as it is specified at time of probing. New datasets should be added to DATASET_CATALOG.
