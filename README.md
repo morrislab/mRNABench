@@ -5,11 +5,13 @@ This repository contains a workflow to benchmark the embedding quality of genomi
 
 ## Setup
 The mRNA bench can be installed by cloning this repository and running:
+
 ```pip install -e .```
 
 After installation, please call the following to set where data associated with the benchmarks will be stored.
 ```python
 import mrna_bench as mb
+
 mb.update_data_path(path_to_dir_to_store_data)
 ```
 
@@ -23,8 +25,8 @@ Datasets can be retrieved using:
 import torch
 
 import mrna_bench as mb
-from mb.embedder import DatasetEmbedder
-from mb.linear_probe import LinearProbe
+from mrna_bench.embedder import DatasetEmbedder
+from mrna_bench.linear_probe import LinearProbe
 
 device = torch.device("cuda")
 
@@ -33,19 +35,21 @@ model = mb.load_model("Orthrus", "orthrus_large_6_track", device)
 
 embedder = DatasetEmbedder(model, dataset)
 embeddings = embedder.embed_dataset()
+embeddings = embeddings.detach().cpu().numpy()
 
-prober = LinearProbe(
-    model_name="Orthrus",
-    model_version="orthrus_large_6_track",
-    dataset_name="go-mf",
-    seq_chunk_overlap=0,
-    target_col="target",
-    target_task="multilabel",
-    split_type="homology"
-)
+# TODO: Implement LinearProbe version that accepts embeddings.
+# prober = LinearProbe(
+#     model_name="Orthrus",
+#     model_version="orthrus_large_6_track",
+#     dataset_name="go-mf",
+#     seq_chunk_overlap=0,
+#     target_col="target",
+#     target_task="multilabel",
+#     split_type="homology"
+# )
 
-metrics = prober.run_linear_probe()
-print(metrics)
+# metrics = prober.run_linear_probe()
+# print(metrics)
 ```
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
 
@@ -72,4 +76,4 @@ The current datasets catalogued are:
 | Protein Coding Gene Essentiality | <code>pcg&#8209;ess</code> | Essentiality of PCGs as measured by CRISPR knockdown. Log-fold expression and binary essentiality available on several cell lines. | `regression` `classification`| [paper](https://www.cell.com/cell/fulltext/S0092-8674(24)01203-0)|
 
 ### Adding a new dataset
-New datasets should inherit from `BenchmarkDataset`. Dataset names cannot contain underscores. Each new dataset should download raw data and process it into a dataframe by overriding `process_raw_data`. This dataframe should store transcript as rows, using string encoding in the `sequence` column. If homology splitting is required, a column `gene` containing gene names is required. Six track embedding also requires columns `cds` and `splice`. The target column can have any name, as it is specified at time of probing. New datasets should be added to DATASET_CATALOG.
+New datasets should inherit from `BenchmarkDataset`. Dataset names cannot contain underscores. Each new dataset should download raw data and process it into a dataframe by overriding `process_raw_data`. This dataframe should store transcript as rows, using string encoding in the `sequence` column. If homology splitting is required, a column `gene` containing gene names is required. Six track embedding also requires columns `cds` and `splice`. The target column can have any name, as it is specified at time of probing. New datasets should be added to `DATASET_CATALOG`.
