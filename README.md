@@ -37,19 +37,16 @@ embedder = DatasetEmbedder(model, dataset)
 embeddings = embedder.embed_dataset()
 embeddings = embeddings.detach().cpu().numpy()
 
-# TODO: Implement LinearProbe version that accepts embeddings.
-# prober = LinearProbe(
-#     model_name="Orthrus",
-#     model_version="orthrus_large_6_track",
-#     dataset_name="go-mf",
-#     seq_chunk_overlap=0,
-#     target_col="target",
-#     target_task="multilabel",
-#     split_type="homology"
-# )
+prober = LinearProbe(
+    dataset=dataset,
+    embeddings=embeddings,
+    task="multilabel",
+    target_col="target",
+    split_type="homology"
+)
 
-# metrics = prober.run_linear_probe()
-# print(metrics)
+metrics = prober.run_linear_probe()
+print(metrics)
 ```
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
 

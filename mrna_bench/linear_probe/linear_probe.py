@@ -10,58 +10,123 @@ from sklearn.metrics import average_precision_score, roc_auc_score
 from mrna_bench import load_dataset
 from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
+from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
 from mrna_bench.embedder import get_output_filename
-from mrna_bench.models import MODEL_CATALOG
 
 
 class LinearProbe:
-    """Linear Probe Evaluation Module.
+    """Linear Probe Evaluation Module."""
 
-    TODO: Add multiple ways to initialize:
-        - Using just string to save on time
-        - Using dataset and model objects
-    """
-    def __init__(
-        self,
+    linear_models = {
+        "regression": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+        "reg_lin": LinearRegression(),
+        "reg_ridge": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+        "classification": LogisticRegression(max_iter=5000),
+        "multilabel": MultiOutputClassifier(
+            LogisticRegression(max_iter=5000)
+        )
+    }
+
+    @staticmethod
+    def load_persisted_embeddings(
+        embedding_dir: str,
+        model_short_name: str,
+        dataset_name: str,
+        seq_overlap: int = 0
+    ) -> np.ndarray:
+        """Load embeddings from persisted location."""
+        embeddings_fn = get_output_filename(
+            embedding_dir,
+            model_short_name,
+            dataset_name,
+            seq_overlap,
+        ) + ".npz"
+        embeddings = np.load(embeddings_fn)["embedding"]
+        return embeddings
+
+    @classmethod
+    def init_from_instance(
+        cls,
+        model: EmbeddingModel,
+        dataset: BenchmarkDataset,
+        task: str,
+        target_col: str,
+        seq_chunk_overlap: int = 0,
+        split_type: str = "homology",
+        split_ratios: tuple[float, float, float] = [0.7, 0.15, 0.15],
+        eval_all_splits: bool = False
+    ) -> "LinearProbe":
+        """Initialize LinearProbe from instantiated dataset and model."""
+        embeddings = cls.load_persisted_embeddings(
+            dataset.embedding_dir,
+            model.short_name,
+            dataset.dataset_name,
+            seq_chunk_overlap
+        )
+        return cls(
+            dataset,
+            embeddings,
+            task,
+            target_col,
+            split_type,
+            split_ratios,
+            eval_all_splits
+        )
+
+    @classmethod
+    def init_from_name(
+        cls,
         model_name: str,
         model_version: str,
         dataset_name: str,
-        seq_chunk_overlap: int,
+        task: str,
         target_col: str,
-        target_task: str,
+        seq_chunk_overlap: int = 0,
+        split_type: str = "homology",
+        split_ratios: tuple[float, float, float] = [0.7, 0.15, 0.15],
+        eval_all_splits: bool = False
+    ) -> "LinearProbe":
+        """Initialize LinearProbe using model and dataset names."""
+        model_class = MODEL_CATALOG[model_name]
+        model_short_name = model_class.get_model_short_name(model_version)
+
+        dataset = load_dataset(dataset_name)
+
+        embeddings = cls.load_persisted_embeddings(
+            dataset.embedding_dir,
+            model_short_name,
+            dataset_name,
+            seq_chunk_overlap
+        )
+
+        return cls(
+            dataset,
+            embeddings,
+            task,
+            target_col,
+            split_type,
+            split_ratios,
+            eval_all_splits
+        )
+
+    def __init__(
+        self,
+        dataset: BenchmarkDataset,
+        embeddings: np.ndarray,
+        task: str,
+        target_col: str,
         split_type: str = "homology",
         split_ratios: tuple[float, float, float] = [0.7, 0.15, 0.15],
         eval_all_splits: bool = False
     ):
-        self.target_task = target_task
+        self.dataset = dataset
+        self.data_df = dataset.data_df
 
-        valid_tasks = [
-            "regression",
-            "reg_lin",
-            "reg_ridge",
-            "classification",
-            "multilabel"
-        ]
+        self.task = task
+        self.target_col = target_col
 
-        assert self.target_task in valid_tasks
-
-        self.dataset = load_dataset(dataset_name)
-
-        model_class = MODEL_CATALOG[model_name]
-        self.model_short_name = model_class.get_model_short_name(model_version)
-
-        self.seq_overlap = seq_chunk_overlap
-
-        self.embeddings_fn = get_output_filename(
-            self.dataset.embedding_dir,
-            self.model_short_name,
-            self.dataset.dataset_name,
-            self.seq_overlap,
-        ) + ".npz"
-
-        self.embeddings = np.load(self.embeddings_fn)["embedding"]
-        self.data_df = self.dataset.data_df
-        self.concat_embeddings()
+        self.concat_embeddings(embeddings)
 
         self.splitter: DataSplitter
 
@@ -73,17 +138,22 @@ class LinearProbe:
             self.splitter = SPLIT_CATALOG["default"]
 
         self.split_ratios = split_ratios
-        self.target_col = target_col
         self.eval_all_splits = eval_all_splits
 
-    def concat_embeddings(self):
+    def concat_embeddings(self, embeddings: np.ndarray):
         """Merge embeddings with benchmark dataframe.
 
         Assumes that the dataframe rows and embedding order is identical.
-        """
-        self.data_df["embeddings"] = list(self.embeddings)
 
-    def get_df_splits(self, random_seed: int) -> dict[str, pd.DataFrame]:
+        Args:
+            embeddings: Embeddings in order of dataset. Shape (N x D).
+        """
+        self.data_df["embeddings"] = list(embeddings)
+
+    def get_df_splits(
+        self,
+        random_seed: int,
+    ) -> dict[str, pd.DataFrame]:
         train_df, val_df, test_df = self.splitter.get_all_splits_df(
             self.data_df,
             self.split_ratios,
@@ -99,38 +169,31 @@ class LinearProbe:
             "test_y": test_df[self.target_col],
         }
 
-        if self.target_task == "multilabel":
+        if self.task == "multilabel":
             splits["train_y"] = np.vstack(splits["train_y"])
             splits["val_y"] = np.vstack(splits["val_y"])
             splits["test_y"] = np.vstack(splits["test_y"])
 
         return splits
 
-    def run_linear_probe(self, random_seed: int = 2541):
-        splits = self.get_df_splits(random_seed)
+    def run_linear_probe(self, random_seed: int = 2541) -> dict[str, float]:
+        try:
+            model = self.linear_models[self.task]
+        except KeyError:
+            print("Invalid task name.")
+            raise
 
-        models = {
-            "regression": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-            "reg_lin": LinearRegression(),
-            "reg_ridge": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-            "classification": LogisticRegression(max_iter=5000),
-            "multilabel": MultiOutputClassifier(
-                LogisticRegression(max_iter=5000)
-            )
-        }
-        model = models[self.target_task]
+        splits = self.get_df_splits(random_seed)
 
         np.random.seed(random_seed)
         model.fit(splits["train_X"], splits["train_y"])
 
-        if self.target_task in ["regression", "reg_lin", "reg_ridge"]:
+        if self.task in ["regression", "reg_lin", "reg_ridge"]:
             metrics = self.eval_regression(model, splits)
-        elif self.target_task == "classification":
+        elif self.task == "classification":
             metrics = self.eval_classification(model, splits)
-        elif self.target_task == "multilabel":
+        elif self.task == "multilabel":
             metrics = self.eval_multilabel(model, splits)
-        else:
-            raise ValueError("Invalid task.")
 
         return metrics
 
@@ -214,7 +277,12 @@ class LinearProbe:
             metrics[random_seed] = metric
         return metrics
 
-    def print_multirun_results(self, metrics: dict[int, dict[str, float]]):
+    def compute_multirun_results(
+        self,
+        metrics: dict[int, dict[str, float]],
+        print_output: bool = False,
+        ci_multiplier: float = 1.96
+    ) -> dict[str, str]:
         metric_vals = {}
 
         for metric_dict in metrics.values():
@@ -224,6 +292,13 @@ class LinearProbe:
         metric_mean = {k: np.mean(v) for k, v in metric_vals.items()}
         metric_std = {k: np.std(v) for k, v in metric_vals.items()}
 
+        metric_out = {}
+
         for k in metric_vals.keys():
-            se = 1.96 * (metric_std[k] / (np.sqrt(len(metrics))))
-            print("{}: {} ± {}".format(k, metric_mean[k], se))
+            se = ci_multiplier * (metric_std[k] / (np.sqrt(len(metrics))))
+            metric_out[k] = "{}: {} ± {}".format(k, metric_mean[k], se)
+
+            if print_output:
+                print("{}: {} ± {}".format(k, metric_mean[k], se))
+
+        return metric_out

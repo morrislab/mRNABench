@@ -62,6 +62,7 @@ class BenchmarkDataset(ABC):
             else:
                 self.download_raw_data()
 
+            # TODO: This bugs out due to parallelism I think.
             self.data_df = self.process_raw_data()
             self.save_processed_df(self.data_df)
 
