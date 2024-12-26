@@ -64,7 +64,8 @@ class NucleotideTransformer(EmbeddingModel):
         Returns:
             NT embedding of sequence with shape (1 x H).
         """
-        tokenized = self.tokenizer.encode_plus(sequence)
+        tokenized = self.tokenizer.encode_plus(sequence, verbose=False)
+
         chunks = self.chunk_tokens(
             tokenized["input_ids"],
             self.max_length,
