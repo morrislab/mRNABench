@@ -8,6 +8,7 @@ LNCRNA_URL = "/home/shir2/mRNABench/data/HAP1_essentiality_data.tsv"
 
 class LNCRNAEssentiality(BenchmarkDataset):
     """Long Non-Coding RNA Essentiality Dataset."""
+
     def __init__(self, force_redownload: bool = False):
         super().__init__(
             dataset_name="lncrna-ess",

@@ -5,11 +5,15 @@ from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 from mrna_bench.datasets.dataset_utils import ohe_to_str
 
 
-PL_URL = "https://zenodo.org/records/13910050/files/protein_localization_dataset.npz"
+PL_URL = (
+    "https://zenodo.org/records/13910050/files/"
+    "protein_localization_dataset.npz"
+)
 
 
 class ProteinLocalization(BenchmarkDataset):
     """Protein Subcellular Localization Dataset."""
+
     def __init__(self, force_redownload: bool = False):
         super().__init__(
             dataset_name="prot-loc",

@@ -1,7 +1,8 @@
 from pathlib import Path
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 
 import torch
 
@@ -11,29 +12,53 @@ from mrna_bench.embedder.embedder_utils import get_output_filename
 
 
 class DatasetEmbedder:
+    """Embeds sequences associated with dataset using specified embedder.
+
+    This class is built to split the sequences in a dataset into chunks of
+    sequences which can then be processed in parallel. This is denoted d_chunk,
+    while s_chunk denotes the sequence chunking that occur within each model
+    to handle sequences that exceed model maximum length.
+    """
+
     def __init__(
         self,
         model: EmbeddingModel,
         dataset: BenchmarkDataset,
         s_chunk_overlap: int = 0,
         d_chunk_ind: int = 0,
-        d_chunk_max_ind: int = 0,
+        d_num_chunks: int = 0,
     ):
+        """Initialize DatasetEmbedder.
+
+        Args:
+            model: Model used to embed sequences.
+            dataset: Dataset to embed.
+            s_chunk_overlap: Number of overlapping tokens between chunks in
+                individual sequences when using chunking to handle input
+                exceeding maximum model length.
+            d_chunk_ind: Current dataset chunk to be processed.
+            d_num_chunks: Total number of chunks to divide dataset into.
+        """
         self.model = model
         self.dataset = dataset
         self.data_df = dataset.data_df
         self.s_chunk_overlap = s_chunk_overlap
 
         self.d_chunk_ind = d_chunk_ind
-        self.d_chunk_max_ind = d_chunk_max_ind
+        self.d_num_chunks = d_num_chunks
 
-        if self.d_chunk_max_ind == 0:
+        if self.d_num_chunks == 0:
             self.d_chunk_size = len(self.data_df)
         else:
-            self.d_chunk_size = (len(self.data_df) // self.d_chunk_max_ind) + 1
+            self.d_chunk_size = (len(self.data_df) // self.d_num_chunks) + 1
 
     def get_dataset_chunk(self) -> pd.DataFrame:
-        if self.d_chunk_max_ind == 0:
+        """Retrieve current dataset chunk to be embedded.
+
+        Returns:
+            Current dataset chunk to be embedded.
+        """
+        if self.d_num_chunks == 0:
             return self.data_df
 
         s = self.d_chunk_size * self.d_chunk_ind
@@ -43,15 +68,20 @@ class DatasetEmbedder:
         return chunk_df
 
     def embed_dataset(self) -> torch.Tensor:
+        """Compute embeddings for current dataset chunk.
+
+        Returns:
+            Embeddings for current dataset chunk in original order.
+        """
         dataset_chunk = self.get_dataset_chunk()
 
         dataset_embeddings = []
-        for _, row in dataset_chunk.iterrows():
+        for _, row in tqdm(dataset_chunk.iterrows(), total=len(dataset_chunk)):
             if self.model.is_sixtrack:
                 embedding = self.model.embed_sequence_sixtrack(
                     row["sequence"],
-                    row["cds"],
-                    row["splice"],
+                    row["cds"].astype(np.int32),
+                    row["splice"].astype(np.int32),
                     self.s_chunk_overlap,
                 )
             else:
@@ -65,20 +95,29 @@ class DatasetEmbedder:
         return embeddings
 
     def persist_embeddings(self, embeddings: torch.Tensor):
+        """Persist embeddings at global data storage location.
+
+        Args:
+            embedding: Embedding to persist.
+        """
         out_path = get_output_filename(
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name,
             self.s_chunk_overlap,
             self.d_chunk_ind,
-            self.d_chunk_max_ind
+            self.d_num_chunks
         )
 
         np_embeddings = embeddings.detach().cpu().numpy()
         np.savez_compressed(out_path, embedding=np_embeddings)
 
     def merge_embeddings(self):
-        all_chunks = list(range(self.d_chunk_max_ind))
+        """Merge persisted processed dataset chunks into single file.
+
+        Process will only complete if all chunks are finished processing.
+        """
+        all_chunks = list(range(self.d_num_chunks))
         processed_files_paths = []
         processed_chunk_inds = []
 
@@ -98,7 +137,7 @@ class DatasetEmbedder:
                 continue
 
             chunk_coords = file_name_arr[3].split("-")
-            if int(chunk_coords[-1]) != self.d_chunk_max_ind:
+            if int(chunk_coords[-1]) != self.d_num_chunks:
                 continue
 
             processed_chunk_inds.append(int(chunk_coords[0]))

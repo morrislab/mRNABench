@@ -296,9 +296,9 @@ class LinearProbe:
 
         for k in metric_vals.keys():
             se = ci_multiplier * (metric_std[k] / (np.sqrt(len(metrics))))
-            metric_out[k] = "{}: {} ± {}".format(k, metric_mean[k], se)
+            metric_out[k] = "{} ± {}".format(metric_mean[k], se)
 
             if print_output:
-                print("{}: {} ± {}".format(k, metric_mean[k], se))
+                print("{} ± {}".format(metric_mean[k], se))
 
         return metric_out

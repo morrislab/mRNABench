@@ -13,6 +13,16 @@ class DataSplitter(ABC):
         test_size: float,
         random_seed: int
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Split dataframe into train and test dataframes.
+
+        Args:
+            df: Dataframe to split.
+            test_size: Fraction of dataset to assign to test split.
+            random_seed: Random seed used during split sampling.
+
+        Returns:
+            Train and test dataframes.
+        """
         pass
 
     def get_all_splits_df(

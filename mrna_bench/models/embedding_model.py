@@ -6,7 +6,30 @@ import torch
 
 
 class EmbeddingModel(ABC):
+    """Wrapper class for embedding models used to represent sequences."""
+
+    @staticmethod
+    @abstractmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Retrieve shortened name for model version.
+
+        Should not contain any underscores. Represent spaces with '-'.
+
+        Args:
+            model_version: Version of model to fetch short name for.
+
+        Returns:
+            Shortened name of model version.
+        """
+        pass
+
     def __init__(self, model_version: str, device: torch.device):
+        """Initialize EmbeddingModel.
+
+        Args:
+            model_version: Version of embedding model to use.
+            device: PyTorch device to send embedding model.
+        """
         self.model_version = model_version
         self.short_name = self.__class__.get_model_short_name(model_version)
         self.device = device
@@ -21,8 +44,18 @@ class EmbeddingModel(ABC):
         self,
         sequence: str,
         overlap: int,
-        agg_fn: Callable,
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
+        """Embed sequence.
+
+        Args:
+            sequence: String of nucleotides to embed (uses DNA bases).
+            overlap: Number of overlapping nucleotides between chunks.
+            agg_fn: Method used to aggregate across sequence dimension.
+
+        Returns:
+            Embedded sequence with shape (1 x H).
+        """
         pass
 
     @abstractmethod
@@ -32,20 +65,27 @@ class EmbeddingModel(ABC):
         cds: np.ndarray,
         splice: np.ndarray,
         overlap: int,
-        agg_fn: Callable | None = None,
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        pass
+        """Embed sequence incorporating splice and cds information.
 
-    @staticmethod
-    @abstractmethod
-    def get_model_short_name(model_version: str) -> str:
+        Args:
+            sequence: String of nucleotides to embed (uses DNA bases).
+            cds: Binary encoding of first nucleotide of each codon in CDS.
+            splice: Binary encoding of splice site locations.
+            overlap: Number of overlapping nucleotides between chunks.
+            agg_fn: Method used to aggregate across sequence dimension.
+
+        Returns:
+            Embedded sequence with shape (1 x H).
+        """
         pass
 
     def chunk_sequence(
         self,
         sequence: str,
         chunk_length: int,
-        overlap_size: int
+        overlap_size: int = 0
     ) -> list[str]:
         """Split sequence into chunks of specified length with given overlap.
 
@@ -67,5 +107,34 @@ class EmbeddingModel(ABC):
         # Ensure the last incomplete chunk is included (if not already added)
         if len(sequence) > len(chunks) * step_size:
             chunks.append(sequence[-chunk_length:])
+
+        return chunks
+
+    def chunk_tokens(
+        self,
+        sequence_tokens: list[int],
+        chunk_length: int,
+        overlap_size: int = 0
+    ) -> list[list[int]]:
+        """Chunk tokenized sequence into specified length with overlap.
+
+        Args:
+            sequence_tokens: The tokenized sequence to be chunked.
+            chunk_length: The length of each chunk.
+            overlap_size: The number of overlapping characters between chunks.
+
+        Returns:
+            A list of chunked tokens each with specified maximum length.
+        """
+        step_size = chunk_length - overlap_size
+
+        chunks = []
+        for i in range(0, len(sequence_tokens), step_size):
+            chunk = sequence_tokens[i:i + chunk_length]
+            chunks.append(chunk)
+
+        # Ensure the last incomplete chunk is included (if not already added)
+        if len(sequence_tokens) > len(chunks) * step_size:
+            chunks.append(sequence_tokens[-chunk_length:])
 
         return chunks

@@ -1,5 +1,6 @@
 import os
 import requests
+from tqdm import tqdm
 import yaml
 
 
@@ -13,12 +14,14 @@ def download_file(
     Args:
         url: URL of file to be downloaded.
         download_dir: Directory to store downloaded file.
+        force_redownload: Forces download even if file already exists.
 
     Returns:
         Path to downloaded file and whether file was downloaded.
     """
     response = requests.get(url, stream=True)
     response.raise_for_status()
+    total_bytes = int(response.headers.get("content-length", 0))
 
     output_path = download_dir + "/" + os.path.basename(url)
 
@@ -26,22 +29,30 @@ def download_file(
         print("File already downloaded.")
         return (output_path, False)
 
-    # TODO: write progress bar.
     with open(output_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-            f.write(chunk)
+        with tqdm(total=total_bytes, unit="B", unit_scale=True) as bar:
+            for chunk in response.iter_content(chunk_size=8192):
+                if chunk:
+                    f.write(chunk)
+                    bar.update(len(chunk))
 
     return (output_path, True)
 
 
 class DataManager:
-    """Helper class that keeps track of directory where data is stored."""
+    """Helper class tracking the directory where benchmark data is stored."""
 
     def __init__(self):
+        """Initialize DataManager."""
         self.curr_dir = os.path.dirname(os.path.abspath(__file__))
         self.config_path = self.curr_dir + "/config.yaml"
 
     def update_data_path(self, data_dir_path: str):
+        """Update path to data storage directory.
+
+        Args:
+            data_dir_path: New path to data storage directory.
+        """
         data_dir_path = os.path.normpath(data_dir_path)
 
         config = {"data_path": data_dir_path}
@@ -68,16 +79,26 @@ class DataManager:
                 return yaml.safe_load(stream)["data_path"]
         else:
             raise RuntimeError((
-                "Data storage path is not set."
+                "Data storage path is not set. Please run: "
                 "mrna_bench.update_data_path(path_to_store_data)"
             ))
 
 
 def update_data_path(path_to_data: str):
+    """Update path to benchmark data storage directory.
+
+    Args:
+        path_to_data: New path to directory where data is stored.
+    """
     dm = DataManager()
     dm.update_data_path(path_to_data)
 
 
 def get_data_path() -> str:
+    """Get path where benchmark data is stored.
+
+    Returns:
+        Directory where benchmark data is stored.
+    """
     dm = DataManager()
     return dm.get_data_path()

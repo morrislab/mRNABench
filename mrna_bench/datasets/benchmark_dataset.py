@@ -111,9 +111,19 @@ class BenchmarkDataset(ABC):
         self.raw_data_path = raw_data_path
 
     def save_processed_df(self, df: pd.DataFrame):
+        """Save dataframe to data storage path.
+
+        Args:
+            df: Processed dataframe to save.
+        """
         df.to_pickle(self.dataset_path + "/data_df.pkl")
 
     def load_processed_df(self) -> bool:
+        """Load processed dataframe from data storage path.
+
+        Returns:
+            Whether dataframe was successfully loaded to class property.
+        """
         try:
             self.data_df = pd.read_pickle(self.dataset_path + "/data_df.pkl")
         except FileNotFoundError:

@@ -10,6 +10,7 @@ MRLS_URL = "https://zenodo.org/records/13910050/files/mrl_isoform_resolved.npz"
 
 class MRLSugimoto(BenchmarkDataset):
     """Mean Ribosome Load Dataset from Sugimoto et al. 2022."""
+
     def __init__(self, force_redownload: bool = False):
         super().__init__(
             dataset_name="mrl-sugimoto",

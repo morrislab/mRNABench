@@ -10,6 +10,7 @@ GOMF_URL = "https://zenodo.org/records/13910050/files/go_dna_dataset.npz"
 
 class GOMolecularFunction(BenchmarkDataset):
     """GO Molecular Function Dataset."""
+
     def __init__(self, force_redownload: bool = False):
         super().__init__(
             dataset_name="go-mf",

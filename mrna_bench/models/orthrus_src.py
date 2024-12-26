@@ -106,14 +106,14 @@ class MixerModel(
             x = x.transpose(1, 2)
 
         hidden_states = self.embedding(x)
-        residual = None
+        res = None
         for layer in self.layers:
-            hidden_states, residual = layer(
-                hidden_states, residual, inference_params=inference_params
+            hidden_states, res = layer(
+                hidden_states, res, inference_params=inference_params
             )
 
-        residual = (hidden_states + residual) if residual is not None else hidden_states
-        hidden_states = self.norm_f(residual.to(dtype=self.norm_f.weight.dtype))
+        res = (hidden_states + res) if res is not None else hidden_states
+        hidden_states = self.norm_f(res.to(dtype=self.norm_f.weight.dtype))
 
         hidden_states = hidden_states
 
@@ -126,10 +126,12 @@ class MixerModel(
         channel_last: bool = False,
     ) -> torch.Tensor:
         """Get global representation of input data.
+
         Args:
             x: Data to embed. Has shape (B x C x L) if not channel_last.
             lengths: Unpadded length of each data input.
             channel_last: Expects input of shape (B x L x C).
+
         Returns:
             Global representation vector of shape (B x H).
         """
@@ -141,9 +143,11 @@ class MixerModel(
 
 def mean_unpadded(x: torch.Tensor, lengths: torch.Tensor) -> torch.Tensor:
     """Take mean of tensor across second dimension without padding.
+
     Args:
         x: Tensor to take unpadded mean. Has shape (B x L x H).
         lengths: Tensor of unpadded lengths. Has shape (B)
+
     Returns:
         Mean tensor of shape (B x H).
     """
@@ -179,9 +183,11 @@ def _init_weights(
 
 def load_model(run_path: str, checkpoint_name: str) -> nn.Module:
     """Load trained model located at specified path.
+
     Args:
         run_path: Path where run data is located.
         checkpoint_name: Name of model checkpoint to load.
+
     Returns:
         Model with loaded weights.
     """

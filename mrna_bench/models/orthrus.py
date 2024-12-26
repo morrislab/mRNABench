@@ -1,18 +1,22 @@
 from collections.abc import Callable
 
 import numpy as np
-
 import torch
 
-from mrna_bench.models.embedding_model import EmbeddingModel
-
 from mrna_bench.datasets.dataset_utils import str_to_ohe
+from mrna_bench.models import EmbeddingModel
 
 
 class Orthrus(EmbeddingModel):
+    """"""
     CKPT_DICT = {
         "orthrus_large_6_track": "epoch=22-step=20000.ckpt"
     }
+
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        return model_version.replace("_track", "").replace("_", "-")
 
     def __init__(self, model_version, device):
         super().__init__(model_version, device)
@@ -32,8 +36,7 @@ class Orthrus(EmbeddingModel):
 
         self.model = model.to(device)
 
-    def get_model_short_name(model_version: str) -> str:
-        return model_version.replace("_track", "").replace("_", "-")
+
 
     def embed_sequence(
         self,

@@ -72,13 +72,16 @@ def train_test_split_homologous(
 
 class HomologySplitter(DataSplitter):
 
-    HOMO_URL = "https://zenodo.org/records/13910050/files/homology_maps_homologene.zip"
+    HOMO_URL = (
+        "https://zenodo.org/records/13910050/files/"
+        "homology_maps_homologene.zip"
+    )
 
     def __init__(
         self,
         species: list[str],
         homology_map_path: str | None = None,
-        force_redownload: bool = True
+        force_redownload: bool = False
     ):
         """Initialize HomologySplitter.
 
@@ -99,6 +102,7 @@ class HomologySplitter(DataSplitter):
         if homology_map_path is None:
             data_storage_path = get_data_path()
             self.homology_map_path = data_storage_path + "/homology_maps"
+
             if not Path(self.homology_map_path).exists():
                 Path(self.homology_map_path).mkdir(exist_ok=True)
                 force_redownload = True
