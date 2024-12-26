@@ -97,16 +97,15 @@ class EmbeddingModel(ABC):
         Returns:
             A list of string chunks, where each chunk has the specified length.
         """
+        if overlap_size >= chunk_length:
+            raise ValueError("overlap_size must be less than chunk_length")
+
         step_size = chunk_length - overlap_size
 
         chunks = []
         for i in range(0, len(sequence), step_size):
             chunk = sequence[i:i + chunk_length]
             chunks.append(chunk)
-
-        # Ensure the last incomplete chunk is included (if not already added)
-        if len(sequence) > len(chunks) * step_size:
-            chunks.append(sequence[-chunk_length:])
 
         return chunks
 
@@ -121,20 +120,19 @@ class EmbeddingModel(ABC):
         Args:
             sequence_tokens: The tokenized sequence to be chunked.
             chunk_length: The length of each chunk.
-            overlap_size: The number of overlapping characters between chunks.
+            overlap_size: The number of overlapping tokens between chunks.
 
         Returns:
             A list of chunked tokens each with specified maximum length.
         """
+        if overlap_size >= chunk_length:
+            raise ValueError("overlap_size must be less than chunk_length")
+
         step_size = chunk_length - overlap_size
 
         chunks = []
         for i in range(0, len(sequence_tokens), step_size):
             chunk = sequence_tokens[i:i + chunk_length]
             chunks.append(chunk)
-
-        # Ensure the last incomplete chunk is included (if not already added)
-        if len(sequence_tokens) > len(chunks) * step_size:
-            chunks.append(sequence_tokens[-chunk_length:])
 
         return chunks
