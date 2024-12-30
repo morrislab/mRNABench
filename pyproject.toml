@@ -1,0 +1,43 @@
+[project]
+name = "mrna_bench"
+description = "Benchmarking suite for mRNA property prediction."
+readme = "README.md"
+authors = [
+    { name = "Ruian (Ian) Shi", email = "ian.shi@mail.utoronto.ca" }
+]
+requires-python = ">= 3.10"
+dynamic = ["version"]
+license = { file = "LICENSE" }  # Include a LICENSE file in your repo
+keywords = ["mrna", "genomic foundation model", "benchmark"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Unix"
+]
+dependencies = [
+    "tqdm",
+    "PyYAML",
+    "scikit-learn",
+    "numpy<2",
+    "pandas<=2.2.2",
+]
+[project.urls]
+Repository = "https://github.com/IanShi1996/mRNABench"
+
+[project.optional-dependencies]
+base_models = [
+    "torch==2.2.2",
+    "causal-conv1d>=1.2.0",
+    "transformers==4.29.1",
+    "mamba-ssm==1.2.0.post1",
+    "rna-fm==0.2.2",
+    "accelerate"
+]
+
+[build-system]
+requires = [
+    "setuptools",
+    "wheel",
+    "pip"
+]
+build-backend = "setuptools.build_meta"

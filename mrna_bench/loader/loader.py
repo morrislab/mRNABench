@@ -1,7 +1,10 @@
-import torch
+from typing import TYPE_CHECKING
 
 from mrna_bench.datasets import BenchmarkDataset, DATASET_CATALOG
 from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
+
+if TYPE_CHECKING:
+    import torch
 
 
 def load_model(

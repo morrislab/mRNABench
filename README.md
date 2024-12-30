@@ -4,19 +4,37 @@ This repository contains a workflow to benchmark the embedding quality of genomi
 **Jump to:** [Model Catalog](#model-catalog) [Dataset Catalog](#dataset-catalog)
 
 ## Setup
-The mRNA bench can be installed by cloning this repository and running:
+Several configurations of the mRNABench are available.
 
-```pip install -e .```
+If you are interested in the benchmark datasets **only** , you can run:
+```bash
+conda create --name mrna_bench
+git clone https://github.com/IanShi1996/mRNABench.git
+cd mRNABench
 
-After installation, please call the following to set where data associated with the benchmarks will be stored.
+pip install -e .
+```
+
+The inference-capable version of mRNABench that can generate embeddings using
+Orthrus, DNA-BERT2, NucleotideTransformer and RNA-FM can be installed by calling:
+```bash
+conda create --name mrna_bench
+git clone https://github.com/IanShi1996/mRNABench.git
+cd mRNABench
+
+pip install -e .[base_models] --extra-index-url https://download.pytorch.org/whl/cu121
+pip uninstall triton
+```
+
+After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
 ```python
 import mrna_bench as mb
 
+path_to_dir_to_store_data = "DESIRED_PATH"
 mb.update_data_path(path_to_dir_to_store_data)
 ```
 
-Unfortunately, there's no good way to setup each individual model at the moment. The best approach seems to be to create a conda environment, install the dependencies for the models used for embedding, and then call the above code to install mrna_bench into
-each conda environment.
+Inference with other models will require the installation of the model's dependencies first, which are usually listed on the model's GitHub page (see below).
 
 ## Usage
 Datasets can be retrieved using:
