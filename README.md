@@ -6,26 +6,36 @@ This repository contains a workflow to benchmark the embedding quality of genomi
 ## Setup
 Several configurations of the mRNABench are available.
 
-If you are interested in the benchmark datasets **only** , you can run:
+### Datasets Only
+If you are interested in the benchmark datasets **only**, you can run:
 ```bash
-conda create --name mrna_bench
+conda create --name mrna_bench python=3.10
+conda activate mrna_bench
 git clone https://github.com/IanShi1996/mRNABench.git
 cd mRNABench
 
 pip install -e .
 ```
 
+### Full Version
 The inference-capable version of mRNABench that can generate embeddings using
-Orthrus, DNA-BERT2, NucleotideTransformer and RNA-FM can be installed by calling:
+Orthrus, DNA-BERT2, NucleotideTransformer, RNA-FM, and HyenaDNA can be 
+installed as shown below. Note that this requires PyTorch version 2.2.2 with 
+CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
 ```bash
-conda create --name mrna_bench
+conda create --name mrna_bench python=3.10
+conda activate mrna_bench
 git clone https://github.com/IanShi1996/mRNABench.git
 cd mRNABench
 
-pip install -e .[base_models] --extra-index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+pip install -e .[base_models] 
 pip uninstall triton
 ```
+Inference with other models will require the installation of the model's
+dependencies first, which are usually listed on the model's GitHub page (see below).
 
+### Post-install
 After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
 ```python
 import mrna_bench as mb
@@ -34,11 +44,17 @@ path_to_dir_to_store_data = "DESIRED_PATH"
 mb.update_data_path(path_to_dir_to_store_data)
 ```
 
-Inference with other models will require the installation of the model's dependencies first, which are usually listed on the model's GitHub page (see below).
-
 ## Usage
 Datasets can be retrieved using:
 
+```python
+import mrna_bench as mb
+
+dataset = mb.load_dataset("go-mf")
+data_df = dataset.data_df
+```
+
+The mRNABench can also be used to test out common genomic foundation models:
 ```python
 import torch
 

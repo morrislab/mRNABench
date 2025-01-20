@@ -1,5 +1,6 @@
 [project]
 name = "mrna_bench"
+version = "0.0.1"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
@@ -20,6 +21,7 @@ dependencies = [
     "scikit-learn",
     "numpy<2",
     "pandas<=2.2.2",
+    "requests"
 ]
 [project.urls]
 Repository = "https://github.com/IanShi1996/mRNABench"
@@ -27,7 +29,6 @@ Repository = "https://github.com/IanShi1996/mRNABench"
 [project.optional-dependencies]
 base_models = [
     "torch==2.2.2",
-    "causal-conv1d>=1.2.0",
     "transformers==4.29.1",
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
@@ -41,3 +42,6 @@ requires = [
     "pip"
 ]
 build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["mrna_bench"]

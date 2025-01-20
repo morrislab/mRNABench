@@ -1,17 +1,17 @@
 from typing import TYPE_CHECKING
 
 from mrna_bench.datasets import BenchmarkDataset, DATASET_CATALOG
-from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
 
 if TYPE_CHECKING:
     import torch
+    from mrna_bench.models import EmbeddingModel
 
 
 def load_model(
     model_name: str,
     model_version: str,
-    device: torch.device
-) -> EmbeddingModel:
+    device: "torch.device"
+) -> "EmbeddingModel":
     """Load Embedding Model.
 
     Args:
@@ -23,11 +23,14 @@ def load_model(
         Initialized EmbeddingModel.
     """
     try:
+        from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
+
         model_class: EmbeddingModel = MODEL_CATALOG[model_name]
         model = model_class(model_version, device)
     except ModuleNotFoundError:
-        print("Error loading model dependencies. Check environment.")
-        raise
+        raise ModuleNotFoundError(
+            "PyTorch not installed. Model benchmarking unavailable."
+        )
 
     return model
 
