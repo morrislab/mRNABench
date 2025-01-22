@@ -1,5 +1,6 @@
 from .aido import AIDORNA
 from .dnabert import DNABERT2
+from .hyenadna import HyenaDNA
 from .nucleotide_transformer import NucleotideTransformer
 from .orthrus import Orthrus
 from .rnafm import RNAFM
@@ -13,4 +14,5 @@ MODEL_CATALOG: dict[str, EmbeddingModel] = {
     "NucleotideTransformer": NucleotideTransformer,
     "Orthrus": Orthrus,
     "RNA-FM": RNAFM,
+    "HyenaDNA": HyenaDNA
 }
