@@ -87,7 +87,7 @@ Also see the `scripts/` folder for example scripts that uses slurm to embed data
 ## Model Catalog
 The current models catalogued are:
 
-| Model Name |  Model Versions         | Description   | Citation | Supported in `base_models` |
+| Model Name |  Model Versions         | Description   | Citation | Supported<br>by<br>`base_models` |
 | :--------: |  ---------------------- | ------------- | :------: | :------------------------: |
 | `Orthrus` | `orthrus_large_6_track`<br> `orthrus_base_4_track` | Mamba-based RNA FM pre-trained using contrastive learning. | [code](https://github.com/bowang-lab/Orthrus) [paper](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)| ✅ |
 | `AIDO.RNA` | `aido_rna_650m` <br> `aido_rna_650m_cds` <br> `aido_rna_1b600m` <br> `aido_rna_1b600m_cds` | Encoder Transformer-based RNA FM pre-trained using MLM on 42M ncRNA sequences. Version that is domain adapted to CDS is available. | [paper](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) | |
