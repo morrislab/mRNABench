@@ -23,7 +23,7 @@ class BenchmarkDataset(ABC):
     def __init__(
         self,
         dataset_name: str,
-        species: list[str],
+        species: list[str] = ["human"],
         raw_data_src_url: str | None = None,
         force_redownload: bool = False,
         raw_data_src_path: str | None = None,
@@ -51,7 +51,6 @@ class BenchmarkDataset(ABC):
         self.species = species
 
         self.force_redownload = force_redownload
-        self.first_download = False
 
         self.data_storage_path = get_data_path()
         self.init_folders()
@@ -91,13 +90,12 @@ class BenchmarkDataset(ABC):
 
     def download_raw_data(self):
         """Download the raw data from given web source."""
-        raw_data_path, is_dled = download_file(
+        raw_data_path, _ = download_file(
             self.raw_data_src_url,
             self.raw_data_dir,
             self.force_redownload
         )
         self.raw_data_path = raw_data_path
-        self.first_download = is_dled
 
     def collect_raw_data(self):
         """Collect the raw data from given local path."""
@@ -106,7 +104,6 @@ class BenchmarkDataset(ABC):
 
         if not os.path.exists(raw_data_path):
             shutil.copy(self.raw_data_src_path, raw_data_path)
-            self.first_download = True
 
         self.raw_data_path = raw_data_path
 

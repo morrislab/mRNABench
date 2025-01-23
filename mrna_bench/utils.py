@@ -6,7 +6,7 @@ import yaml
 
 def download_file(
     url: str,
-    download_dir: str | None = None,
+    download_dir: str,
     force_redownload: bool = False
 ) -> tuple[str, bool]:
     """Download file at the given url.
@@ -67,7 +67,7 @@ class DataManager:
             data["data_path"] = data_dir_path
 
             with open(self.config_path, "w") as f:
-                yaml.dmp(data, f, default_flow_style=False)
+                yaml.dump(data, f, default_flow_style=False)
 
     def get_data_path(self) -> str:
         """Load data_dir_path from config.

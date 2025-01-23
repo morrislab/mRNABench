@@ -109,7 +109,7 @@ class DatasetEmbedder:
             self.d_num_chunks
         )
 
-        np_embeddings = embeddings.detach().cpu().numpy()
+        np_embeddings = embeddings.float().detach().cpu().numpy()
         np.savez_compressed(out_path, embedding=np_embeddings)
 
     def merge_embeddings(self):
