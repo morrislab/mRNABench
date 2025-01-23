@@ -8,13 +8,9 @@ Several configurations of the mRNABench are available.
 
 ### Datasets Only
 If you are interested in the benchmark datasets **only**, you can run:
-```bash
-conda create --name mrna_bench python=3.10
-conda activate mrna_bench
-git clone https://github.com/IanShi1996/mRNABench.git
-cd mRNABench
 
-pip install -e .
+```bash
+pip install mrna-bench
 ```
 
 ### Full Version
@@ -25,11 +21,9 @@ CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
 ```bash
 conda create --name mrna_bench python=3.10
 conda activate mrna_bench
-git clone https://github.com/IanShi1996/mRNABench.git
-cd mRNABench
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install -e .[base_models] 
+pip install mrna-bench[base_models]
 pip uninstall triton
 ```
 Inference with other models will require the installation of the model's

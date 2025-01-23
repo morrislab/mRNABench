@@ -1,13 +1,12 @@
 [project]
-name = "mrna_bench"
-version = "1.0.0"
+name = "mrna-bench"
+version = "1.0.1"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
     { name = "Ruian (Ian) Shi", email = "ian.shi@mail.utoronto.ca" }
 ]
 requires-python = ">= 3.10"
-dynamic = ["version"]
 license = { file = "LICENSE" }  # Include a LICENSE file in your repo
 keywords = ["mrna", "genomic foundation model", "benchmark"]
 classifiers = [
@@ -49,4 +48,4 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["mrna_bench"]
+packages = ["mrna_bench"]
