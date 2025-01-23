@@ -1,6 +1,6 @@
 [project]
 name = "mrna_bench"
-version = "0.0.1"
+version = "1.0.0"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
@@ -33,6 +33,11 @@ base_models = [
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
     "accelerate"
+]
+dev = [
+    "mypy",
+    "flake8",
+    "flake8-docstrings"
 ]
 
 [build-system]
