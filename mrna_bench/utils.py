@@ -1,4 +1,5 @@
 import os
+import pathlib
 import requests
 from tqdm import tqdm
 import yaml
@@ -68,6 +69,10 @@ class DataManager:
 
             with open(self.config_path, "w") as f:
                 yaml.dump(data, f, default_flow_style=False)
+
+        if not os.path.exists(data_dir_path):
+            print("Specified data path does not exist. Making directories.")
+            pathlib.Path(data_dir_path).mkdir(parents=True, exist_ok=True)
 
     def get_data_path(self) -> str:
         """Load data_dir_path from config.

@@ -56,6 +56,7 @@ class BenchmarkDataset(ABC):
         self.init_folders()
 
         if force_redownload or not self.load_processed_df():
+            print("Downloading raw data.")
             if self.raw_data_src_url is None:
                 self.collect_raw_data()
             else:
