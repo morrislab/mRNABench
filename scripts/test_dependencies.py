@@ -24,7 +24,7 @@ batch_labels, batch_strs, batch_tokens = batch_converter(data)
 with torch.no_grad():
     results = model(batch_tokens.to(device), repr_layers=[12])
 token_embeddings = results["representations"][12]
-
+print(token_embeddings.shape)
 print("RNA-FM functional.")
 
 # DNABERT2
@@ -46,7 +46,7 @@ model = AutoModel.from_pretrained(
 dna = "ACGTAGCATCGGATCTATCTATCGACACTTGGTTATCGATCTACGAGCATCTCGTTAGC"
 inputs = tokenizer(dna, return_tensors='pt')["input_ids"].to(device)
 hidden_states = model(inputs)[0]
-
+print(hidden_states.shape)
 print("DNA-BERT2 functional.")
 
 # NT
@@ -75,7 +75,7 @@ torch_outs = model(
 )
 
 embeddings = torch_outs['hidden_states'][-1]
-
+print(embeddings.shape)
 
 print("NT functional.")
 
@@ -83,10 +83,10 @@ print("NT functional.")
 from transformers import AutoModelForSequenceClassification
 
 checkpoint = 'LongSafari/hyenadna-tiny-1k-seqlen-hf'
-max_length = 10
+max_length = 1000
 
 tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=True)
-model = AutoModelForSequenceClassification.from_pretrained(
+model = AutoModel.from_pretrained(
     checkpoint,
     torch_dtype=torch.bfloat16,
     device_map="auto",
@@ -104,6 +104,6 @@ tok_seq = tok_seq.to(device)
 model.to(device)
 model.eval()
 with torch.inference_mode():
-    embeddings = model(tok_seq)
-
+    embeddings = model(tok_seq)[0]
+    print(embeddings.shape)
 print("HyenaDNA functional.")

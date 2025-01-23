@@ -25,15 +25,15 @@ class HyenaDNA(EmbeddingModel):
     def __init__(self, model_version: str, device: torch.device):
         """Initialize HyenaDNA inference wrapper.
 
+        Support for HyenaDNA 1k models is currently omitted.
+
         Args:
             model_version: Version of model used. Valid versions are: {
                 "hyenadna-large-1m-seqlen-hf",
                 "hyenadna-medium-450k-seqlen-hf",
                 "hyenadna-medium-160k-seqlen-hf",
                 "hyenadna-small-32k-seqlen-hf",
-                "hyenadna-tiny-16k-seqlen-d128-hf",
-                "hyenadna-tiny-1k-seqlen-d256-hf",
-                "hyenadna-tiny-1k-seqlen-hf"
+                "hyenadna-tiny-16k-seqlen-d128-hf"
             }
             device: PyTorch device to send model to.
         """
