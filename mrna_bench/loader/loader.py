@@ -1,4 +1,4 @@
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Type
 
 from mrna_bench.datasets import BenchmarkDataset, DATASET_CATALOG
 
@@ -25,7 +25,7 @@ def load_model(
     try:
         from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
 
-        model_class: EmbeddingModel = MODEL_CATALOG[model_name]
+        model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
         model = model_class(model_version, device)
     except ModuleNotFoundError:
         raise ModuleNotFoundError(

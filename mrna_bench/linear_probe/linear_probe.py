@@ -74,7 +74,7 @@ class LinearProbe:
         target_col: str,
         seq_chunk_overlap: int = 0,
         split_type: str = "homology",
-        split_ratios: tuple[float, float, float] = [0.7, 0.15, 0.15],
+        split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
         eval_all_splits: bool = False
     ) -> "LinearProbe":
         """Initialize LinearProbe from instantiated dataset and model.
@@ -121,7 +121,7 @@ class LinearProbe:
         target_col: str,
         seq_chunk_overlap: int = 0,
         split_type: str = "homology",
-        split_ratios: tuple[float, float, float] = [0.7, 0.15, 0.15],
+        split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
         eval_all_splits: bool = False
     ) -> "LinearProbe":
         """Initialize LinearProbe using model and dataset names.
@@ -172,7 +172,7 @@ class LinearProbe:
         task: str,
         target_col: str,
         split_type: str = "homology",
-        split_ratios: tuple[float, float, float] = [0.7, 0.15, 0.15],
+        split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
         eval_all_splits: bool = False
     ):
         """Initialize LinearProbe.
@@ -204,7 +204,7 @@ class LinearProbe:
                 self.dataset.species
             )
         else:
-            self.splitter = SPLIT_CATALOG["default"]
+            self.splitter = SPLIT_CATALOG["default"]()
 
         self.split_ratios = split_ratios
         self.eval_all_splits = eval_all_splits
@@ -417,7 +417,7 @@ class LinearProbe:
         Returns:
             Dictionary of mean metric and CI per data split.
         """
-        metric_vals = {}
+        metric_vals: dict[str, list[float]] = {}
 
         for metric_dict in metrics.values():
             for metric_name, metric_val in metric_dict.items():

@@ -2,7 +2,7 @@ import numpy as np
 
 
 def ohe_to_str(
-    ohe: np.array,
+    ohe: np.ndarray,
     nucs: list[str] = ["A", "C", "G", "T", "N"]
 ) -> list[str]:
     """Convert OHE sequence to string representation.

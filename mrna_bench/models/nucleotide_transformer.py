@@ -26,10 +26,16 @@ class NucleotideTransformer(EmbeddingModel):
         """Initialize NucleotideTransformer inference wrapper.
 
         Args:
-            model_version: Version of model to initialize. Valid versions are:
-                {"2.5b-multi-species", "2.5b-1000g", "500m-human-ref",
-                 "500m-1000g", "v2-50m-multi-species", "v2-100m-multi-species",
-                 "v2-250m-multi-species", "v2-500m-multi_species"}
+            model_version: Version of model to load. Valid versions are: {
+                "2.5b-multi-species",
+                "2.5b-1000g",
+                "500m-human-ref",
+                "500m-1000g",
+                "v2-50m-multi-species",
+                "v2-100m-multi-species",
+                "v2-250m-multi-species",
+                "v2-500m-multi-species"
+            }
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
@@ -72,7 +78,7 @@ class NucleotideTransformer(EmbeddingModel):
             overlap
         )
 
-        embedding = []
+        embedding_chunks = []
 
         for _, chunk in enumerate(chunks):
             chunk_tt = torch.Tensor(chunk).unsqueeze(0).to(self.device).long()
@@ -86,9 +92,9 @@ class NucleotideTransformer(EmbeddingModel):
             )
 
             model_out = torch_outs["hidden_states"][-1]
-            embedding.append(model_out)
+            embedding_chunks.append(model_out)
 
-        embedding = torch.cat(embedding, dim=1)
+        embedding = torch.cat(embedding_chunks, dim=1)
 
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding

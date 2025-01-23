@@ -74,7 +74,7 @@ class RNAFM(EmbeddingModel):
         sequence = sequence.replace("U", "T")
         chunks = self.chunk_sequence(sequence, self.MAX_LENGTH - 2, overlap)
 
-        embedding = []
+        embedding_chunks = []
 
         for i, chunk in enumerate(chunks):
             _, _, tokens = self.batch_converter([("", chunk)])
@@ -89,9 +89,9 @@ class RNAFM(EmbeddingModel):
             model_output = self.model(tokens.to(self.device), repr_layers=[12])
             embedded_chunk = model_output["representations"][12]
 
-            embedding.append(embedded_chunk)
+            embedding_chunks.append(embedded_chunk)
 
-        embedding = torch.cat(embedding, dim=1)
+        embedding = torch.cat(embedding_chunks, dim=1)
 
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
@@ -137,7 +137,7 @@ class RNAFM(EmbeddingModel):
 
         chunks = self.chunk_sequence(cds_seq, 1022 * 3)
 
-        embedding = []
+        embedding_chunks = []
 
         for i, chunk in enumerate(chunks):
             _, _, tokens = self.batch_converter([("", chunk)])
@@ -152,9 +152,9 @@ class RNAFM(EmbeddingModel):
             model_output = self.model(tokens.to(self.device), repr_layers=[12])
             embedded_chunk = model_output["representations"][12]
 
-            embedding.append(embedded_chunk)
+            embedding_chunks.append(embedded_chunk)
 
-        embedding = torch.cat(embedding, dim=1)
+        embedding = torch.cat(embedding_chunks, dim=1)
 
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding

@@ -13,7 +13,7 @@ from mrna_bench.utils import download_file
 def train_test_split_homologous(
     genes: list[str],
     homology_df: pd.DataFrame,
-    test_size: int = 0.3,
+    test_size: float = 0.3,
     random_state: int | None = None
 ) -> tuple[list[int], list[int]]:
     """Split genes into two sets with homologous genes in the same set.
@@ -33,7 +33,7 @@ def train_test_split_homologous(
 
     gene_groups = np.array([homo_group_map.get(gene, None) for gene in genes])
 
-    group_to_index = {}
+    group_to_index: dict[int, list[int]] = {}
 
     # Populate the group_to_index dictionary
     for i, group in enumerate(gene_groups):
@@ -47,8 +47,8 @@ def train_test_split_homologous(
 
     len_of_train = int(len(gene_index) * (1 - test_size))
 
-    train_indices = []
-    test_indices = []
+    train_indices: list[int] = []
+    test_indices: list[int] = []
 
     seen_groups = set()
 
@@ -71,6 +71,12 @@ def train_test_split_homologous(
 
 
 class HomologySplitter(DataSplitter):
+    """Homology-based data splitter.
+
+    Uses an external homology mapping file to construct train / test splits.
+    Genes which are homologous are kept within the same 'side' of the data
+    split to reduce data leakage.
+    """
 
     HOMO_URL = (
         "https://zenodo.org/records/13910050/files/"
@@ -164,6 +170,16 @@ class HomologySplitter(DataSplitter):
         test_size: float,
         random_seed: int
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
+        """Split dataframe rows into train and test df using homology split.
+
+        Args:
+            df: Dataframe to split.
+            test_size: Fraction of dataset to assign to test split.
+            random_seed: Random seed used for sampling rows during splitting.
+
+        Returns:
+            Dataframe containing train data and test data.
+        """
         if "gene" not in df.columns:
             raise ValueError("Gene must be column for homology split.")
 
