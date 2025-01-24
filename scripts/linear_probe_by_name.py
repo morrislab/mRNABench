@@ -1,3 +1,5 @@
+"""Run linear probing for dataset using embeddings from given model."""
+
 import argparse
 
 from mrna_bench.linear_probe.linear_probe import LinearProbe
@@ -24,12 +26,12 @@ if __name__ == "__main__":
         task=args.task,
         seq_chunk_overlap=args.seq_chunk_overlap,
         split_type="homology",
-        split_ratios=[0.7, 0.15, 0.15],
+        split_ratios=(0.7, 0.15, 0.15),
         eval_all_splits=True
     )
 
     seeds = [2541, 413, 411, 412, 2547]
     metrics = linear_prober.linear_probe_multirun(seeds)
-    results = linear_prober.compute_multirun_results(metrics)
+    results = linear_prober.compute_multirun_results(metrics, persist=True)
 
     print(results)
