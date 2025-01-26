@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 
 from mrna_bench import load_model, load_dataset
-from mrna_bench.embedder import DatasetEmbedder, get_output_filename
+from mrna_bench.embedder import DatasetEmbedder, get_output_filepath
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_class", type=str)
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     model = load_model(args.model_class, args.model_version, device)
     dataset = load_dataset(args.dataset_name, args.force_recompute)
 
-    out_fn = get_output_filename(
+    out_fn = get_output_filepath(
         dataset.embedding_dir,
         model.short_name,
         dataset.dataset_name,

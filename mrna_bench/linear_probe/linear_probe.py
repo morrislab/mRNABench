@@ -14,7 +14,7 @@ from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
 from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
-from mrna_bench.embedder import get_output_filename
+from mrna_bench.embedder import get_output_filepath
 
 
 class LinearProbe:
@@ -58,7 +58,7 @@ class LinearProbe:
         Returns:
             Embeddings for dataset computed using embedding model.
         """
-        embeddings_fn = get_output_filename(
+        embeddings_fn = get_output_filepath(
             embedding_dir,
             model_short_name,
             dataset_name,

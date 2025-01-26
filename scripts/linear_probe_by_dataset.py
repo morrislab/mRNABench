@@ -1,10 +1,10 @@
-"""Run linear probing for dataset for all generated embeddings."""
+"""Run linear probe on all generated embeddings for a dataset."""
 
 import argparse
 import os
 
-from mrna_bench.linear_probe.linear_probe import LinearProbe
 from mrna_bench.datasets import DATASET_CATALOG
+from mrna_bench.linear_probe.linear_probe import LinearProbe
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset_name", type=str)

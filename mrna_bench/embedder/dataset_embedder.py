@@ -8,7 +8,7 @@ import torch
 
 from mrna_bench.models import EmbeddingModel
 from mrna_bench.datasets import BenchmarkDataset
-from mrna_bench.embedder.embedder_utils import get_output_filename
+from mrna_bench.embedder.embedder_utils import get_output_filepath
 
 
 class DatasetEmbedder:
@@ -100,7 +100,7 @@ class DatasetEmbedder:
         Args:
             embedding: Embedding to persist.
         """
-        out_path = get_output_filename(
+        out_path = get_output_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name,
@@ -160,7 +160,7 @@ class DatasetEmbedder:
 
         all_embeddings = np.concatenate(embeddings, axis=0)
 
-        out_fn = get_output_filename(
+        out_fn = get_output_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name,
