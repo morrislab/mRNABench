@@ -83,7 +83,7 @@ The current models catalogued are:
 
 | Model Name |  Model Versions         | Description   | Citation | Supported<br>by<br>`base_models` |
 | :--------: |  ---------------------- | ------------- | :------: | :------------------------: |
-| `Orthrus` | `orthrus_large_6_track`<br> `orthrus_base_4_track` | Mamba-based RNA FM pre-trained using contrastive learning. | [code](https://github.com/bowang-lab/Orthrus) [paper](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)| ✅ |
+| `Orthrus` | `orthrus-large-6-track`<br> `orthrus-base-4-track` | Mamba-based RNA FM pre-trained using contrastive learning. | [code](https://github.com/bowang-lab/Orthrus) [paper](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)| ✅ |
 | `AIDO.RNA` | `aido_rna_650m` <br> `aido_rna_650m_cds` <br> `aido_rna_1b600m` <br> `aido_rna_1b600m_cds` | Encoder Transformer-based RNA FM pre-trained using MLM on 42M ncRNA sequences. Version that is domain adapted to CDS is available. | [paper](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) | |
 | `RNA-FM` | `rna-fm` <br> `mrna-fm` | Transformer-based RNA FM pre-trained using MLM on 23M ncRNA sequences. mRNA-FM trained on CDS using codon tokenizer. | [github](https://github.com/ml4bio/RNA-FM) | ✅ |
 | `DNABERT2` | `dnabert2` | Transformer-based DNA FM pre-trained using MLM on multispecies genomic dataset. Uses BPE and other modern architectural improvements for efficiency. | [github](https://github.com/MAGICS-LAB/DNABERT_2) | ✅ |
