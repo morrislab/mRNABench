@@ -6,9 +6,45 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 
 from mrna_bench.datasets import DATASET_CATALOG
+from mrna_bench.models.model_catalog import MODEL_CATALOG, MODEL_VERSION_MAP
+
+
+def get_model_shortname_class_map() -> dict[str, str]:
+    """Construct map between model short name and model class."""
+    model_shortname_map = {}
+    for model_name, model_class in MODEL_CATALOG.items():
+        for model_version in MODEL_VERSION_MAP[model_name]:
+            short_name = model_class.get_model_short_name(model_version)
+
+            model_shortname_map[short_name] = model_name
+
+    return model_shortname_map
+
+
+def sort_embedding_by_model_class(embedding_names: list[str]) -> list[str]:
+    """Return list of embeddings sorted by model class name."""
+    shortname_map = get_model_shortname_class_map()
+    output = []
+
+    embedding_map = {}
+
+    for embedding_name in embedding_names:
+        model_short_name = embedding_name.split("_")[3]
+
+        model_class = shortname_map[model_short_name]
+        embedding_map.setdefault(model_class, []).append(embedding_name)
+
+    embedding_map = dict(sorted(embedding_map.items()))
+
+    for v in embedding_map.values():
+        output.extend(sorted(v))
+
+    return output
 
 
 if __name__ == "__main__":
+    shortname_map = get_model_shortname_class_map()
+
     all_results_mean = {}
     all_results_std = {}
 
@@ -22,7 +58,9 @@ if __name__ == "__main__":
         results_path = dataset_path / "lp_results"
 
         if results_path.exists():
-            for result_fn in sorted(os.listdir(results_path)):
+            e_paths = sort_embedding_by_model_class(os.listdir(results_path))
+
+            for result_fn in e_paths:
                 model = result_fn.split("_")[3]
 
                 if "250" in model:
@@ -60,8 +98,6 @@ if __name__ == "__main__":
     ]
 
     for dataset_name, metrics in all_results_mean.items():
-        metrics = dict(sorted(metrics.items()))
-
         model_names = ["_".join(k.split("_")[:-1]) for k in metrics.keys()]
 
         colours = []
@@ -70,7 +106,7 @@ if __name__ == "__main__":
 
         # Assumes model_names sorted
         for model_name in model_names:
-            model_class = model_name.split("-")[0]
+            model_class = shortname_map[model_name]
             if model_class not in seen_model_class:
                 seen_model_class.add(model_class)
                 c_ind += 1
