@@ -3,6 +3,7 @@ from collections.abc import Callable
 import torch
 from transformers import AutoModel, AutoTokenizer
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -42,14 +43,16 @@ class HyenaDNA(EmbeddingModel):
         checkpoint = "LongSafari/{}".format(model_version)
         tokenizer = AutoTokenizer.from_pretrained(
             checkpoint,
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
 
         model = AutoModel.from_pretrained(
             checkpoint,
             torch_dtype=torch.bfloat16,
             device_map="auto",
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
 
         self.tokenizer = tokenizer

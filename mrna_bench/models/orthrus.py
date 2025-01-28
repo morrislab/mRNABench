@@ -5,6 +5,7 @@ import torch
 
 from transformers import AutoModel
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -39,7 +40,8 @@ class Orthrus(EmbeddingModel):
         model_hf_path = "quietflamingo/{}".format(model_version)
         model = AutoModel.from_pretrained(
             model_hf_path,
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
 
         self.is_sixtrack = model_version == "orthrus-large-6-track"

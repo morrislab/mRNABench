@@ -1,7 +1,10 @@
 from collections.abc import Callable
 
 import torch
+from transformers import AutoTokenizer, AutoModel
+from transformers.models.bert.configuration_bert import BertConfig
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -33,22 +36,25 @@ class DNABERT2(EmbeddingModel):
         if model_version != "dnabert2":
             raise ValueError("Only dnabert2 model version available.")
 
-        from transformers import AutoTokenizer, AutoModel
-
         self.tokenizer = AutoTokenizer.from_pretrained(
             "zhihan1996/DNABERT-2-117M",
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
+
+        config = BertConfig.from_pretrained("zhihan1996/DNABERT-2-117M")
 
         self.model = AutoModel.from_pretrained(
             "zhihan1996/DNABERT-2-117M",
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+            config=config
         ).to(self.device)
 
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int,
+        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using DNABERT2.

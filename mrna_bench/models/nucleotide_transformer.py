@@ -1,7 +1,9 @@
 from collections.abc import Callable
 
 import torch
+from transformers import AutoTokenizer, AutoModelForMaskedLM
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -40,16 +42,16 @@ class NucleotideTransformer(EmbeddingModel):
         """
         super().__init__(model_version, device)
 
-        from transformers import AutoTokenizer, AutoModelForMaskedLM
-
         self.tokenizer = AutoTokenizer.from_pretrained(
             "InstaDeepAI/nucleotide-transformer-{}".format(model_version),
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
 
         self.model = AutoModelForMaskedLM.from_pretrained(
             "InstaDeepAI/nucleotide-transformer-{}".format(model_version),
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         ).to(self.device)
 
         self.max_length = self.tokenizer.model_max_length
