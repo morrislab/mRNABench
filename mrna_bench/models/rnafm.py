@@ -3,6 +3,8 @@ from collections.abc import Callable
 import numpy as np
 import torch
 
+import fm
+
 from mrna_bench.models.embedding_model import EmbeddingModel
 
 
@@ -35,8 +37,6 @@ class RNAFM(EmbeddingModel):
             device: PyTorch device used by model inference.
         """
         super().__init__(model_version, device)
-
-        import fm
 
         if model_version == "rna-fm":
             model, alphabet = fm.pretrained.rna_fm_t12()
@@ -71,7 +71,7 @@ class RNAFM(EmbeddingModel):
         Returns:
             RNA-FM representation of sequence with shape (1 x 640).
         """
-        sequence = sequence.replace("U", "T")
+        sequence = sequence.replace("T", "U")
         chunks = self.chunk_sequence(sequence, self.MAX_LENGTH - 2, overlap)
 
         embedding_chunks = []
