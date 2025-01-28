@@ -5,8 +5,10 @@ from .dnabert import DNABERT2
 from .hyenadna import HyenaDNA
 from .nucleotide_transformer import NucleotideTransformer
 from .orthrus import Orthrus
+from .rinalmo import RiNALMo
 from .rnafm import RNAFM
 from .splicebert import SpliceBERT
+from .utrlm import UTRLM
 
 from .embedding_model import EmbeddingModel
 
@@ -16,9 +18,11 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "DNABERT2": DNABERT2,
     "HyenaDNA": HyenaDNA,
     "NucleotideTransformer": NucleotideTransformer,
+    "RiNALMo": RiNALMo,
     "Orthrus": Orthrus,
     "RNA-FM": RNAFM,
-    "SpliceBERT": SpliceBERT
+    "SpliceBERT": SpliceBERT,
+    "UTR-LM": UTRLM
 }
 
 
@@ -51,6 +55,9 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "orthrus-large-6-track",
         "orthrus-base-4-track"
     ],
+    "RiNALMo": [
+        "rinalmo"
+    ],
     "RNA-FM": [
         "rna-fm",
         "mrna-fm"
@@ -59,5 +66,11 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "SpliceBERT.1024nt",
         "SpliceBERT-human.510nt",
         "SpliceBERT.510nt"
+    ],
+    "UTR-LM": [
+        "utrlm-te_el",
+        "utrlm-mrl",
+        "utrlm-te_el-utronly",
+        "utrlm-mrl-utronly"
     ]
 }

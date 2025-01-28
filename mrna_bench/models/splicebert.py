@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 import tarfile
 
-import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
 
