@@ -131,13 +131,13 @@ def test_utrlm_forward_5utr(device):
 
 def test_utrlm_forward_5utr_missing(device):
     """Test embedding only the 5'utr using UTR-LM when no cds exists.
-    
+
     Behaviour should be to use whole sequence.
     """
     text = "AAAGGG"
     cds = np.array([0, 0, 0, 0, 0, 0])
 
-    model = UTRLM("utrlm-te_el", device)
+    model = UTRLM("utrlm-te_el-utronly", device)
 
     ground_truth_vals = torch.mean(torch.arange(8).float()).repeat(1, 128)
 
@@ -160,3 +160,10 @@ def test_utrlm_forward_5utr_missing(device):
         ).cpu()
 
         assert torch.allclose(output, ground_truth_vals)
+
+
+def test_utrlm_forward_5utr_sixtrack(device):
+    """Test UTR-LM properly sets sixtrack flag for UTR only embedding."""
+    model = UTRLM("utrlm-te_el-utronly", device)
+
+    assert model.is_sixtrack is True

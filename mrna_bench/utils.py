@@ -119,4 +119,4 @@ def get_model_weights_path() -> str:
     data_path = pathlib.Path(dm.get_data_path())
     model_path = data_path / "model_weights"
 
-    return model_path
+    return str(model_path)
