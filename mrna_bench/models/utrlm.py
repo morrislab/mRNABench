@@ -28,7 +28,7 @@ class UTRLM(EmbeddingModel):
     by adding '-utr' to the end of the model version.
     """
 
-    MAX_LENGTH = 1026
+    max_length = 1026
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -81,7 +81,7 @@ class UTRLM(EmbeddingModel):
             UTR-LM embedding of sequence with shape (1 x 128).
         """
         sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.MAX_LENGTH - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
 
         embedding_chunks = []
 

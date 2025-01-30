@@ -59,7 +59,7 @@ class NucleotideTransformer(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int,
+        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using NucleotideTransformer.

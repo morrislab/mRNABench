@@ -61,7 +61,7 @@ class HyenaDNA(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int,
+        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using HyenaDNA.
@@ -77,9 +77,10 @@ class HyenaDNA(EmbeddingModel):
         if overlap != 0:
             raise ValueError("HyenaDNA does not chunk sequence.")
 
-        inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
-        inputs = inputs.to(self.device)
-        hidden_states = self.model(inputs)[0]
+        with torch.inference_mode():
+            inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
+            inputs = inputs.to(self.device)
+            hidden_states = self.model(inputs)[0]
 
         embedding_mean = agg_fn(hidden_states, dim=1)
         return embedding_mean

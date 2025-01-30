@@ -21,7 +21,7 @@ class RNAFM(EmbeddingModel):
     Link: https://github.com/ml4bio/RNA-FM/
     """
 
-    MAX_LENGTH = 1024
+    max_length = 1024
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -72,7 +72,7 @@ class RNAFM(EmbeddingModel):
             RNA-FM representation of sequence with shape (1 x 640).
         """
         sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.MAX_LENGTH - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
 
         embedding_chunks = []
 
@@ -101,7 +101,7 @@ class RNAFM(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int,
+        overlap: int = 0,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed sequence using mRNA-FM.
