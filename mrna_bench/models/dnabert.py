@@ -3,6 +3,7 @@ from collections.abc import Callable
 import torch
 from transformers import AutoTokenizer, AutoModel
 from transformers.models.bert.configuration_bert import BertConfig
+from transformers.models.bert.modeling_bert import BertModel
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
@@ -42,7 +43,10 @@ class DNABERT2(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        config = BertConfig.from_pretrained("zhihan1996/DNABERT-2-117M")
+        config = BertConfig.from_pretrained(
+            "zhihan1996/DNABERT-2-117M",
+            cache_dir=get_model_weights_path()
+        )
 
         self.model = AutoModel.from_pretrained(
             "zhihan1996/DNABERT-2-117M",
@@ -50,6 +54,10 @@ class DNABERT2(EmbeddingModel):
             cache_dir=get_model_weights_path(),
             config=config
         ).to(self.device)
+
+        # Reset AutoModel mapping to use default BertConfig for scenarios
+        # where additional non-DNABERT loading occurs.
+        AutoModel._model_mapping.register(BertConfig, BertModel, exist_ok=True)
 
     def embed_sequence(
         self,
