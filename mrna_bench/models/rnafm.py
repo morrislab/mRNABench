@@ -125,7 +125,7 @@ class RNAFM(EmbeddingModel):
 
         _ = splice, overlap  # unused
 
-        sequence = sequence.replace("U", "T")
+        sequence = sequence.replace("T", "U")
 
         first_one_index = np.argmax(cds == 1)
         last_one_index = (len(cds) - 1 - np.argmax(np.flip(cds) == 1)) + 2
@@ -135,7 +135,7 @@ class RNAFM(EmbeddingModel):
         if len(cds_seq) % 3 != 0:
             raise ValueError("Length of CDS is not a multiple of 3.")
 
-        chunks = self.chunk_sequence(cds_seq, 1022 * 3)
+        chunks = self.chunk_sequence(cds_seq, (self.max_length - 2) * 3)
 
         embedding_chunks = []
 
