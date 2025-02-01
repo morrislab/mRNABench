@@ -8,6 +8,7 @@ from .orthrus import Orthrus
 from .rinalmo import RiNALMo
 from .rnafm import RNAFM
 from .splicebert import SpliceBERT
+from .utrbert import UTRBERT
 from .utrlm import UTRLM
 
 from .embedding_model import EmbeddingModel
@@ -22,7 +23,8 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "Orthrus": Orthrus,
     "RNA-FM": RNAFM,
     "SpliceBERT": SpliceBERT,
-    "UTR-LM": UTRLM
+    "3UTRBERT": UTRBERT,
+    "UTR-LM": UTRLM,
 }
 
 
@@ -66,6 +68,16 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "SpliceBERT.1024nt",
         "SpliceBERT-human.510nt",
         "SpliceBERT.510nt"
+    ],
+    "3UTRBERT": [
+        "utrbert-3mer",
+        "utrbert-4mer",
+        "utrbert-5mer",
+        "utrbert-6mer",
+        "utrbert-3mer-utronly",
+        "utrbert-4mer-utronly",
+        "utrbert-5mer-utronly",
+        "utrbert-6mer-utronly"
     ],
     "UTR-LM": [
         "utrlm-te_el",
