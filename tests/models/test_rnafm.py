@@ -173,3 +173,40 @@ def test_mrnafm_forward_chunking_overlap_errors(mrnamodel):
             np.array([0, 0, 0]),
             overlap=1
         )
+
+
+def test_get_cds_full(mrnamodel):
+    """Test get_cds method."""
+    sequence = "CCGATGCCG"
+    cds = np.array([0, 0, 0, 1, 0, 0, 0, 0, 0])
+
+    cds_seq = mrnamodel.get_cds(sequence, cds)
+    assert cds_seq == "ATG"
+
+
+def test_get_cds_missing(mrnamodel):
+    """Test get_cds method when cds is missing."""
+    sequence_1 = "CCGATGCCG"
+    cds_1 = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0])
+
+    sequence_2 = "CCGATGCC"
+    cds_2 = np.array([0, 0, 0, 0, 0, 0, 0, 0])
+
+    cds_seq_1 = mrnamodel.get_cds(sequence_1, cds_1)
+    assert cds_seq_1 == "CCGATGCCG"
+
+    cds_seq_2 = mrnamodel.get_cds(sequence_2, cds_2)
+    assert cds_seq_2 == "CCGATG"
+
+
+def test_get_cds_irregular(mrnamodel):
+    """Test get_cds method when cds is not a multiple of 3."""
+    sequence = "CCGATGCCG"
+    cds_1 = np.array([0, 0, 0, 0, 1, 0, 0, 1, 0])
+    cds_2 = np.array([0, 0, 0, 0, 0, 1, 0, 0, 1])
+
+    cds_1_seq = mrnamodel.get_cds(sequence, cds_1)
+    cds_2_seq = mrnamodel.get_cds(sequence, cds_2)
+
+    assert cds_1_seq == "TGC"
+    assert cds_2_seq == "GCC"
