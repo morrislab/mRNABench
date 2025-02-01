@@ -12,7 +12,7 @@ from mrna_bench.models import EmbeddingModel
 class UTRLM(EmbeddingModel):
     """Inference wrapper for UTR-LM.
 
-    UTR-LM is a transformer-based RNA foundation model that is pre-trained on
+    UTR-LM is a transformer-based mRNA foundation model that is pre-trained on
     random and endogenous 5'UTR sequences from various species using MLM.
 
     Link: https://github.com/a96123155/UTR-LM
@@ -120,7 +120,7 @@ class UTRLM(EmbeddingModel):
         _ = splice
         five_utr_seq = self.get_fiveprime_utr(sequence, cds)
 
-        return self.embed_sequence(five_utr_seq, overlap)
+        return self.embed_sequence(five_utr_seq, overlap, agg_fn)
 
     def get_fiveprime_utr(self, sequence: str, cds: np.ndarray) -> str:
         """Return the portion of a sequence corresponding to the 5'UTR.
