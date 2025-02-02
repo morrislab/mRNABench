@@ -59,13 +59,9 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "orthrus-large-6-track",
         "orthrus-base-4-track"
     ],
-    "RiNALMo": [
-        "rinalmo"
-    ],
-    "RNA-FM": [
-        "rna-fm",
-        "mrna-fm"
-    ],
+    "RiNALMo": ["rinalmo"],
+    "RNA-FM": ["rna-fm", "mrna-fm"],
+    "RNA-MSM": ["rnamsm"],
     "SpliceBERT": [
         "SpliceBERT.1024nt",
         "SpliceBERT-human.510nt",
