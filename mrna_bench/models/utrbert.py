@@ -26,6 +26,8 @@ class UTRBERT(EmbeddingModel):
     https://huggingface.co/multimolecule/utrbert-3mer
     """
 
+    max_length = 512
+
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
@@ -58,8 +60,8 @@ class UTRBERT(EmbeddingModel):
             "multimolecule/{}".format(model_version.replace("-utronly", "")),
             cache_dir=get_model_weights_path()
         ).to(device)
+
         self.kmer_size = int(model_version.split("-")[1].replace("mer", ""))
-        self.max_length = 512
 
     def embed_sequence(
         self,

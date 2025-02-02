@@ -7,6 +7,7 @@ from .nucleotide_transformer import NucleotideTransformer
 from .orthrus import Orthrus
 from .rinalmo import RiNALMo
 from .rnafm import RNAFM
+from .rnamsm import RNAMSM
 from .splicebert import SpliceBERT
 from .utrbert import UTRBERT
 from .utrlm import UTRLM
@@ -22,6 +23,7 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "RiNALMo": RiNALMo,
     "Orthrus": Orthrus,
     "RNA-FM": RNAFM,
+    "RNA-MSM": RNAMSM,
     "SpliceBERT": SpliceBERT,
     "3UTRBERT": UTRBERT,
     "UTR-LM": UTRLM,
