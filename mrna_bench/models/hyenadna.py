@@ -3,6 +3,7 @@ from collections.abc import Callable
 import torch
 from transformers import AutoModel, AutoTokenizer
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -42,14 +43,16 @@ class HyenaDNA(EmbeddingModel):
         checkpoint = "LongSafari/{}".format(model_version)
         tokenizer = AutoTokenizer.from_pretrained(
             checkpoint,
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
 
         model = AutoModel.from_pretrained(
             checkpoint,
             torch_dtype=torch.bfloat16,
             device_map="auto",
-            trust_remote_code=True
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
 
         self.tokenizer = tokenizer
@@ -58,7 +61,7 @@ class HyenaDNA(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int,
+        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using HyenaDNA.
@@ -74,9 +77,10 @@ class HyenaDNA(EmbeddingModel):
         if overlap != 0:
             raise ValueError("HyenaDNA does not chunk sequence.")
 
-        inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
-        inputs = inputs.to(self.device)
-        hidden_states = self.model(inputs)[0]
+        with torch.inference_mode():
+            inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
+            inputs = inputs.to(self.device)
+            hidden_states = self.model(inputs)[0]
 
         embedding_mean = agg_fn(hidden_states, dim=1)
         return embedding_mean

@@ -1,7 +1,10 @@
 from collections.abc import Callable
+import warnings
 
 import numpy as np
 import torch
+
+import fm
 
 from mrna_bench.models.embedding_model import EmbeddingModel
 
@@ -19,7 +22,7 @@ class RNAFM(EmbeddingModel):
     Link: https://github.com/ml4bio/RNA-FM/
     """
 
-    MAX_LENGTH = 1024
+    max_length = 1024
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -35,8 +38,6 @@ class RNAFM(EmbeddingModel):
             device: PyTorch device used by model inference.
         """
         super().__init__(model_version, device)
-
-        import fm
 
         if model_version == "rna-fm":
             model, alphabet = fm.pretrained.rna_fm_t12()
@@ -71,8 +72,8 @@ class RNAFM(EmbeddingModel):
         Returns:
             RNA-FM representation of sequence with shape (1 x 640).
         """
-        sequence = sequence.replace("U", "T")
-        chunks = self.chunk_sequence(sequence, self.MAX_LENGTH - 2, overlap)
+        sequence = sequence.replace("T", "U")
+        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
 
         embedding_chunks = []
 
@@ -101,7 +102,7 @@ class RNAFM(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int,
+        overlap: int = 0,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed sequence using mRNA-FM.
@@ -125,17 +126,11 @@ class RNAFM(EmbeddingModel):
 
         _ = splice, overlap  # unused
 
-        sequence = sequence.replace("U", "T")
+        sequence = sequence.replace("T", "U")
 
-        first_one_index = np.argmax(cds == 1)
-        last_one_index = (len(cds) - 1 - np.argmax(np.flip(cds) == 1)) + 2
+        cds_seq = self.get_cds(sequence, cds)
 
-        cds_seq = sequence[first_one_index:last_one_index + 1]
-
-        if len(cds_seq) % 3 != 0:
-            raise ValueError("Length of CDS is not a multiple of 3.")
-
-        chunks = self.chunk_sequence(cds_seq, 1022 * 3)
+        chunks = self.chunk_sequence(cds_seq, (self.max_length - 2) * 3)
 
         embedding_chunks = []
 
@@ -158,3 +153,31 @@ class RNAFM(EmbeddingModel):
 
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
+
+    def get_cds(self, sequence: str, cds: np.ndarray) -> str:
+        """Get CDS region of sequence.
+
+        CDS must be a multiple of three. For anamolous sequences, returns as
+        much of the CDS as possible that is still a multiple of three.
+
+        Args:
+            sequence: Sequence to extract CDS region from.
+
+        Returns:
+            Sequence of CDS. Returns original sequence if no CDS found with
+            truncation to multiple of three.
+        """
+        if sum(cds) == 0:
+            warnings.warn("No CDS found. Returning truncated sequence.")
+            return sequence[:len(sequence) - (len(sequence) % 3)]
+
+        first_one_index = np.argmax(cds == 1)
+        last_one_index = (len(cds) - 1 - np.argmax(np.flip(cds) == 1)) + 2
+
+        proposed_cds = sequence[first_one_index:last_one_index + 1]
+
+        if len(proposed_cds) % 3 != 0:
+            warnings.warn("Irregular CDS. Returning truncated sequence.")
+            return proposed_cds[:-(len(proposed_cds) % 3)]
+
+        return proposed_cds

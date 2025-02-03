@@ -18,3 +18,12 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "prot-loc": ProteinLocalization,
     "mrl-sugimoto": MRLSugimoto,
 }
+
+DATASET_DEFAULT_TASK: dict[str, str] = {
+    "go-mf": "multilabel",
+    "rnahl-human": "regression",
+    "rnahl-mouse": "regression",
+    "prot-loc": "multilabel",
+    "mrl-sugimoto": "regression",
+    "pcg-ess": "regression",
+}

@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 import tarfile
 
-import numpy as np
 import torch
 from transformers import AutoTokenizer, AutoModel
 
@@ -19,7 +18,7 @@ class SpliceBERT(EmbeddingModel):
     """Inference Wrapper for SpliceBERT.
 
     SpliceBERT is a transformer-based RNA foundation model trained on 2 million
-    vertebrate RNA sequences using a MLM pretraining objective. Alternative
+    vertebrate mRNA sequences using a MLM pretraining objective. Alternative
     versions are trained on only human RNA, and using smaller context windows.
 
     SpliceBERT 510nt versions strictly use 510nt windows, sequence that is not

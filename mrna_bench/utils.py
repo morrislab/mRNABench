@@ -107,3 +107,16 @@ def get_data_path() -> str:
     """
     dm = DataManager()
     return dm.get_data_path()
+
+
+def get_model_weights_path() -> str:
+    """Get path where model weights are stored.
+
+    Returns:
+        Directory where model weights are stored.
+    """
+    dm = DataManager()
+    data_path = pathlib.Path(dm.get_data_path())
+    model_path = data_path / "model_weights"
+
+    return str(model_path)
