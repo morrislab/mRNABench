@@ -94,6 +94,10 @@ The current models catalogued are shown below. Currently, all models but AIDO.RN
 | `UTR-LM` | `utrlm-te_el` <br> `utrlm-mrl` | Transformer-based RNA foundation model that is pre-trained on random and endogenous 5'UTR sequences from various species using MLM. | [[Github]](https://github.com/a96123155/UTR-LM) |
 | `3UTRBERT` | `utrbert-3mer` <br> `utrbert-4mer` <br> `utrbert-5mer` <br> `utrbert-6mer` | Transformer-based RNA foundation model that is pre-trained on the 3'UTR regions of 100K RNA sequences using MLM. | [[Github]](https://github.com/yangyn533/3UTRBERT) |
 | `RNA-MSM` | `rnamsm` | Transformer-based RNA foundation model trained by using MSA from custom structure-based homology map on roughly 8M RNA sequences. | [[Github]](https://github.com/yikunpku/RNA-MSM) |
+| `RNAErnie` | `rnaernie` | Transformer-based RNA foundation model trained using MLM at various mask sizes on 23M ncRNA sequences. | [[Github]](https://github.com/CatIIIIIIII/RNAErnie) |
+| `RNABERT` | `rnabert` | Transformer-based RNA foundation model trained using MLM and a structural alignment objective on 80K ncRNA sequences | [[Github]](https://github.com/mana438/RNABERT) |
+| `ERNIE-RNA` | `ernierna` <br> `ernierna-ss` | Transformer-based RNA foundation model trained using MLM with structural information added as attention mask biases. Pretrained on 20M ncRNA sequences. | [[Github]](https://github.com/Bruce-ywj/ERNIE-RNA) |
+
 
 Many of the models wrappers (3UTRBERT, RiNALMo, UTR-LM, RNA-MSM, RNAErnie) use reimplementations from the `multimolecule` package. See their [website](https://multimolecule.danling.org/) for more details.
 
