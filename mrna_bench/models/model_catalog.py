@@ -2,10 +2,13 @@ from typing import Type
 
 from .aido import AIDORNA
 from .dnabert import DNABERT2
+from .ernierna import ERNIERNA
 from .hyenadna import HyenaDNA
 from .nucleotide_transformer import NucleotideTransformer
 from .orthrus import Orthrus
 from .rinalmo import RiNALMo
+from .rnabert import RNABERT
+from .rnaernie import RNAErnie
 from .rnafm import RNAFM
 from .rnamsm import RNAMSM
 from .splicebert import SpliceBERT
@@ -18,10 +21,13 @@ from .embedding_model import EmbeddingModel
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "AIDO.RNA": AIDORNA,
     "DNABERT2": DNABERT2,
+    "ERNIE-RNA": ERNIERNA,
     "HyenaDNA": HyenaDNA,
     "NucleotideTransformer": NucleotideTransformer,
     "RiNALMo": RiNALMo,
     "Orthrus": Orthrus,
+    "RNABERT": RNABERT,
+    "RNAErnie": RNAErnie,
     "RNA-FM": RNAFM,
     "RNA-MSM": RNAMSM,
     "SpliceBERT": SpliceBERT,
@@ -38,6 +44,7 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "aido_rna_1b600m_cds"
     ],
     "DNABERT2": ["dnabert2"],
+    "ERNIE-RNA": ["ernierna", "ernierna-ss"],
     "HyenaDNA": [
         "hyenadna-large-1m-seqlen-hf",
         "hyenadna-medium-450k-seqlen-hf",
@@ -60,6 +67,8 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "orthrus-base-4-track"
     ],
     "RiNALMo": ["rinalmo"],
+    "RNABERT": ["rnabert"],
+    "RNAErnie": ["rnaernie"],
     "RNA-FM": ["rna-fm", "mrna-fm"],
     "RNA-MSM": ["rnamsm"],
     "SpliceBERT": [

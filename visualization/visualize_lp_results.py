@@ -63,7 +63,10 @@ if __name__ == "__main__":
             for result_fn in e_paths:
                 model = result_fn.split("_")[3]
 
-                if "250" in model:
+                if "o250" in result_fn:
+                    continue
+
+                if "utronly" in model:
                     continue
 
                 overlap = int(result_fn.split("_")[4][1:])
@@ -94,7 +97,17 @@ if __name__ == "__main__":
         "#984ea3",
         "#999999",
         "#e41a1c",
-        "#dede00"
+        "#dede00",
+        # ================
+        "#17becf",
+        "#bcbd22",
+        "#e377c2",
+        "#8c564b",
+        "#7f7f7f",
+        "#1f77b4",
+        "#ffbb78",
+        "#2ca02c",
+        "#d62728"
     ]
 
     for dataset_name, metrics in all_results_mean.items():
