@@ -103,7 +103,7 @@ class UTRLM(EmbeddingModel):
         cds: np.ndarray,
         splice: np.ndarray,
         overlap: int = 0,
-        agg_fn: Callable | None = None,
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed ONLY the 5'UTR of a sequence using UTR-LM.
 

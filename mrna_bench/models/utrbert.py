@@ -83,7 +83,7 @@ class UTRBERT(EmbeddingModel):
         tokens = self.tokenizer(sequence, return_tensors="pt")
         input_ids = list(tokens["input_ids"][0][1:-1])
 
-        chunks = self.chunk_sequence(input_ids, self.max_length - 2, overlap)
+        chunks = self.chunk_tokens(input_ids, self.max_length - 2, overlap)
 
         embedding_chunks = []
 
