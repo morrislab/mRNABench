@@ -69,6 +69,9 @@ if __name__ == "__main__":
                 if "utronly" in model:
                     continue
 
+                if "rnabert" in model:
+                    continue
+
                 overlap = int(result_fn.split("_")[4][1:])
 
                 with open(results_path / result_fn, "r") as f:
@@ -97,7 +100,6 @@ if __name__ == "__main__":
         "#984ea3",
         "#999999",
         "#e41a1c",
-        "#dede00",
         # ================
         "#17becf",
         "#bcbd22",
@@ -126,20 +128,25 @@ if __name__ == "__main__":
             colours.append(CB_color_cycle[c_ind])
 
         ax = plt.gca()
-        f = plt.gcf()
+        f = plt.figure(figsize=(10, 5))
 
         x_pos = np.arange(len(model_names))
-        plt.bar(x_pos, metrics.values(), color=colours)
+        plt.bar(
+            x_pos,
+            metrics.values(),
+            color=colours,
+            yerr=list(all_results_std[dataset_name].values()),
+        )
 
-        text_anchor = (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.025
-
+        text_anchor = (ax.get_ylim()[1] - ax.get_ylim()[0]) * 0.015
         for i, x in enumerate(x_pos):
             plt.text(
-                x - 0.3,
+                x - 0.25,
                 text_anchor,
                 model_names[i],
                 rotation=90,
-                c="black",
+                c="white",
+                fontsize=12
             )
 
         if dataset_name in ["prot-loc", "go-mf"]:
@@ -149,6 +156,7 @@ if __name__ == "__main__":
 
         plt.title("Linear Probe " + dataset_name)
         ax.axes.get_xaxis().set_visible(False)
+        plt.xticks([])
         f.tight_layout()
 
         plt.savefig("./output/lp_results_{}.png".format(dataset_name))

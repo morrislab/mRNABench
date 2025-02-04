@@ -3,6 +3,7 @@ import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 from mrna_bench.datasets.dataset_utils import ohe_to_str
+from mrna_bench.utils import download_file
 
 
 RNAHLM_URL = "https://zenodo.org/records/14708163/files/rna_hl_mouse.npz"
@@ -20,9 +21,13 @@ class RNAHalfLifeMouse(BenchmarkDataset):
         super().__init__(
             dataset_name="rnahl-mouse",
             species=["mouse"],
-            raw_data_src_url=RNAHLM_URL,
             force_redownload=force_redownload
         )
+
+    def get_raw_data(self):
+        """Download raw data from source."""
+        print("Downloading raw data...")
+        self.raw_data_path = download_file(RNAHLM_URL, self.raw_data_dir)
 
     def process_raw_data(self) -> pd.DataFrame:
         """Process raw data into Pandas dataframe.

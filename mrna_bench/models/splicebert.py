@@ -58,7 +58,7 @@ class SpliceBERT(EmbeddingModel):
 
         if not (weight_path / "models").exists():
             print("Fetching SpliceBERT weights.")
-            dl_path, _ = download_file(MODEL_WEIGHT_URL, str(weight_path))
+            dl_path = download_file(MODEL_WEIGHT_URL, str(weight_path))
 
             with tarfile.open(dl_path) as f:
                 f.extractall(weight_path)

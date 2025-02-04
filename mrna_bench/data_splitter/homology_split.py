@@ -116,7 +116,7 @@ class HomologySplitter(DataSplitter):
             self.homology_map_path = homology_map_path
 
         if force_redownload:
-            out = download_file(self.HOMO_URL, self.homology_map_path, True)[0]
+            out = download_file(self.HOMO_URL, self.homology_map_path, True)
 
             with zipfile.ZipFile(out, "r") as zip_ref:
                 for file in zip_ref.namelist():
@@ -183,7 +183,7 @@ class HomologySplitter(DataSplitter):
         if "gene" not in df.columns:
             raise ValueError("Gene must be column for homology split.")
 
-        genes = df["gene"]
+        genes = df["gene"].to_list()
 
         train_indices, test_indices = train_test_split_homologous(
             genes,

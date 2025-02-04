@@ -9,7 +9,7 @@ def download_file(
     url: str,
     download_dir: str,
     force_redownload: bool = False
-) -> tuple[str, bool]:
+) -> str:
     """Download file at the given url.
 
     Args:
@@ -18,7 +18,7 @@ def download_file(
         force_redownload: Forces download even if file already exists.
 
     Returns:
-        Path to downloaded file and whether file was downloaded.
+        Path to downloaded file.
     """
     response = requests.get(url, stream=True)
     response.raise_for_status()
@@ -28,7 +28,7 @@ def download_file(
 
     if os.path.isfile(output_path) and not force_redownload:
         print("File already downloaded.")
-        return (output_path, False)
+        return output_path
 
     with open(output_path, "wb") as f:
         with tqdm(total=total_bytes, unit="B", unit_scale=True) as bar:
@@ -37,7 +37,7 @@ def download_file(
                     f.write(chunk)
                     bar.update(len(chunk))
 
-    return (output_path, True)
+    return output_path
 
 
 class DataManager:

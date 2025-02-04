@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 
 import numpy as np
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
 
 from sklearn.base import RegressorMixin, ClassifierMixin
 from sklearn.linear_model import RidgeCV, LinearRegression, LogisticRegression
@@ -380,6 +380,7 @@ class LinearProbe:
             split_y = splits[s_name + "_y"]
             metrics[s_name + "_mse"] = np.mean((split_pred - split_y) ** 2)
             metrics[s_name + "_r"] = pearsonr(split_pred, split_y).statistic
+            metrics[s_name + "_p"] = spearmanr(split_pred, split_y).statistic
 
         return metrics
 
