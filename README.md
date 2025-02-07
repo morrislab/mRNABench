@@ -79,12 +79,11 @@ print(metrics)
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
 
 ## Model Catalog
-The current models catalogued are shown below. Currently, all models but AIDO.RNA are supported by the `base_models` optional installation.
+The models supported by the `base_models` installation are catalogued below.
 
 | Model Name | &nbsp;&nbsp;Model&nbsp;Versions&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Description | Citation |
 | :--------: |  ---------------------- | ------------- | :------: | 
 | `Orthrus` | `orthrus-large-6-track`<br> `orthrus-base-4-track` | Mamba-based RNA FM pre-trained using contrastive learning on ~45M RNA transcripts to capture functional and evolutionary relationships. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
-| `AIDO.RNA` | `aido_rna_650m` <br> `aido_rna_650m_cds` <br> `aido_rna_1b600m` <br> `aido_rna_1b600m_cds` | Encoder Transformer-based RNA FM pre-trained using MLM on 42M ncRNA sequences. Version that is domain adapted to CDS is available. | [[Paper]](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) |
 | `RNA-FM` | `rna-fm` <br> `mrna-fm` | Transformer-based RNA FM pre-trained using MLM on 23M ncRNA sequences. mRNA-FM trained on mRNA CDS regions using codon tokenizer. | [[Github]](https://github.com/ml4bio/RNA-FM) |
 | `DNABERT2` | `dnabert2` | Transformer-based DNA FM pre-trained using MLM on multispecies genomic dataset. Uses BPE and other modern architectural improvements for efficiency. | [[Github]](https://github.com/MAGICS-LAB/DNABERT_2) |
 | `Nucleotide`<br>`Transformer` | `2.5b-multi-species` <br> `2.5b-1000g` <br> `500m-human-ref` <br> `500m-1000g` <br> `v2-50m-multi-species` <br> `v2-100m-multi-species` <br> `v2-250m-multi-species` <br> `v2-500m-multi-species` | Transformer-based DNA FM pre-trained using MLM on a variety of possible datasets at various model sizes. Sequence is tokenized using 6-mers. | [[Github]](https://github.com/instadeepai/nucleotide-transformer) |
