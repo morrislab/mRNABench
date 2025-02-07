@@ -2,8 +2,6 @@ from collections.abc import Callable
 
 import torch
 
-from multimolecule import RnaTokenizer, RiNALMoModel
-
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
@@ -34,6 +32,13 @@ class RiNALMo(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from multimolecule import RnaTokenizer, RiNALMoModel
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use RiNALMo."
+            )
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/rinalmo",

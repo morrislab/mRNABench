@@ -3,8 +3,6 @@ from typing import Callable
 
 import torch
 
-from multimolecule import RnaErnieModel, RnaTokenizer
-
 from mrna_bench.models import EmbeddingModel
 
 
@@ -36,6 +34,13 @@ class RNAErnie(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from multimolecule import RnaErnieModel, RnaTokenizer
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use RNAErnie."
+            )
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version)

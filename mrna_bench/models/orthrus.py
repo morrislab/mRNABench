@@ -3,8 +3,6 @@ from collections.abc import Callable
 import numpy as np
 import torch
 
-from transformers import AutoModel
-
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
@@ -36,6 +34,13 @@ class Orthrus(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from transformers import AutoModel
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use Orthrus."
+            )
 
         model_hf_path = "quietflamingo/{}".format(model_version)
         model = AutoModel.from_pretrained(

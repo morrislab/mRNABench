@@ -2,8 +2,6 @@ from typing import Callable
 
 import torch
 
-from multimolecule import RnaMsmModel, RnaTokenizer
-
 from mrna_bench.models import EmbeddingModel
 from mrna_bench import get_model_weights_path
 
@@ -40,6 +38,13 @@ class RNAMSM(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from multimolecule import RnaMsmModel, RnaTokenizer
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use RNA-MSM."
+            )
 
         self.model = RnaMsmModel.from_pretrained(
             "multimolecule/{}".format(model_version),

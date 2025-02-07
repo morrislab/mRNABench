@@ -2,8 +2,6 @@ from typing import Callable
 
 import torch
 
-from multimolecule import RnaTokenizer, RnaBertModel
-
 from mrna_bench.models import EmbeddingModel
 from mrna_bench.utils import get_model_weights_path
 
@@ -36,6 +34,13 @@ class RNABERT(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from multimolecule import RnaTokenizer, RnaBertModel
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use RNABERT."
+            )
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version),

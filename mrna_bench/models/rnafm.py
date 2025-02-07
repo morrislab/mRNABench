@@ -4,8 +4,6 @@ import warnings
 import numpy as np
 import torch
 
-import fm
-
 from mrna_bench.models.embedding_model import EmbeddingModel
 
 
@@ -38,6 +36,13 @@ class RNAFM(EmbeddingModel):
             device: PyTorch device used by model inference.
         """
         super().__init__(model_version, device)
+
+        try:
+            import fm
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use RNA-FM."
+            )
 
         if model_version == "rna-fm":
             model, alphabet = fm.pretrained.rna_fm_t12()

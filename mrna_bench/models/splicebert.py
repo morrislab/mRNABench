@@ -5,7 +5,6 @@ from pathlib import Path
 import tarfile
 
 import torch
-from transformers import AutoTokenizer, AutoModel
 
 from mrna_bench.models.embedding_model import EmbeddingModel
 from mrna_bench.utils import get_data_path, download_file
@@ -49,6 +48,13 @@ class SpliceBERT(EmbeddingModel):
             device: PyTorch device used by model inference.
         """
         super().__init__(model_version, device)
+
+        try:
+            from transformers import AutoTokenizer, AutoModel
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use SpliceBERT."
+            )
 
         self.is_sixtrack = False
 

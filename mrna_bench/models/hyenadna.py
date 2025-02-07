@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 import torch
-from transformers import AutoModel, AutoTokenizer
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
@@ -39,6 +38,13 @@ class HyenaDNA(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from transformers import AutoModel, AutoTokenizer
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use HyenaDNA."
+            )
 
         checkpoint = "LongSafari/{}".format(model_version)
         tokenizer = AutoTokenizer.from_pretrained(

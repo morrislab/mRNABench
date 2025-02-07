@@ -1,7 +1,6 @@
 from collections.abc import Callable
 
 import torch
-from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
@@ -41,6 +40,14 @@ class NucleotideTransformer(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from transformers import AutoTokenizer, AutoModelForMaskedLM
+        except ImportError:
+            raise ImportError((
+                "Install base_models optional dependency to use "
+                "NucleotideTransformer."
+            ))
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             "InstaDeepAI/nucleotide-transformer-{}".format(model_version),

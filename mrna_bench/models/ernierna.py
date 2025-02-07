@@ -2,8 +2,6 @@ from typing import Callable
 
 import torch
 
-from multimolecule import ErnieRnaModel, RnaTokenizer
-
 from mrna_bench.models import EmbeddingModel
 from mrna_bench.utils import get_model_weights_path
 
@@ -41,8 +39,12 @@ class ERNIERNA(EmbeddingModel):
         """
         super().__init__(model_version, device)
 
-        self.model_version = model_version
-        self.device = device
+        try:
+            from multimolecule import ErnieRnaModel, RnaTokenizer
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional dependency to use ERNIE-RNA."
+            )
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version),

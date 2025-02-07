@@ -15,12 +15,12 @@ class AIDORNA(EmbeddingModel):
     Link: https://github.com/genbio-ai/ModelGenerator
     """
 
-    MAX_LENGTH = 1024
+    max_length = 1024
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
-        return model_version.replace("rna_", "").replace("_", "-")
+        return model_version.replace("_", "-")
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize AIDO.RNA.
@@ -35,7 +35,11 @@ class AIDORNA(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
-        from modelgenerator.tasks import Embed
+
+        try:
+            from modelgenerator.tasks import Embed
+        except ImportError:
+            raise ImportError("AIDO.RNA missing required dependencies.")
 
         model = Embed.from_config({"model.backbone": model_version}).eval()
 
@@ -57,7 +61,7 @@ class AIDORNA(EmbeddingModel):
         Returns:
             AIDO.RNA embedding of sequence with shape (1 x H).
         """
-        chunks = self.chunk_sequence(sequence, self.MAX_LENGTH - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
 
         embedding_chunks = []
 

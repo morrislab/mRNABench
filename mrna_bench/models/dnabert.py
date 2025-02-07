@@ -1,9 +1,6 @@
 from collections.abc import Callable
 
 import torch
-from transformers import AutoTokenizer, AutoModel
-from transformers.models.bert.configuration_bert import BertConfig
-from transformers.models.bert.modeling_bert import BertModel
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
@@ -33,6 +30,15 @@ class DNABERT2(EmbeddingModel):
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
+
+        try:
+            from transformers import AutoTokenizer, AutoModel
+            from transformers.models.bert.configuration_bert import BertConfig
+            from transformers.models.bert.modeling_bert import BertModel
+        except ImportError:
+            raise ImportError(
+                "Install base_models optional_dependency to use DNABERT2."
+            )
 
         if model_version != "dnabert2":
             raise ValueError("Only dnabert2 model version available.")
