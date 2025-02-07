@@ -173,7 +173,7 @@ class LinearProbe:
         )
 
     @classmethod
-    def init_from_embeding(
+    def init_from_embedding(
         cls,
         embedding_name: str,
         task: str,
@@ -281,6 +281,55 @@ class LinearProbe:
         self.split_ratios = split_ratios
         self.eval_all_splits = eval_all_splits
 
+    def get_output_filename(self, random_seed: str | int) -> str:
+        """Generate output filename for linear probing results.
+
+        Args:
+            random_seed: Random seed used for data split, or 'all' if getting
+                file name for multi-run results.
+
+        Returns:
+            Filename for linear probing results.
+        """
+        out_fn = "result_lp_{}_{}_o{}_{}_tcol-{}_split-{}".format(
+            self.dataset.dataset_name,
+            self.model_short_name,
+            self.seq_chunk_overlap,
+            self.task,
+            self.target_col,
+            self.split_type
+        )
+
+        if random_seed == "all":
+            out_fn += "_rs-all"
+        else:
+            out_fn += "_rs-{}".format(random_seed)
+
+        out_fn += ".json"
+
+        return out_fn
+
+    def persist_run_results(
+        self,
+        metrics: dict[str, float] | dict[str, str],
+        random_seed: int | str
+    ):
+        """Persist linear probe results.
+
+        Args:
+            metrics: Linear probing metrics.
+            random_seed: Random seed used for data split, or 'all'.
+        """
+        dataset_root = Path(self.dataset.dataset_path)
+
+        result_dir = dataset_root / "lp_results"
+        result_dir.mkdir(exist_ok=True)
+
+        result_fn = self.get_output_filename(random_seed)
+
+        with open(result_dir / result_fn, "w") as f:
+            json.dump(metrics, f)
+
     def concat_embeddings(self, embeddings: np.ndarray):
         """Merge embeddings with benchmark dataframe.
 
@@ -311,26 +360,35 @@ class LinearProbe:
         )
 
         splits = {
-            "train_X": np.vstack(train_df["embeddings"]),
-            "val_X": np.vstack(val_df["embeddings"]),
-            "test_X": np.vstack(test_df["embeddings"]),
-            "train_y": train_df[self.target_col],
-            "val_y": val_df[self.target_col],
-            "test_y": test_df[self.target_col],
+            "train_X": np.array(train_df["embeddings"].tolist()),
+            "val_X": np.array(val_df["embeddings"].tolist()),
+            "test_X": np.array(test_df["embeddings"].tolist()),
+            "train_y": train_df[self.target_col].to_numpy(),
+            "val_y": val_df[self.target_col].to_numpy(),
+            "test_y": test_df[self.target_col].to_numpy(),
         }
 
-        if self.task == "multilabel":
-            splits["train_y"] = np.vstack(splits["train_y"])
-            splits["val_y"] = np.vstack(splits["val_y"])
-            splits["test_y"] = np.vstack(splits["test_y"])
+        if isinstance(splits["train_y"][0], np.ndarray):
+            splits["train_y"] = np.vstack(list(splits["train_y"]))
+            splits["val_y"] = np.vstack(list(splits["val_y"]))
+            splits["test_y"] = np.vstack(list(splits["test_y"]))
+        else:
+            splits["train_y"] = splits["train_y"]
+            splits["val_y"] = splits["val_y"]
+            splits["test_y"] = splits["test_y"]
 
         return splits
 
-    def run_linear_probe(self, random_seed: int = 2541) -> dict[str, float]:
+    def run_linear_probe(
+        self,
+        random_seed: int = 2541,
+        persist=False
+    ) -> dict[str, float]:
         """Perform data split and run linear probe.
 
         Args:
             random_seed: Random seed used for data split.
+            persist: Save results to data directory.
 
         Returns:
             Dictionary of linear probing metrics per split.
@@ -352,6 +410,9 @@ class LinearProbe:
             metrics = self.eval_classification(model, splits)
         elif self.task == "multilabel":
             metrics = self.eval_multilabel(model, splits)
+
+        if persist:
+            self.persist_run_results(metrics, random_seed)
 
         return metrics
 
@@ -456,11 +517,13 @@ class LinearProbe:
     def linear_probe_multirun(
         self,
         random_seeds: list[int],
+        persist: bool = False
     ) -> dict[int, dict[str, float]]:
         """Run multiple linear probes with distinct data split randomization.
 
         Args:
             random_seeds: Trandom seeds used per individual linear probe run.
+            persist: Save results to data directory.
 
         Returns:
             Dictionary of metrics per random seed used to generate data splits
@@ -468,8 +531,34 @@ class LinearProbe:
         """
         metrics = {}
         for random_seed in random_seeds:
-            metric = self.run_linear_probe(random_seed)
+            metric = self.run_linear_probe(random_seed, persist)
             metrics[random_seed] = metric
+        return metrics
+
+    def load_results(
+        self,
+        random_seeds: list[int]
+    ) -> dict[int, dict[str, float]]:
+        """Load multi-run linear probing results from persisted files.
+
+        Args:
+            random_seeds: Random seeds used for data splits.
+
+        Returns:
+            Dictionary of metrics per random seed used to generate data splits
+            for each individual linear probing run.
+        """
+        metrics = {}
+        dataset_root = Path(self.dataset.dataset_path)
+
+        result_dir = dataset_root / "lp_results"
+
+        for random_seed in random_seeds:
+            result_fn = self.get_output_filename(random_seed)
+
+            with open(result_dir / result_fn, "r") as f:
+                metrics[random_seed] = json.load(f)
+
         return metrics
 
     def compute_multirun_results(
@@ -511,21 +600,6 @@ class LinearProbe:
                 print("{} ± {}".format(metric_mean[k], se))
 
         if persist:
-            dataset_root = Path(self.dataset.dataset_path)
-
-            result_dir = dataset_root / "lp_results"
-            result_dir.mkdir(exist_ok=True)
-
-            result_fn = "result_lp_{}_{}_o{}_{}_tcol-{}_split-{}.json".format(
-                self.dataset.dataset_name,
-                self.model_short_name,
-                self.seq_chunk_overlap,
-                self.task,
-                self.target_col,
-                self.split_type,
-            )
-
-            with open(result_dir / result_fn, "w") as f:
-                json.dump(metric_out, f)
+            self.persist_run_results(metric_out, "all")
 
         return metric_out
