@@ -343,18 +343,25 @@ class LinearProbe:
     def get_df_splits(
         self,
         random_seed: int,
+        dropna: bool = True
     ) -> dict[str, np.ndarray]:
         """Get the train, validation, test data and label splits.
 
         Args:
             random_seed: Random seed used for generating data splits.
+            dropna: Drop rows with NaN values in target column.
 
         Returns:
             Dictionary containing training, validation, testing splits for
             data and labels as numpy arrays.
         """
+        data_df_copy = self.data_df.copy()
+
+        if dropna:
+            data_df_copy = data_df_copy.dropna(subset=[self.target_col])
+
         train_df, val_df, test_df = self.splitter.get_all_splits_df(
-            self.data_df,
+            data_df_copy,
             self.split_ratios,
             random_seed
         )
@@ -382,13 +389,15 @@ class LinearProbe:
     def run_linear_probe(
         self,
         random_seed: int = 2541,
-        persist=False
+        persist: bool = False,
+        dropna: bool = True
     ) -> dict[str, float]:
         """Perform data split and run linear probe.
 
         Args:
             random_seed: Random seed used for data split.
             persist: Save results to data directory.
+            dropna: Drop rows with NaN values in target column
 
         Returns:
             Dictionary of linear probing metrics per split.
@@ -399,7 +408,7 @@ class LinearProbe:
             print("Invalid task name.")
             raise
 
-        splits = self.get_df_splits(random_seed)
+        splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
         model.fit(splits["train_X"], splits["train_y"])
