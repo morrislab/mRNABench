@@ -6,6 +6,7 @@ import torch
 
 from mrna_bench.models.helix_mrna import HelixmRNAWrapper
 
+
 @pytest.fixture(scope="module")
 def device() -> torch.device:
     """Get torch cuda device if available, else use cpu."""

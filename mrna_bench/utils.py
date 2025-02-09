@@ -136,7 +136,7 @@ class DataManager:
         if not c_init or not p_init:
             warn("Model weights storage path is not set. Using default path.")
             data_path = Path(self.get_data_path())
-            self.update_model_weights_path(data_path / "model_weights")
+            self.update_model_weights_path(str(data_path / "model_weights"))
 
         with open(self.config_path) as stream:
             return yaml.safe_load(stream)["model_weights_path"]
