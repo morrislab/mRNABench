@@ -1,8 +1,10 @@
 import os
-import pathlib
+from pathlib import Path
 import requests
 from tqdm import tqdm
 import yaml
+
+from warnings import warn
 
 
 def download_file(
@@ -55,6 +57,7 @@ class DataManager:
             data_dir_path: New path to data storage directory.
         """
         data_dir_path = os.path.normpath(data_dir_path)
+        data_dir_path = str(Path(data_dir_path).expanduser())
 
         config = {"data_path": data_dir_path}
 
@@ -72,12 +75,15 @@ class DataManager:
 
         if not os.path.exists(data_dir_path):
             print("Specified data path does not exist. Making directories.")
-            pathlib.Path(data_dir_path).mkdir(parents=True, exist_ok=True)
+            Path(data_dir_path).mkdir(parents=True, exist_ok=True)
 
     def get_data_path(self) -> str:
         """Load data_dir_path from config.
 
         Throws exception if config is not yet initialized.
+
+        Returns:
+            Path to data storage directory.
         """
         if os.path.exists(self.config_path):
             with open(self.config_path) as stream:
@@ -87,6 +93,53 @@ class DataManager:
                 "Data storage path is not set. Please run: "
                 "mrna_bench.update_data_path(path_to_store_data)"
             ))
+
+    def update_model_weights_path(self, model_weights_path: str):
+        """Update path to model weights storage directory.
+
+        Args:
+            model_weights_path: New path to model weights storage directory.
+        """
+        model_weights_path = os.path.normpath(model_weights_path)
+        model_weights_path = str(Path(model_weights_path).expanduser())
+
+        config = {"model_weights_path": model_weights_path}
+
+        if not os.path.exists(self.config_path):
+            with open(self.config_path, "w") as f:
+                yaml.dump(config, f, default_flow_style=False)
+        else:
+            with open(self.config_path, "r") as f:
+                data = yaml.safe_load(f)
+
+            data["model_weights_path"] = model_weights_path
+
+            with open(self.config_path, "w") as f:
+                yaml.dump(data, f, default_flow_style=False)
+
+        if not os.path.exists(model_weights_path):
+            print("Specified weights path does not exist. Making directories.")
+            Path(model_weights_path).mkdir(parents=True, exist_ok=True)
+
+    def get_model_weights_path(self) -> str:
+        """Load model_weights_path from config.
+
+        Returns default path if config is not yet initialized, which uses the
+        data path as the root.
+
+        Returns:
+            Path to model weights storage directory.
+        """
+        c_init = os.path.exists(self.config_path)
+        p_init = "model_weights_path" in yaml.safe_load(open(self.config_path))
+
+        if not c_init or not p_init:
+            warn("Model weights storage path is not set. Using default path.")
+            data_path = Path(self.get_data_path())
+            self.update_model_weights_path(data_path / "model_weights")
+
+        with open(self.config_path) as stream:
+            return yaml.safe_load(stream)["model_weights_path"]
 
 
 def update_data_path(path_to_data: str):
@@ -109,6 +162,16 @@ def get_data_path() -> str:
     return dm.get_data_path()
 
 
+def update_model_weights_path(path_to_weights: str):
+    """Update path to model weights storage directory.
+
+    Args:
+        path_to_weights: New path to directory where model weights are stored.
+    """
+    dm = DataManager()
+    dm.update_model_weights_path(path_to_weights)
+
+
 def get_model_weights_path() -> str:
     """Get path where model weights are stored.
 
@@ -116,7 +179,4 @@ def get_model_weights_path() -> str:
         Directory where model weights are stored.
     """
     dm = DataManager()
-    data_path = pathlib.Path(dm.get_data_path())
-    model_path = data_path / "model_weights"
-
-    return str(model_path)
+    return dm.get_model_weights_path()
