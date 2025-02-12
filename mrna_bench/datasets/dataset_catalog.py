@@ -8,6 +8,12 @@ from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
 from .prot_loc import ProteinLocalization
 from .mrl_sugimoto import MRLSugimoto
+from .mrl_sample import (
+    MRLSampleEGFP,
+    MRLSampleMCherry,
+    MRLSampleDesigned,
+    MRLSampleVarying
+)
 
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "go-mf": GOMolecularFunction,
@@ -17,13 +23,18 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "rnahl-mouse": RNAHalfLifeMouse,
     "prot-loc": ProteinLocalization,
     "mrl-sugimoto": MRLSugimoto,
+    "mrl-sample-egfp": MRLSampleEGFP,
+    "mrl-sample-mcherry": MRLSampleMCherry,
+    "mrl-sample-designed": MRLSampleDesigned,
+    "mrl-sample-varying": MRLSampleVarying,
 }
 
 DATASET_DEFAULT_TASK: dict[str, str] = {
     "go-mf": "multilabel",
-    "rnahl-human": "regression",
-    "rnahl-mouse": "regression",
+    "rnahl-human": "reg_ridge",
+    "rnahl-mouse": "reg_ridge",
     "prot-loc": "multilabel",
-    "mrl-sugimoto": "regression",
-    "pcg-ess": "regression",
+    "mrl-sugimoto": "reg_ridge",
+    "pcg-ess": "classification",
+    "lncrna-ess": "classification",
 }
