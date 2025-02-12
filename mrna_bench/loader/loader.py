@@ -10,6 +10,7 @@ if TYPE_CHECKING:
 def load_model(
     model_name: str,
     model_version: str,
+    checkpoint: str,
     device: "torch.device"
 ) -> "EmbeddingModel":
     """Load Embedding Model.
@@ -26,7 +27,12 @@ def load_model(
         from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
 
         model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
-        model = model_class(model_version, device)
+        
+        if model_name != "Orthrus":
+            model = model_class(model_version, device)
+        else:
+            model = model_class(model_version, checkpoint, device)
+
     except ModuleNotFoundError:
         raise ModuleNotFoundError(
             "PyTorch not installed. Model benchmarking unavailable."
