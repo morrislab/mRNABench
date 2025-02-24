@@ -78,7 +78,8 @@ class LinearProbe:
         seq_chunk_overlap: int = 0,
         split_type: str = "homology",
         split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
-        eval_all_splits: bool = False
+        eval_all_splits: bool = False,
+        **kwargs # noqa
     ) -> "LinearProbe":
         """Initialize LinearProbe from instantiated dataset and model.
 
@@ -113,7 +114,8 @@ class LinearProbe:
             target_col,
             split_type,
             split_ratios,
-            eval_all_splits
+            eval_all_splits,
+            **kwargs
         )
 
     @classmethod
@@ -127,7 +129,8 @@ class LinearProbe:
         seq_chunk_overlap: int = 0,
         split_type: str = "homology",
         split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
-        eval_all_splits: bool = False
+        eval_all_splits: bool = False,
+        **kwargs # noqa
     ) -> "LinearProbe":
         """Initialize LinearProbe using model and dataset names.
 
@@ -151,7 +154,7 @@ class LinearProbe:
         model_class = MODEL_CATALOG[model_name]
         model_short_name = model_class.get_model_short_name(model_version)
 
-        dataset = load_dataset(dataset_name)
+        dataset = load_dataset(dataset_name, target_col = target_col, **kwargs)
 
         embeddings = cls.load_persisted_embeddings(
             dataset.embedding_dir,
@@ -169,7 +172,8 @@ class LinearProbe:
             target_col,
             split_type,
             split_ratios,
-            eval_all_splits
+            eval_all_splits,
+            **kwargs
         )
 
     @classmethod
@@ -180,7 +184,8 @@ class LinearProbe:
         target_col: str,
         split_type: str = "homology",
         split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
-        eval_all_splits: bool = False
+        eval_all_splits: bool = False,
+        **kwargs # noqa
     ) -> "LinearProbe":
         """Initialize LinearProbe from embedding file name.
 
@@ -208,7 +213,7 @@ class LinearProbe:
         model_short_name = emb_fn_arr[1]
         seq_chunk_overlap = int(emb_fn_arr[2][1:].replace(".npz", ""))
 
-        dataset = load_dataset(emb_fn_arr[0])
+        dataset = load_dataset(emb_fn_arr[0], target_col = target_col, **kwargs)
 
         embeddings = cls.load_persisted_embeddings(
             dataset.embedding_dir,
@@ -226,7 +231,8 @@ class LinearProbe:
             target_col,
             split_type,
             split_ratios,
-            eval_all_splits
+            eval_all_splits,
+            **kwargs
         )
 
     def __init__(
