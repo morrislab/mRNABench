@@ -20,16 +20,17 @@ dependencies = [
     "scikit-learn",
     "numpy<2",
     "pandas<=2.2.2",
-    "requests"
+    "requests",
+    "parasail"
 ]
 [project.urls]
 Repository = "https://github.com/IanShi1996/mRNABench"
 
 [project.optional-dependencies]
 base_models = [
-    "torch==2.2.2",
+    "torch==2.1.2",
     "transformers",
-    "mamba-ssm==1.2.0.post1",
+    "mamba-ssm==2.1.0",
     "rna-fm==0.2.2",
     "accelerate"
 ]

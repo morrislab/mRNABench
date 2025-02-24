@@ -239,7 +239,8 @@ class LinearProbe:
         target_col: str,
         split_type: str = "homology",
         split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
-        eval_all_splits: bool = False
+        eval_all_splits: bool = False,
+        **kwargs # noqa
     ):
         """Initialize LinearProbe.
 
@@ -274,6 +275,13 @@ class LinearProbe:
         if split_type == "homology":
             self.splitter = SPLIT_CATALOG[split_type](
                 self.dataset.species
+            )
+        elif split_type == "ss": # only for lncRNA
+            self.splitter = SPLIT_CATALOG[split_type](
+                sequences = self.dataset.data_df[self.dataset.data_df.isoform_resolved == 1].sequence.tolist(),
+                ss_map_path = kwargs["ss_map_path"] if "ss_map_path" in kwargs else None,
+                threshold = kwargs["threshold"] if "threshold" in kwargs else 0.75,
+                dataset_name = self.dataset.dataset_name
             )
         else:
             self.splitter = SPLIT_CATALOG["default"]()

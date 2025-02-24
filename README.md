@@ -22,8 +22,8 @@ CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
 conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
-pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install mrna-bench[base_models]
+pip install torch==2.1.2 --index-url https://download.pytorch.org/whl/cu121
+pip install -e .[base_models]
 pip uninstall triton
 ```
 Inference with other models will require the installation of the model's
@@ -36,6 +36,9 @@ import mrna_bench as mb
 
 path_to_dir_to_store_data = "DESIRED_PATH"
 mb.update_data_path(path_to_dir_to_store_data)
+
+path_to_dir_to_store_weights = "/data1/morrisq/ian/rna_benchmarks/model_weights"
+mb.update_model_weights_path(path_to_dir_to_store_weights)
 ```
 
 ## Usage

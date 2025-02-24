@@ -12,7 +12,10 @@ RNAHLM_URL = "https://zenodo.org/records/14708163/files/rna_hl_mouse.npz"
 class RNAHalfLifeMouse(BenchmarkDataset):
     """RNA Halflife in Mouse Dataset."""
 
-    def __init__(self, force_redownload: bool = False):
+    def __init__(self, 
+        force_redownload: bool = False,
+        **kwargs # noqa
+    ):
         """Initialize RNAHalfLifeMouse dataset.
 
         Args:
