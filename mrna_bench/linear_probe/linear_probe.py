@@ -278,7 +278,7 @@ class LinearProbe:
             )
         elif split_type == "ss": # only for lncRNA
             self.splitter = SPLIT_CATALOG[split_type](
-                self.dataset.data_df.sequence.tolist(),
+                sequences = self.dataset.data_df[self.dataset.data_df.isoform_resolved == 1].sequence.tolist(),
                 ss_map_path = kwargs["ss_map_path"] if "ss_map_path" in kwargs else None,
                 threshold = kwargs["threshold"] if "threshold" in kwargs else 0.75,
                 dataset_name = self.dataset.dataset_name

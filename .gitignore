@@ -1,4 +1,5 @@
 mrna_bench/config.yaml
+scripts/embedding/slurm/logs/
 
 .vscode/
 
