@@ -390,7 +390,8 @@ class LinearProbe:
         self,
         random_seed: int = 2541,
         persist: bool = False,
-        dropna: bool = True
+        dropna: bool = True,
+        return_pred_only: bool = False,
     ) -> dict[str, float]:
         """Perform data split and run linear probe.
 
@@ -412,6 +413,12 @@ class LinearProbe:
 
         np.random.seed(random_seed)
         model.fit(splits["train_X"], splits["train_y"])
+
+        if return_pred_only:
+            if self.eval_all_splits:
+                return model.predict_proba(splits["test_X"]), splits['test_y']
+            else:
+                return model.predict_proba(splits["val_X"]), splits['val_y']
 
         if self.task in ["regression", "reg_lin", "reg_ridge"]:
             metrics = self.eval_regression(model, splits)
@@ -513,12 +520,12 @@ class LinearProbe:
             metrics[s_name + "_auroc"] = roc_auc_score(
                 split_y,
                 split_pred,
-                average="micro"
+                average="macro"
             )
             metrics[s_name + "_auprc"] = average_precision_score(
                 split_y,
                 split_pred,
-                average="micro"
+                average="macro"
             )
 
         return metrics
@@ -526,7 +533,8 @@ class LinearProbe:
     def linear_probe_multirun(
         self,
         random_seeds: list[int],
-        persist: bool = False
+        persist: bool = False,
+        return_pred_only: bool = False,
     ) -> dict[int, dict[str, float]]:
         """Run multiple linear probes with distinct data split randomization.
 
@@ -540,7 +548,7 @@ class LinearProbe:
         """
         metrics = {}
         for random_seed in random_seeds:
-            metric = self.run_linear_probe(random_seed, persist)
+            metric = self.run_linear_probe(random_seed, persist, return_pred_only=return_pred_only)
             metrics[random_seed] = metric
         return metrics
 

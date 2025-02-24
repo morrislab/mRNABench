@@ -6,8 +6,8 @@ import torch
 import torch.nn as nn
 import numpy as np
 
-from mamba_ssm.modules.mamba_simple import Mamba#, Block - comment in for earlier mamba version
-from mamba_ssm.modules.block import Block # comment out for earlier mamba version
+from mamba_ssm.modules.mamba_simple import Mamba, Block #- comment in for earlier mamba version
+# from mamba_ssm.modules.block import Block # comment out for earlier mamba version
 from huggingface_hub import PyTorchModelHubMixin
 
 
@@ -44,7 +44,7 @@ def create_block(
     block = Block(
         d_model,
         mix_cls,
-        mlp_cls=nn.Identity, # comment out for earlier mamba version
+        # mlp_cls=nn.Identity, # comment out for earlier mamba version
         norm_cls=norm_cls,
         fused_add_norm=fused_add_norm,
         residual_in_fp32=residual_in_fp32,

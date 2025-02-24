@@ -7,6 +7,7 @@ from .lncrna_essentiality import LNCRNAEssentiality
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
 from .prot_loc import ProteinLocalization
+from .prot_loc_van_nostrand import ProteinLocalizationVan
 from .mrl_sugimoto import MRLSugimoto
 
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
@@ -16,6 +17,7 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
     "prot-loc": ProteinLocalization,
+    "prot-loc-van": ProteinLocalizationVan,
     "mrl-sugimoto": MRLSugimoto,
 }
 

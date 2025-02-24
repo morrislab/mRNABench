@@ -27,7 +27,7 @@ class Orthrus(EmbeddingModel):
     def __init__(self, model_version: str, 
         checkpoint : str, 
         device: torch.device,
-        model_repository: str = "/home/dalalt1/compute/Orthrus/models/"
+        model_repository: str = "/data1/morrisq/ian/rna_contrast/runs/"
     ):
         """Initialize Orthrus model.
 
@@ -58,7 +58,7 @@ class Orthrus(EmbeddingModel):
                 checkpoint_name=checkpoint,
             )
 
-            self.is_sixtrack = '6_track' in model_version
+            self.is_sixtrack = '6_track' in model_version or '6t' in model_version
 
         else: 
             model_hf_path = "quietflamingo/{}".format(model_version)
