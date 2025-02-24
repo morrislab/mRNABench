@@ -225,7 +225,10 @@ class MRLSample(BenchmarkDataset):
 class MRLSampleEGFP(MRLSample):
     """Concrete class for MRL Sample for egfp experiments."""
 
-    def __init__(self, force_redownload=False):
+    def __init__(self, 
+        force_redownload=False,
+        **kwargs # noqa
+    ):
         """Initialize MRLSampleEGFP dataset.
 
         Args:
@@ -237,7 +240,10 @@ class MRLSampleEGFP(MRLSample):
 class MRLSampleMCherry(MRLSample):
     """Concrete class for MRL Sample for mCherry experiments."""
 
-    def __init__(self, force_redownload=False):
+    def __init__(self, 
+        force_redownload=False,
+        **kwargs # noqa
+    ):
         """Initialize MRLSampleMCherry dataset.
 
         Args:
@@ -249,7 +255,10 @@ class MRLSampleMCherry(MRLSample):
 class MRLSampleDesigned(MRLSample):
     """Concrete class for MRL Sample for designed experiments."""
 
-    def __init__(self, force_redownload=False):
+    def __init__(self, 
+        force_redownload=False,
+        **kwargs # noqa
+    ):
         """Initialize MRLSampleDesigned dataset.
 
         Args:
@@ -261,7 +270,10 @@ class MRLSampleDesigned(MRLSample):
 class MRLSampleVarying(MRLSample):
     """Concrete class for MRL Sample for varying length experiments."""
 
-    def __init__(self, force_redownload=False):
+    def __init__(self, 
+        force_redownload=False,
+        **kwargs # noqa
+    ):
         """Initialize MRLSampleVarying dataset.
 
         Args:
