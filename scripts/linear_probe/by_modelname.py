@@ -13,11 +13,15 @@ parser.add_argument("--data", type=str)
 parser.add_argument("--task", type=str)
 parser.add_argument("--target", type=str, default="target")
 parser.add_argument("--seq_chunk_overlap", type=int, default=0)
+parser.add_argument("--split_type", type=str, default="default")
+parser.add_argument("--isoform_resolved", type=str)
 args = parser.parse_args()
 
 
 if __name__ == "__main__":
     model_class = MODEL_CATALOG[args.model_name]
+
+    isoform_resolved = True if args.isoform_resolved == "True" else False
 
     prober = LinearProbe.init_from_name(
         args.model_name,
@@ -26,14 +30,20 @@ if __name__ == "__main__":
         target_col=args.target,
         task=args.task,
         seq_chunk_overlap=args.seq_chunk_overlap,
-        split_type="default",
+        split_type=args.split_type,
         split_ratios=(0.7, 0.15, 0.15),
-        eval_all_splits=True
+        eval_all_splits=True,
+        ss_map_path="/home/dalalt1/Orthrus_eval/essentiality/lncRNA_homology/output/similarity_results_full.npz",
+        threshold=0.75,
+        isoform_resolved=isoform_resolved,
     )
 
     lp_res_path = prober.dataset.dataset_path + "/lp_results"
 
-    seeds = [2541, 413, 411, 412, 2547]
+    seeds = [0, 1, 7, 9, 42, 123, 256, 777, 2025, 31415]
+
+    metrics = prober.linear_probe_multirun(seeds, persist=True)
+    average_metrics = prober.compute_multirun_results(metrics, persist=True)
 
     for seed in seeds:
         if not os.path.exists(lp_res_path):
