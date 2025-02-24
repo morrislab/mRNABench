@@ -48,10 +48,10 @@ class Orthrus(EmbeddingModel):
             )
         
         if checkpoint is not None:
-            if 'bidirectional' in model_version:
-                from mrna_bench.models.cerebrus_src import load_model
-            else:
-                from mrna_bench.models.orthrus_src import load_model
+            # if 'bidirectional' in model_version:
+            #     from mrna_bench.models.cerebrus_src import load_model
+            # else:
+            from mrna_bench.models.orthrus_src import load_model
 
             model = load_model(
                 f"{model_repository}{model_version}",
