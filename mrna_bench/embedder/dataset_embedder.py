@@ -164,7 +164,7 @@ class DatasetEmbedder:
 
         np_embeddings = embeddings.float().detach().cpu().numpy()
 
-        if len(gene_list) > 0 and len(row_index_list) > 0:
+        if gene_list is not None and row_index_list is not None:
             np_genes = np.array(gene_list)
             np_row_ix = np.array(row_index_list)
             np.savez_compressed(out_path,
