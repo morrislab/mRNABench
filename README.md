@@ -29,6 +29,13 @@ pip uninstall triton
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
 
+Inference using AIDO.RNA requires installing the following (in its own env)
+```bash
+pip install modelgenerator
+pip install git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442
+pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769
+```
+
 ### Post-install
 After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
 ```python
