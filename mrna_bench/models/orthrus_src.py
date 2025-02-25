@@ -7,6 +7,7 @@ import torch.nn as nn
 import numpy as np
 
 from huggingface_hub import PyTorchModelHubMixin
+from torch.utils.checkpoint import checkpoint
 
 from torch.utils.checkpoint import checkpoint
 
@@ -14,10 +15,11 @@ try:
     from hydra import Hydra
     from mamba_ssm.modules.mamba_simple import Mamba#, Block #- comment in for earlier mamba version
     from mamba_ssm.modules.block import Block # comment out for earlier mamba version
-    from mamba_ssm.ops.triton.layer_norm import RMSNorm, layer_norm_fn, rms_norm_fn
 except ImportError:
     from mamba_ssm.modules.mamba_simple import Mamba, Block
 
+from mamba_ssm.ops.triton.layer_norm import RMSNorm, layer_norm_fn, rms_norm_fn
+    
 class BiMamba(nn.Module):
     """Caduceus wrapper around Mamba to support bi-directionality.
     
