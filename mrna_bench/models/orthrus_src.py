@@ -10,10 +10,13 @@ from huggingface_hub import PyTorchModelHubMixin
 
 from torch.utils.checkpoint import checkpoint
 
-from hydra import Hydra
-from mamba_ssm.modules.mamba_simple import Mamba#, Block #- comment in for earlier mamba version
-from mamba_ssm.modules.block import Block # comment out for earlier mamba version
-from mamba_ssm.ops.triton.layer_norm import RMSNorm, layer_norm_fn, rms_norm_fn
+try:
+    from hydra import Hydra
+    from mamba_ssm.modules.mamba_simple import Mamba#, Block #- comment in for earlier mamba version
+    from mamba_ssm.modules.block import Block # comment out for earlier mamba version
+    from mamba_ssm.ops.triton.layer_norm import RMSNorm, layer_norm_fn, rms_norm_fn
+except ImportError:
+    from mamba_ssm.modules.mamba_simple import Mamba, Block
 
 class BiMamba(nn.Module):
     """Caduceus wrapper around Mamba to support bi-directionality.
@@ -102,14 +105,24 @@ def create_block(
         
     norm_cls = partial(nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_epsilon, **factory_kwargs)
     
-    block = Block(
-        d_model,
-        mix_cls,
-        mlp_cls=nn.Identity, # comment out for earlier mamba version
-        norm_cls=norm_cls,
-        fused_add_norm=fused_add_norm,
-        residual_in_fp32=residual_in_fp32,
-    )
+    try:
+        block = Block(
+            d_model,
+            mix_cls,
+            mlp_cls=nn.Identity, # comment out for earlier mamba version
+            norm_cls=norm_cls,
+            fused_add_norm=fused_add_norm,
+            residual_in_fp32=residual_in_fp32,
+        )
+    except TypeError:
+        block = Block(
+            d_model,
+            mix_cls,
+            norm_cls=norm_cls,
+            fused_add_norm=fused_add_norm,
+            residual_in_fp32=residual_in_fp32,
+        )
+
     block.layer_idx = layer_idx
     return block
 
