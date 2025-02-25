@@ -17,7 +17,6 @@ class LNCRNAEssentiality(BenchmarkDataset):
     def __init__(self, 
         dataset_name: str,
         force_redownload: bool = False,
-        isoform_resolved: bool = False,
         **kwargs # noqa
     ):
         """Initialize LNCRNAEssentiality dataset.
@@ -28,7 +27,7 @@ class LNCRNAEssentiality(BenchmarkDataset):
                     "hap1",
                     "hek293ft",
                     "k562",
-                    "mda_mb_231",
+                    "mda-mb-231",
                     "thp1",
                     "shared"
                 }.
@@ -37,10 +36,8 @@ class LNCRNAEssentiality(BenchmarkDataset):
         if type(self) is LNCRNAEssentiality:
             raise TypeError("LNCRNAEssentiality is an abstract class.")
 
-        self.isoform_resolved = isoform_resolved
-
         self.exp_target = dataset_name.split("-")[-1]
-        assert self.exp_target in ["hap1", "hek293ft", "k562", "mda_mb_231", "thp1", "shared"]
+        assert self.exp_target in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]
 
         super().__init__(
             dataset_name=dataset_name,
@@ -94,15 +91,10 @@ class LNCRNAEssHAP1(LNCRNAEssentiality):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.isoform_resolved = kwargs["isoform_resolved"]
-        self.target_col = kwargs["target_col"]
+        self.isoform_resolved = kwargs.get("isoform_resolved", True)
+        self.target_col = kwargs.get("target_col", "essential_HAP1")
 
-        super().__init__(dataset_name="lncrna-ess-hap1", 
-            target_col=self.target_col, 
-            force_redownload=force_redownload, 
-            isoform_resolved=self.isoform_resolved, 
-        )
-
+        super().__init__("lncrna-ess-hap1", force_redownload)
 
 class LNCRNAEssHEK293FT(LNCRNAEssentiality):
     """Concrete class for HEK293FT cell line experiments."""
@@ -116,15 +108,10 @@ class LNCRNAEssHEK293FT(LNCRNAEssentiality):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.isoform_resolved = kwargs["isoform_resolved"]
-        self.target_col = kwargs["target_col"]
+        self.isoform_resolved = kwargs.get("isoform_resolved", True)
+        self.target_col = kwargs.get("target_col", "essential_HEK293FT")
 
-        super().__init__(dataset_name="lncrna-ess-hek293ft", 
-            target_col=self.target_col, 
-            force_redownload=force_redownload, 
-            isoform_resolved=self.isoform_resolved, 
-        )
-
+        super().__init__("lncrna-ess-hek293ft", force_redownload)
 
 class LNCRNAEssK562(LNCRNAEssentiality):
     """Concrete class for K562 cell line experiments."""
@@ -138,37 +125,27 @@ class LNCRNAEssK562(LNCRNAEssentiality):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.isoform_resolved = kwargs["isoform_resolved"]
-        self.target_col = kwargs["target_col"]
+        self.isoform_resolved = kwargs.get("isoform_resolved", True)
+        self.target_col = kwargs.get("target_col", "essential_K562")
 
-        super().__init__(dataset_name="lncrna-ess-k562", 
-            target_col=self.target_col, 
-            force_redownload=force_redownload, 
-            isoform_resolved=self.isoform_resolved, 
-        )
-
+        super().__init__("lncrna-ess-k562", force_redownload)
 
 class LNCRNAEssMDA_MB_231(LNCRNAEssentiality):
-    """Concrete class for MDA_MB_231 cell line experiments."""
+    """Concrete class for MDA-MB-231 cell line experiments."""
 
     def __init__(self, 
         force_redownload=False,
         **kwargs # noqa
     ):
-        """Initialize MDA_MB_231 dataset.
+        """Initialize MDA-MB-231 dataset.
 
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.isoform_resolved = kwargs["isoform_resolved"]
-        self.target_col = kwargs["target_col"]
+        self.isoform_resolved = kwargs.get("isoform_resolved", True)
+        self.target_col = kwargs.get("target_col", "essential_MDA-MB-231")
 
-        super().__init__(dataset_name="lncrna-ess-mda_mb_231", 
-            target_col=self.target_col, 
-            force_redownload=force_redownload, 
-            isoform_resolved=self.isoform_resolved, 
-        )
-
+        super().__init__("lncrna-ess-mda-mb-231", force_redownload)
 
 class LNCRNAEssTHP1(LNCRNAEssentiality):
     """Concrete class for THP1 cell line experiments."""
@@ -182,15 +159,10 @@ class LNCRNAEssTHP1(LNCRNAEssentiality):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.isoform_resolved = kwargs["isoform_resolved"]
-        self.target_col = kwargs["target_col"]
+        self.isoform_resolved = kwargs.get("isoform_resolved", True)
+        self.target_col = kwargs.get("target_col", "essential_THP1")
 
-        super().__init__(dataset_name="lncrna-ess-thp1", 
-            target_col=self.target_col, 
-            force_redownload=force_redownload, 
-            isoform_resolved=self.isoform_resolved, 
-        )
-
+        super().__init__("lncrna-ess-thp1", force_redownload)
 
 class LNCRNAEssShared(LNCRNAEssentiality):
     """Concrete class for Shared cell line essentiality."""
@@ -204,11 +176,7 @@ class LNCRNAEssShared(LNCRNAEssentiality):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.isoform_resolved = kwargs["isoform_resolved"]
-        self.target_col = kwargs["target_col"]
+        self.isoform_resolved = kwargs.get("isoform_resolved", True)
+        self.target_col = kwargs.get("target_col", "essential_SHARED")
 
-        super().__init__(dataset_name="lncrna-ess-shared", 
-            target_col=self.target_col, 
-            force_redownload=force_redownload, 
-            isoform_resolved=self.isoform_resolved, 
-        )
+        super().__init__("lncrna-ess-shared", force_redownload)

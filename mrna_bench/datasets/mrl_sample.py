@@ -80,7 +80,10 @@ class MRLSample(BenchmarkDataset):
     This class is a superclass which is inherited by the specific experiments.
     """
 
-    def __init__(self, dataset_name: str, force_redownload: bool = False, mask_out_splice_track: bool = False):
+    def __init__(self, 
+        dataset_name: str, 
+        force_redownload: bool = False
+    ):
         """Initialize MRLSample dataset.
 
         Args:
@@ -98,7 +101,6 @@ class MRLSample(BenchmarkDataset):
 
         self.exp_target = dataset_name.split("-")[-1]
         assert self.exp_target in ["egfp", "mcherry", "designed", "varying"]
-        self.mask_out_splice_track = mask_out_splice_track
 
         super().__init__(dataset_name, ["human"], force_redownload)
 
@@ -240,6 +242,7 @@ class MRLSampleEGFP(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
+        self.mask_out_splice_track = kwargs.get("mask_out_splice_track", False)
         super().__init__("mrl-sample-egfp", force_redownload)
 
 
@@ -255,6 +258,7 @@ class MRLSampleMCherry(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
+        self.mask_out_splice_track = kwargs.get("mask_out_splice_track", False)
         super().__init__("mrl-sample-mcherry", force_redownload)
 
 
@@ -270,6 +274,7 @@ class MRLSampleDesigned(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
+        self.mask_out_splice_track = kwargs.get("mask_out_splice_track", False)
         super().__init__("mrl-sample-designed", force_redownload)
 
 
@@ -285,4 +290,5 @@ class MRLSampleVarying(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
+        self.mask_out_splice_track = kwargs.get("mask_out_splice_track", False)
         super().__init__("mrl-sample-varying", force_redownload)
