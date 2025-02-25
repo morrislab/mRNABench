@@ -80,7 +80,7 @@ class MRLSample(BenchmarkDataset):
     This class is a superclass which is inherited by the specific experiments.
     """
 
-    def __init__(self, dataset_name: str, force_redownload: bool = False):
+    def __init__(self, dataset_name: str, force_redownload: bool = False, mask_out_splice_track: bool = False):
         """Initialize MRLSample dataset.
 
         Args:
@@ -98,6 +98,7 @@ class MRLSample(BenchmarkDataset):
 
         self.exp_target = dataset_name.split("-")[-1]
         assert self.exp_target in ["egfp", "mcherry", "designed", "varying"]
+        self.mask_out_splice_track = mask_out_splice_track
 
         super().__init__(dataset_name, ["human"], force_redownload)
 
@@ -184,7 +185,12 @@ class MRLSample(BenchmarkDataset):
             out_df["sequence"] = PRIMER_SEQ + out_df["utr"] + EGFP_CDS
 
         out_df["cds"] = out_df["utr"].apply(self.get_cds_track)
-        out_df["splice"] = out_df["cds"].apply(lambda x: np.zeros_like(x))
+        
+        # zeros if no drop -0.25 if self.mask_out_splice_track
+        if self.mask_out_splice_track:
+            out_df["splice"] = out_df["cds"].apply(lambda x: -0.25 * np.ones_like(x))
+        else:
+            out_df["splice"] = out_df["cds"].apply(lambda x: np.zeros_like(x))
 
         out_df.drop(columns=["utr"], inplace=True)
 

@@ -28,6 +28,7 @@ class Orthrus(EmbeddingModel):
         checkpoint : str, 
         device: torch.device,
         model_repository: str = "/data1/morrisq/ian/rna_contrast/runs/"
+        # model_repository: str = "/data1/morrisq/dalalt1/Orthrus/models/"
     ):
         """Initialize Orthrus model.
 

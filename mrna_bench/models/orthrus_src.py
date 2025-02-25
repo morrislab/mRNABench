@@ -9,8 +9,8 @@ import numpy as np
 from huggingface_hub import PyTorchModelHubMixin
 from torch.utils.checkpoint import checkpoint
 
-from hydra import Hydra
-# from mamba_ssm.modules.mamba_simple import Mamba#, Block #- comment in for earlier mamba version
+# from hydra import Hydra
+from mamba_ssm.modules.mamba_simple import Mamba#, Block #- comment in for earlier mamba version
 from mamba_ssm.modules.block import Block # comment out for earlier mamba version
 from mamba_ssm.ops.triton.layer_norm import RMSNorm, layer_norm_fn, rms_norm_fn
 
@@ -93,7 +93,8 @@ def create_block(
     if bidirectional is None:
         mix_cls = partial(Mamba, layer_idx=layer_idx, **ssm_cfg, **factory_kwargs)
     elif bidirectional == "hydra":
-        mix_cls = partial(Hydra, layer_idx=layer_idx, use_mem_eff_path=True, **ssm_cfg, **factory_kwargs)
+        raise ValueError("Hydra is not supported in this version")
+    #     mix_cls = partial(Hydra, layer_idx=layer_idx, use_mem_eff_path=True, **ssm_cfg, **factory_kwargs)
     elif bidirectional == "caduceus":
         mix_cls = partial(BiMamba, layer_idx=layer_idx, bidirectional_strategy=bidirectional_strategy, bidirectional_weight_tie=bidirectional_weight_tie, **ssm_cfg, **factory_kwargs)
     else:
@@ -104,7 +105,7 @@ def create_block(
     block = Block(
         d_model,
         mix_cls,
-        # mlp_cls=nn.Identity, # comment out for earlier mamba version
+        mlp_cls=nn.Identity, # comment out for earlier mamba version
         norm_cls=norm_cls,
         fused_add_norm=fused_add_norm,
         residual_in_fp32=residual_in_fp32,
