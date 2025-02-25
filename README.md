@@ -13,11 +13,10 @@ If you are interested in the benchmark datasets **only**, you can run:
 pip install mrna-bench
 ```
 
-### Full Version
+### Orthrus - mRNA Bench (Bidirectional / Unidirectional)
 The inference-capable version of mRNABench that can generate embeddings using
-Orthrus, DNA-BERT2, NucleotideTransformer, RNA-FM, and HyenaDNA can be 
-installed as shown below. Note that this requires PyTorch version 2.2.2 with 
-CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
+Orthrus can be installed as shown below. Note that this requires PyTorch version 
+2.1.2 with CUDA 12.1.
 ```bash
 conda create --name mrna_bench python=3.10
 conda activate mrna_bench
@@ -29,7 +28,9 @@ pip uninstall triton
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
 
-Inference using AIDO.RNA requires installing the following (in its own env)
+### AIDO.RNA - mRNA Bench
+Inference using AIDO.RNA requires installing the following in its own 
+environment.
 ```bash
 conda create --name aido_bench python=3.10
 conda activate aido_bench
@@ -39,7 +40,11 @@ pip install git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b
 pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769
 ```
 
-Inference with other models (not Orthrus or AIDO.RNA) (in its own env)
+### Almost Full - mRNA Bench (No Orthrus Bidirectionality)
+The inference-capable version of mRNABench that can generate embeddings using
+Orthrus (unidirectional), DNA-BERT2, NucleotideTransformer, RNA-FM, and HyenaDNA can be 
+installed as shown below. Note that this requires PyTorch version 2.2.2 with 
+CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
 ```bash 
 conda create --name model_bench python=3.10
 conda activate model_bench
