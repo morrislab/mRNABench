@@ -31,9 +31,26 @@ dependencies first, which are usually listed on the model's GitHub page (see bel
 
 Inference using AIDO.RNA requires installing the following (in its own env)
 ```bash
+conda create --name aido_bench python=3.10
+conda activate aido_bench
+
 pip install modelgenerator
 pip install git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442
 pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769
+```
+
+Inference with other models (not Orthrus or AIDO.RNA) (in its own env)
+```bash 
+conda create --name model_bench python=3.10
+conda activate model_bench
+
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+pip install -e .
+
+pip install mamba-ssm==1.2.0.post1
+pip install rna-fm
+pip install multimolecule
+pip uninstall triton
 ```
 
 ### Post-install

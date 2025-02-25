@@ -19,7 +19,7 @@ class RiNALMo(EmbeddingModel):
     https://huggingface.co/multimolecule/rinalmo
     """
 
-    max_length = 3072
+    max_length = 4096
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
