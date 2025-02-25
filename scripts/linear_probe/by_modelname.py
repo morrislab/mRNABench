@@ -6,6 +6,14 @@ import os
 from mrna_bench.linear_probe.linear_probe import LinearProbe
 from mrna_bench.models import MODEL_CATALOG
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_name", type=str)
 parser.add_argument("--model_version", type=str)
@@ -14,14 +22,12 @@ parser.add_argument("--task", type=str)
 parser.add_argument("--target", type=str, default="target")
 parser.add_argument("--seq_chunk_overlap", type=int, default=0)
 parser.add_argument("--split_type", type=str, default="default")
-parser.add_argument("--isoform_resolved", type=str)
+parser.add_argument("--isoform_resolved", type=str2bool, default=False)
 args = parser.parse_args()
 
 
 if __name__ == "__main__":
     model_class = MODEL_CATALOG[args.model_name]
-
-    isoform_resolved = True if args.isoform_resolved == "True" else False
 
     prober = LinearProbe.init_from_name(
         args.model_name,
@@ -35,7 +41,7 @@ if __name__ == "__main__":
         eval_all_splits=True,
         ss_map_path="/home/dalalt1/Orthrus_eval/essentiality/lncRNA_homology/output/similarity_results_full.npz",
         threshold=0.75,
-        isoform_resolved=isoform_resolved,
+        isoform_resolved=args.isoform_resolved,
     )
 
     lp_res_path = prober.dataset.dataset_path + "/lp_results"
