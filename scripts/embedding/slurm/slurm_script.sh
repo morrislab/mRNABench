@@ -10,8 +10,8 @@
 #SBATCH --time=00:30:00
 #SBATCH --mail-type=BEGIN,END,FAIL
 #SBATCH --mail-user=dalalt1@mskcc.org
-#SBATCH --output=./logs/aido_embed%A.out
-#SBATCH --error=./logs/aido_embed%A.err
+#SBATCH --output=./logs/aido_embed.%A.out
+#SBATCH --error=./logs/aido_embed.%A.err
 
 source /home/dalalt1/compute/miniforge3/etc/profile.d/conda.sh
 conda activate /home/dalalt1/compute/miniforge3/envs/aido_bench

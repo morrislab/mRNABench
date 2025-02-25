@@ -1,11 +1,12 @@
 #!/bin/bash
 
-model_name=AIDO.RNA
+model_name=AIDO.RNA #RiNALMo
 model_versions=(
-    "aido_rna_1b600m"
-    # "aido_rna_1b600m_cds"
-    "aido_rna_650m"
-    # "aido_rna_650m_cds"
+    # "aido_rna_1b600m"
+    "aido_rna_1b600m_cds"
+    # "aido_rna_650m"
+    "aido_rna_650m_cds"
+    # "rinalmo"
 )
 
 dataset_names=(
@@ -32,7 +33,7 @@ for version in "${model_versions[@]}"; do
             else
                 for ((chunk_ind=0; chunk_ind<max_chunks; chunk_ind++)); do
                     sbatch slurm_script.sh $model_name $version $dataset_name $isoform_resolved $target_col $transcript_avg $chunk_ind $max_chunks $seq_overlap
-                # exit
+
                 done
             fi
         done
