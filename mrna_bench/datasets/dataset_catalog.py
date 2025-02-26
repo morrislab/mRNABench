@@ -185,3 +185,30 @@ DATASET_INFO = {
         "transcript_avg": False,
     },
 }
+
+for ttype in ["pcg", "lncrna"]:
+    split_type = "homology" if ttype == "pcg" else "ss"
+    for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
+        # Use uppercase for target column suffix (adjust if needed).
+        cell_upper = cell.upper()
+        
+        DATASET_INFO[f"{ttype}-ess-{cell}"] = {
+            "dataset": f"{ttype}-ess-{cell}",
+            "task": "classification",
+            "target_col": f"essential_{cell_upper}",
+            "col_name": f"{ttype}-ess-{cell} (AUROC/AUPRC)",
+            "split_type": split_type,
+            "isoform_resolved": True,
+            "transcript_avg": False,
+        }
+
+        if cell != "shared":
+            DATASET_INFO[f"{ttype}-ess-{cell}-day14-log2fc"] = {
+                "dataset": f"{ttype}-ess-{cell}",
+                "task": "reg_ridge",
+                "target_col": f"day14_log2fc_{cell_upper}",
+                "col_name": f"{ttype}-ess-{cell} (day14 log2fc) (MSE/R)",
+                "split_type": split_type,
+                "isoform_resolved": True,
+                "transcript_avg": False,
+            }

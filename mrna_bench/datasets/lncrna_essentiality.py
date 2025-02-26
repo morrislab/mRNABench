@@ -36,8 +36,9 @@ class LNCRNAEssentiality(BenchmarkDataset):
         if type(self) is LNCRNAEssentiality:
             raise TypeError("LNCRNAEssentiality is an abstract class.")
 
-        self.exp_target = dataset_name.split("-")[-1]
-        assert self.exp_target in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]
+        valid_targets = ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]
+        exp_target = next((target for target in valid_targets if target in dataset_name), None)
+        assert exp_target is not None, f"Invalid experiment target in dataset name: {dataset_name}"
 
         super().__init__(
             dataset_name=dataset_name,

@@ -110,7 +110,7 @@ for dataset_name, params in DATASET_INFO.items():
         target_col=params["target_col"],
         split_type=params.get("split_type", "default"),
         ss_map_path="/data1/morrisq/dalalt1/Orthrus/processed_data/essentiality/sanjana_data/miscellaneous/similarity_results_full.npz",
-        threshold=0.9,
+        threshold=0.75,
     )
 
     # Run multi-run probing with the specified seeds.

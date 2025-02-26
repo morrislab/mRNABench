@@ -1,7 +1,10 @@
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-import genome_kit as gk
+try:
+    import genome_kit as gk
+except ImportError:
+    gk = None
 
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 from mrna_bench.datasets.dataset_utils import ohe_to_str
