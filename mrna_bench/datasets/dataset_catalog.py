@@ -175,15 +175,6 @@ DATASET_INFO = {
         "isoform_resolved": False,
         "transcript_avg": False,
     },
-    "lncrna-ess-isoform-level": {
-        "dataset": "lncrna-ess-shared",
-        "task": "classification",
-        "target_col": "essential_SHARED",
-        "col_name": "lncrna-ess (AUROC/AUPRC)",
-        "split_type": "ss",
-        "isoform_resolved": True,
-        "transcript_avg": False,
-    },
 }
 
 for ttype in ["pcg", "lncrna"]:
