@@ -38,9 +38,7 @@ class BenchmarkDataset(ABC):
         if force_redownload or not self.load_processed_df():
             self.get_raw_data()
             self.data_df = self.process_raw_data()
-
-            if 'ess' not in self.dataset_name:
-                self.save_processed_df(self.data_df)
+            self.save_processed_df(self.data_df)
 
     def init_folders(self):
         """Initialize folders for storing raw data.

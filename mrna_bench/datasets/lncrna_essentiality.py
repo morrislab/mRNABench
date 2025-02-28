@@ -37,8 +37,8 @@ class LNCRNAEssentiality(BenchmarkDataset):
             raise TypeError("LNCRNAEssentiality is an abstract class.")
 
         valid_targets = ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]
-        exp_target = next((target for target in valid_targets if target in dataset_name), None)
-        assert exp_target is not None, f"Invalid experiment target in dataset name: {dataset_name}"
+        self.exp_target = next((target for target in valid_targets if target in dataset_name), None)
+        assert self.exp_target is not None, f"Invalid experiment target in dataset name: {dataset_name}"
 
         super().__init__(
             dataset_name=dataset_name,
@@ -59,6 +59,18 @@ class LNCRNAEssentiality(BenchmarkDataset):
         df["cds"] = df["cds"].apply(lambda x: np.array(json.loads(x)))
         df["splice"] = df["splice"].apply(lambda x: np.array(json.loads(x)))
 
+        return df
+
+    def subset_df(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Subset dataframe to only include relevant columns.
+        
+        Args:
+            df: Dataframe to subset
+
+        Returns:
+            Subsetted dataframe.
+        """
+        
         if self.isoform_resolved:
             df = df[df["isoform_resolved"] == 1].reset_index(drop=True)
 
@@ -69,13 +81,49 @@ class LNCRNAEssentiality(BenchmarkDataset):
 
         return df
 
+    def save_processed_df(self, df: pd.DataFrame):
+        """Save dataframe to data storage path.
+
+        Args:
+            df: Processed dataframe to save.
+        """
+        df.to_pickle(self.dataset_path + "/data_df.pkl")
+
+        self.data_df = self.subset_df(df)
+
+
+    def load_processed_df(self) -> bool:
+        """Load processed dataframe from data storage path.
+
+        Returns:
+            Whether dataframe was successfully loaded to class property.
+        """
+        try:
+            df = pd.read_pickle(self.dataset_path + "/data_df.pkl")
+
+            self.data_df = self.subset_df(df)
+
+        except FileNotFoundError:
+            print("Processed data frame not found.")
+            return False
+        return True
+
     def get_raw_data(self):
         """Collect the raw data from given local path."""
         raw_file_name = Path(self.LNCRNA_URL).name
-        raw_data_path = self.raw_data_dir + "/" + raw_file_name
+        raw_data_path = self.raw_data_dir + "/" + self.exp_target.upper() + "_" + raw_file_name
 
         if not os.path.exists(raw_data_path):
-            shutil.copy(self.LNCRNA_URL, raw_data_path)
+
+            df = pd.read_csv(self.LNCRNA_URL, sep="\t")
+
+            # keep the columns that are relevant to this dataset
+            label_cols = [col for col in df.columns if self.exp_target.upper() in col]
+
+            df = df[['gene', 'gene_id', 'transcript', 'isoform_resolved', 'sequence', 'cds', 'splice'] + label_cols]
+
+            df.to_csv(raw_data_path, sep="\t", index=False)
+
             self.first_download = True
 
         self.raw_data_path = raw_data_path
