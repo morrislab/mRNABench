@@ -1,6 +1,6 @@
 [project]
 name = "mrna-bench"
-version = "1.1.0"
+version = "1.1.2"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
@@ -31,7 +31,8 @@ base_models = [
     "transformers",
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
-    "accelerate"
+    "accelerate",
+    "multimolecule"
 ]
 dev = [
     "mypy",
@@ -47,5 +48,5 @@ requires = [
 ]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["mrna_bench"]
+[tool.setuptools.packages.find]
+include = ["mrna_bench*"]
