@@ -140,14 +140,14 @@ def main():
             sequence_chunk_overlap = args.sequence_chunk_overlap
         ) + ".npz"
 
+        if args.recompute_embeddings and os.path.exists(embeddings_path):
+            print(f"Recomputing embeddings for {model_version} on {dataset_name}...")
+            os.remove(embeddings_path)
+
         # we only want to embed the sequences once if it's the same dataset (just different targets)
         if os.path.exists(embeddings_path):
-            if args.recompute_embeddings:
-                print(f"Recomputing embeddings for {model_version} on {dataset_name}...")
-                os.remove(embeddings_path)
-            else:
-                print(f"Embeddings already exist for {model_version} on {dataset_name}. Loading...")
-                embeddings = np.load(embeddings_path)["embedding"]
+            print(f"Embeddings already exist for {model_version} on {dataset_name}. Loading...")
+            embeddings = np.load(embeddings_path)["embedding"]
         else:
             embedder = DatasetEmbedder(model, dataset, transcript_avg=DATASET_INFO[dataset_name]["transcript_avg"])
             embeddings = embedder.embed_dataset()
