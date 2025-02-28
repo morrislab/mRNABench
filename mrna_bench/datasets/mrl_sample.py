@@ -80,7 +80,7 @@ class MRLSample(BenchmarkDataset):
     This class is a superclass which is inherited by the specific experiments.
     """
 
-    def __init__(self, dataset_name: str, force_redownload: bool = False, mask_out_splice_track: bool = False):
+    def __init__(self, dataset_name: str, force_redownload: bool = False, mask_out_splice_track: bool = False, mask_out_cds_track:bool = False, force_reprocess: bool = True):
         """Initialize MRLSample dataset.
 
         Args:
@@ -99,8 +99,9 @@ class MRLSample(BenchmarkDataset):
         self.exp_target = dataset_name.split("-")[-1]
         assert self.exp_target in ["egfp", "mcherry", "designed", "varying"]
         self.mask_out_splice_track = mask_out_splice_track
+        self.mask_out_cds_track = mask_out_cds_track
 
-        super().__init__(dataset_name, ["human"], force_redownload)
+        super().__init__(dataset_name, ["human"], force_redownload, force_reprocess=force_reprocess)
 
     def get_raw_data(self):
         """Download raw data from source."""
@@ -184,7 +185,11 @@ class MRLSample(BenchmarkDataset):
         else:
             out_df["sequence"] = PRIMER_SEQ + out_df["utr"] + EGFP_CDS
 
-        out_df["cds"] = out_df["utr"].apply(self.get_cds_track)
+        if self.mask_out_cds_track:
+            out_df["cds"] = out_df["utr"].apply(self.get_cds_track_masked_negative)
+
+        else:
+            out_df["cds"] = out_df["utr"].apply(self.get_cds_track)
         
         # zeros if no drop -0.25 if self.mask_out_splice_track
         if self.mask_out_splice_track:
@@ -199,6 +204,34 @@ class MRLSample(BenchmarkDataset):
         out_df.columns = pd.Index(cols)
 
         return out_df
+        
+    def get_cds_track_masked_negative(self, utr: str, value: float = -0.25) -> np.ndarray:
+        """Get CDS track for all sequences with values set to -0.25.
+
+        Instead of a binary encoding, every position in the track will have the value -0.25.
+        
+        Args:
+            utr: UTR sequence.
+        
+        Returns:
+            A numpy array representing the CDS track, with all values -0.25.
+        """
+        if self.exp_target == "egfp":
+            n_codons = int(732 / 3)
+            len_downstream = len(EGFP_CDS) - n_codons * 3
+        else:
+            n_codons = int(738 / 3)
+            len_downstream = len(MCHERRY_CDS) - n_codons * 3
+
+        # Calculate lengths for each segment
+        cds_length = n_codons * 3
+        upstream_length = len(PRIMER_SEQ) + len(utr)
+        total_length = upstream_length + cds_length + len_downstream
+
+        # Create the track filled with -0.25
+        cds_track = np.full(total_length, value, dtype=np.float32)
+
+        return cds_track
 
     def get_cds_track(self, utr: str) -> np.ndarray:
         """Get CDS track for all sequences.
@@ -233,6 +266,9 @@ class MRLSampleEGFP(MRLSample):
 
     def __init__(self, 
         force_redownload=False,
+        mask_out_splice_track=False,
+        mask_out_cds_track=False,
+        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleEGFP dataset.
@@ -240,7 +276,7 @@ class MRLSampleEGFP(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-egfp", force_redownload)
+        super().__init__("mrl-sample-egfp", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)
 
 
 class MRLSampleMCherry(MRLSample):
@@ -248,6 +284,9 @@ class MRLSampleMCherry(MRLSample):
 
     def __init__(self, 
         force_redownload=False,
+        mask_out_splice_track=False,
+        mask_out_cds_track=False,
+        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleMCherry dataset.
@@ -255,7 +294,7 @@ class MRLSampleMCherry(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-mcherry", force_redownload)
+        super().__init__("mrl-sample-mcherry", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)
 
 
 class MRLSampleDesigned(MRLSample):
@@ -263,6 +302,9 @@ class MRLSampleDesigned(MRLSample):
 
     def __init__(self, 
         force_redownload=False,
+        mask_out_splice_track=False,
+        mask_out_cds_track=False,
+        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleDesigned dataset.
@@ -270,7 +312,7 @@ class MRLSampleDesigned(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-designed", force_redownload)
+        super().__init__("mrl-sample-designed", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)
 
 
 class MRLSampleVarying(MRLSample):
@@ -278,6 +320,9 @@ class MRLSampleVarying(MRLSample):
 
     def __init__(self, 
         force_redownload=False,
+        mask_out_splice_track=False,
+        mask_out_cds_track=False,
+        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleVarying dataset.
@@ -285,4 +330,4 @@ class MRLSampleVarying(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-varying", force_redownload)
+        super().__init__("mrl-sample-varying", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)

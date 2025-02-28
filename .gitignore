@@ -1,6 +1,6 @@
 mrna_bench/config.yaml
 scripts/embedding/slurm/logs/
-
+scripts/linear_probe/slurm/slurm_out/
 .vscode/
 
 # Byte-compiled / optimized / DLL files

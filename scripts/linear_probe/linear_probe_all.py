@@ -76,12 +76,19 @@ for dataset_name, params in DATASET_INFO.items():
     # Load the dataset.
     # DATASET_INFO is assumed to have keys like 'dataset', 'target_col', 'task',
     # 'split_type', 'isoform_resolved', and 'transcript_avg'
+    if args.mask_out_splice_track or args.mask_out_cds_track:
+        force_redownload = True
+    else:
+        force_redownload = False
+
+
     dataset = mb.load_dataset(
         params["dataset"],
         isoform_resolved=params.get("isoform_resolved", False),
         target_col=params["target_col"],
         mask_out_splice_track=args.mask_out_splice_track,
         mask_out_cds_track=args.mask_out_cds_track,
+        force_redownload=force_redownload
     )
 
     # Load the model using the provided checkpoint and device.
@@ -124,22 +131,22 @@ all_rows = {}
 for model_version, dataset_dict in results.items():
     # If there's only one dataset per model_version, grab its metrics
     row = {}
-    for metric_name, combined_val in dataset_dict.items():
-        if "±" in combined_val:
-            mean_str, se_str = combined_val.split("±")
-            mean_val = float(mean_str.strip())
-            se_val = float(se_str.strip())
-            row[f"{metric_name}_mean"] = mean_val
-            row[f"{metric_name}_se"] = se_val
-        else:
-            row[metric_name] = combined_val
+    for dataset_name, combined_val in dataset_dict.items():
+        for metric_name, metric_vals in combined_val.items():
+            if "±" in metric_vals:
+                mean_str, se_str = metric_vals.split("±")
+                mean_val = float(mean_str.strip())
+                se_val = float(se_str.strip())
+                row[f"{dataset_name}_{metric_name}_mean"] = mean_val
+                row[f"{dataset_name}_{metric_name}_se"] = se_val
+            else:
+                row[f"{dataset_name}_{metric_name}"] = metric_vals
     all_rows[model_version] = row
-
 # Create a DataFrame with model_version as the index.
 df = pd.DataFrame.from_dict(all_rows, orient='index')
 
 # Convert to a pandas DataFrame and save as CSV.
 run_name = f"{args.model_version}_{args.ckpt_name}_mask_splice_{args.mask_out_splice_track}_mask_cds_{args.mask_out_cds_track}"
-output_path = f"{args.mrna_bench_data_storage}/mrna_bench_results/{run_name}.csv"
+output_path = f"{args.mrna_bench_data_storage}/mrna_bench_results2/{run_name}.csv"
 df.to_csv(output_path, index=False)
 print(f"Results saved to {output_path}")
