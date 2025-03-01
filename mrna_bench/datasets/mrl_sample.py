@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 import gzip
 import os
 import pathlib
@@ -183,7 +185,7 @@ class MRLSample(BenchmarkDataset):
         else:
             out_df["sequence"] = PRIMER_SEQ + out_df["utr"] + EGFP_CDS
 
-        out_df["cds"] = out_df["utr"].apply(self.get_cds_track)
+        out_df["cds"] = out_df["utr"].apply(cast(Any, self.get_cds_track))
         out_df["splice"] = out_df["cds"].apply(lambda x: np.zeros_like(x))
 
         out_df.drop(columns=["utr"], inplace=True)
