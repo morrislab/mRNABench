@@ -80,7 +80,7 @@ class MRLSample(BenchmarkDataset):
     This class is a superclass which is inherited by the specific experiments.
     """
 
-    def __init__(self, dataset_name: str, force_redownload: bool = False, mask_out_splice_track: bool = False, mask_out_cds_track:bool = False, force_reprocess: bool = True):
+    def __init__(self, dataset_name: str, force_redownload: bool = False, mask_out_splice_track: bool = False, mask_out_cds_track:bool = False):
         """Initialize MRLSample dataset.
 
         Args:
@@ -101,7 +101,7 @@ class MRLSample(BenchmarkDataset):
         self.mask_out_splice_track = mask_out_splice_track
         self.mask_out_cds_track = mask_out_cds_track
 
-        super().__init__(dataset_name, ["human"], force_redownload, force_reprocess=force_reprocess)
+        super().__init__(dataset_name, ["human"], force_redownload)
 
     def get_raw_data(self):
         """Download raw data from source."""
@@ -268,7 +268,6 @@ class MRLSampleEGFP(MRLSample):
         force_redownload=False,
         mask_out_splice_track=False,
         mask_out_cds_track=False,
-        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleEGFP dataset.
@@ -276,7 +275,7 @@ class MRLSampleEGFP(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-egfp", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)
+        super().__init__("mrl-sample-egfp", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track)
 
 
 class MRLSampleMCherry(MRLSample):
@@ -286,7 +285,6 @@ class MRLSampleMCherry(MRLSample):
         force_redownload=False,
         mask_out_splice_track=False,
         mask_out_cds_track=False,
-        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleMCherry dataset.
@@ -294,7 +292,7 @@ class MRLSampleMCherry(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-mcherry", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)
+        super().__init__("mrl-sample-mcherry", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track)
 
 
 class MRLSampleDesigned(MRLSample):
@@ -304,7 +302,6 @@ class MRLSampleDesigned(MRLSample):
         force_redownload=False,
         mask_out_splice_track=False,
         mask_out_cds_track=False,
-        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleDesigned dataset.
@@ -312,7 +309,7 @@ class MRLSampleDesigned(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-designed", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)
+        super().__init__("mrl-sample-designed", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track)
 
 
 class MRLSampleVarying(MRLSample):
@@ -322,7 +319,6 @@ class MRLSampleVarying(MRLSample):
         force_redownload=False,
         mask_out_splice_track=False,
         mask_out_cds_track=False,
-        force_reprocess=True,
         **kwargs # noqa
     ):
         """Initialize MRLSampleVarying dataset.
@@ -330,4 +326,4 @@ class MRLSampleVarying(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-varying", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track, force_reprocess=force_reprocess)
+        super().__init__("mrl-sample-varying", force_redownload, mask_out_splice_track=mask_out_splice_track, mask_out_cds_track=mask_out_cds_track)

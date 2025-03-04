@@ -5,8 +5,9 @@
 #SBATCH --partition=gpu,morrisq
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=5
+#SBATCH --mem=32G
 #SBATCH --time=6:00:00
-#SBATCH --array=5-7
+#SBATCH --array=6,4,2,1,0
 # Adjust the --array range (0-3) to match the number of model_versions minus one.
 
 # Define an array of model_versions

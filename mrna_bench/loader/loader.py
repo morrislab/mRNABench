@@ -11,7 +11,8 @@ def load_model(
     model_name: str,
     model_version: str,
     device: "torch.device",
-    checkpoint: str = None
+    checkpoint: str = None,
+    model_repository: str = "/data1/morrisq/ian/rna_contrast/runs/"
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
@@ -31,7 +32,7 @@ def load_model(
         if model_name != "Orthrus" or checkpoint is None:
             model = model_class(model_version, device)
         else:
-            model = model_class(model_version, checkpoint, device)
+            model = model_class(model_version, checkpoint, device, model_repository)
 
     except ModuleNotFoundError:
         raise ModuleNotFoundError(
