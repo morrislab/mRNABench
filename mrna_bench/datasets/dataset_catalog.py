@@ -19,11 +19,12 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "mrl-sugimoto": MRLSugimoto,
 }
 
-DATASET_DEFAULT_TASK: dict[str, str] = {
-    "go-mf": "multilabel",
-    "rnahl-human": "regression",
-    "rnahl-mouse": "regression",
-    "prot-loc": "multilabel",
-    "mrl-sugimoto": "regression",
-    "pcg-ess": "regression",
+# Maps dataset name to valid target cols and default task.
+DATASET_DEFAULT_TASK: dict[str, dict[str, str]] = {
+    "go-mf": {"target": "multilabel"},
+    "rnahl-human": {"target": "regression"},
+    "rnahl-mouse": {"target": "regression"},
+    "prot-loc": {"target": "multilabel"},
+    "mrl-sugimoto": {"target": "regression"},
+    "pcg-ess": {"target": "regression"},
 }

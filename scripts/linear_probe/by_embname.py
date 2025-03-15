@@ -4,7 +4,7 @@ import argparse
 import os
 
 from mrna_bench.datasets import DATASET_CATALOG
-from mrna_bench.linear_probe.linear_probe import LinearProbe
+from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--embedding_fn", type=str)
@@ -20,13 +20,17 @@ args = parser.parse_args()
 if __name__ == "__main__":
     dataset = DATASET_CATALOG[args.dataset_name]()
 
-    prober = LinearProbe.init_from_embedding(
-        args.embedding_fn,
-        task=args.task,
-        target_col=args.target_col,
-        split_type=args.split_type,
-        split_ratios=(0.7, 0.15, 0.15),
-        eval_all_splits=True
+    prober = (
+        LinearProbeBuilder(args.dataset_name)
+        .fetch_embedding_by_filename(args.embedding_fn)
+        .build_splitter(
+            args.split_type,
+            eval_all_splits=True,
+            species=["human"])
+        .build_evaluator(args.task)
+        .set_target(args.target_col)
+        .use_persister()
+        .build()
     )
 
     lp_res_path = dataset.dataset_path + "/lp_results"
@@ -34,9 +38,8 @@ if __name__ == "__main__":
     seeds = eval(args.seeds)
 
     for seed in seeds:
-        if not os.path.exists(lp_res_path):
-            metrics = prober.run_linear_probe(seed, persist=True)
-        elif prober.get_output_filename(seed) not in os.listdir(lp_res_path):
-            metrics = prober.run_linear_probe(seed, persist=True)
-        else:
+        out_fn = prober.persister.get_output_filename(seed)
+        if os.path.exists(lp_res_path) and out_fn in os.listdir(lp_res_path):
             print("Results already computed.")
+            continue
+        metrics = prober.run_linear_probe(seed, persist=True)

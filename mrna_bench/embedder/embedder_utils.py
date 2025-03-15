@@ -1,4 +1,4 @@
-def get_output_filepath(
+def get_embedding_filepath(
     output_dir: str,
     model_short_name: str,
     dataset_name: str,
@@ -21,7 +21,7 @@ def get_output_filepath(
     Returns:
         Standardized path to embedding file.
     """
-    out_fn = get_output_filename(
+    out_fn = get_embedding_filename(
         model_short_name,
         dataset_name,
         sequence_chunk_overlap,
@@ -36,7 +36,7 @@ def get_output_filepath(
     return out_path
 
 
-def get_output_filename(
+def get_embedding_filename(
     model_short_name: str,
     dataset_name: str,
     sequence_chunk_overlap: int,

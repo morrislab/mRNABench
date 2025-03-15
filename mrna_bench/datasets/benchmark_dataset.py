@@ -93,3 +93,41 @@ class BenchmarkDataset(ABC):
     def process_raw_data(self) -> pd.DataFrame:
         """Abstract method to process the dataset for the task."""
         pass
+
+    def get_splits(
+        self,
+        split_ratios: tuple[float, float, float],
+        random_seed: int = 2541,
+        split_type: str = "homology",
+        split_kwargs: dict = {}
+    ) -> dict[str, pd.DataFrame]:
+        """Get data splits for the dataset.
+
+        Args:
+            split_ratios: Ratios for train, val, test splits.
+            random_seed: Random seed for reproducibility.
+            split_type: Type of split to use.
+            split_kwargs: Additional arguments for the split type.
+
+        Returns:
+            Dictionary of dataframes containing splits.
+        """
+        from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
+
+        if split_type == "homology" and split_kwargs == {}:
+            split_kwargs["species"] = self.species
+
+        splitter = SPLIT_CATALOG[split_type](**split_kwargs)
+        splits = splitter.get_all_splits_df(
+            self.data_df,
+            split_ratios,
+            random_seed
+        )
+
+        split_df = {
+            "train_df": splits[0],
+            "val_df": splits[1],
+            "test_df": splits[2]
+        }
+
+        return split_df

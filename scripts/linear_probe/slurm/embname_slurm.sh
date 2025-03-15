@@ -7,4 +7,4 @@
 #SBATCH --time=6:00:00
 
 python ../by_embname.py --embedding_fn $1 --dataset_name $2 --task $3 \
-    --target_col $4
+    --target_col $4 --split_type $5
