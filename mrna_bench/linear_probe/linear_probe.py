@@ -285,6 +285,7 @@ class LinearProbe:
         elif split_type == "ss": # only for lncRNA
             self.splitter = SPLIT_CATALOG[split_type](
                 sequences = self.dataset.data_df[self.dataset.data_df.isoform_resolved == 1].sequence.tolist(),
+                transcripts = self.dataset.data_df[self.dataset.data_df.isoform_resolved == 1].transcript.tolist(),
                 ss_map_path = kwargs["ss_map_path"] if "ss_map_path" in kwargs else None,
                 threshold = kwargs["threshold"] if "threshold" in kwargs else 0.75,
                 dataset_name = self.dataset.dataset_name
@@ -404,17 +405,20 @@ class LinearProbe:
         self,
         random_seed: int = 2541,
         persist: bool = False,
-        dropna: bool = True
-    ) -> dict[str, float]:
+        dropna: bool = True,
+        return_model: bool = False
+    ) -> dict[str, float] | tuple[dict[str, float], object]:
         """Perform data split and run linear probe.
 
         Args:
             random_seed: Random seed used for data split.
             persist: Save results to data directory.
             dropna: Drop rows with NaN values in target column
+            return_model: If True, returns a tuple of (metrics, model) instead of just metrics.
 
         Returns:
-            Dictionary of linear probing metrics per split.
+            If return_model is False (default): Dictionary of linear probing metrics per split.
+            If return_model is True: Tuple of (metrics dictionary, trained model).
         """
         try:
             model = self.linear_models[self.task]
@@ -437,7 +441,10 @@ class LinearProbe:
         if persist:
             self.persist_run_results(metrics, random_seed)
 
-        return metrics
+        if return_model:
+            return metrics, model
+        else:
+            return metrics
 
     def eval_regression(
         self,
@@ -540,23 +547,37 @@ class LinearProbe:
     def linear_probe_multirun(
         self,
         random_seeds: list[int],
-        persist: bool = False
-    ) -> dict[int, dict[str, float]]:
+        persist: bool = False,
+        return_models: bool = False
+    ) -> dict[int, dict[str, float]] | tuple[dict[int, dict[str, float]], dict[int, object]]:
         """Run multiple linear probes with distinct data split randomization.
 
         Args:
             random_seeds: Trandom seeds used per individual linear probe run.
             persist: Save results to data directory.
+            return_models: If True, returns a tuple of (metrics, models) instead of just metrics.
 
         Returns:
-            Dictionary of metrics per random seed used to generate data splits
-            for each individual linear probing run.
+            If return_models is False (default): Dictionary of metrics per random seed.
+            If return_models is True: Tuple of (metrics dictionary, models dictionary) where
+                each dictionary is keyed by random seed.
         """
         metrics = {}
+        models = {} if return_models else None
+        
         for random_seed in random_seeds:
-            metric = self.run_linear_probe(random_seed, persist)
-            metrics[random_seed] = metric
-        return metrics
+            if return_models:
+                metric, model = self.run_linear_probe(random_seed, persist, return_model=True)
+                metrics[random_seed] = metric
+                models[random_seed] = model
+            else:
+                metric = self.run_linear_probe(random_seed, persist)
+                metrics[random_seed] = metric
+        
+        if return_models:
+            return metrics, models
+        else:
+            return metrics
 
     def load_results(
         self,
