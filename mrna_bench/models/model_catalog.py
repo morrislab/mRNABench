@@ -3,6 +3,7 @@ from typing import Type
 from .aido import AIDORNA
 from .dnabert import DNABERT2
 from .ernierna import ERNIERNA
+from .evo2 import Evo2
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
 from .nucleotide_transformer import NucleotideTransformer
@@ -23,6 +24,7 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "AIDO.RNA": AIDORNA,
     "DNABERT2": DNABERT2,
     "ERNIE-RNA": ERNIERNA,
+    "Evo2": Evo2,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
     "NucleotideTransformer": NucleotideTransformer,
@@ -47,6 +49,13 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
     ],
     "DNABERT2": ["dnabert2"],
     "ERNIE-RNA": ["ernierna", "ernierna-ss"],
+    "Evo2": [
+        "evo2_40b",
+        "evo2_7b",
+        "evo2_40b_base",
+        "evo2_7b_base",
+        "evo2_1b_base"
+    ],
     "Helix-mRNA": ["helix-mrna"],
     "HyenaDNA": [
         "hyenadna-large-1m-seqlen-hf",

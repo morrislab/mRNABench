@@ -35,6 +35,7 @@ environment.
 conda create --name aido_bench python=3.10
 conda activate aido_bench
 
+pip install -e .
 pip install modelgenerator
 pip install git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442
 pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769
@@ -56,6 +57,27 @@ pip install mamba-ssm==1.2.0.post1
 pip install rna-fm
 pip install multimolecule
 pip uninstall triton
+```
+
+### Evo2 - mRNA Bench
+Inference using Evo2 requires installing the following in its own 
+environment. Note, I had an issue where the evo_40b models, when downloaded,
+had their merged checkpoints stored one directory above the huggingface hub.
+I had to manually move the checkpoint into its corresponding snapshot directory.
+/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/
+
+```bash
+conda create --name evo_bench python=3.11
+conda activate evo_bench
+
+conda install conda-forge::gcc # need updated gcc version
+
+cd path/to/mRNA/bench
+pip install -e .
+
+cd path/to/evo2
+pip install -e .
+pip install transformer_engine[pytorch]==1.13
 ```
 
 ### Post-install
