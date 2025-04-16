@@ -49,7 +49,11 @@ class Evo2(EmbeddingModel):
 
         self.model = Evo2(model_version)
         self.tokenizer = self.model.tokenizer.tokenize
-        self.embedding_layers = [name.strip('.scale') for name,_ in self.model.named_parameters() if "pre_norm" in name]
+        
+        all_prenorms = [name.strip('.scale') for name,_ in self.model.named_parameters() if "pre_norm" in name]
+
+        # we will only take the middle and last layer output for simplicity
+        self.embedding_layers = [all_prenorms[len(all_prenorms)//2], 'norm']
 
         if model_version in ["evo2_40b", "evo2_7b"]:
             max_length = 1_000_000
@@ -95,7 +99,7 @@ class Evo2(EmbeddingModel):
 
         # embedding is of type bfloat16, need to convert to float32
         # since numpy does not support bfloat16
-        for layer_name in sorted(self.embedding_layers, key = lambda x: int(x.split("blocks.")[-1].split(".")[0])):
+        for layer_name in sorted(self.embedding_layers):
             aggregate_embeddings.append(torch.mean(torch.cat([embedding_chunks[i][layer_name] for i in range(len(embedding_chunks))], dim=1), dim=1).float().cpu())
 
         aggregate_embedding = torch.vstack(aggregate_embeddings)
