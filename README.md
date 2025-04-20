@@ -13,21 +13,95 @@ If you are interested in the benchmark datasets **only**, you can run:
 pip install mrna-bench
 ```
 
-### Full Version
+### Orthrus - mRNA Bench (Bidirectional / Unidirectional)
 The inference-capable version of mRNABench that can generate embeddings using
-Orthrus, DNA-BERT2, NucleotideTransformer, RNA-FM, and HyenaDNA can be 
-installed as shown below. Note that this requires PyTorch version 2.2.2 with 
-CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
+Orthrus can be installed as shown below. Note that this requires PyTorch version 
+2.1.2 with CUDA 12.1.
 ```bash
 conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
-pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install mrna-bench[base_models]
+pip install torch==2.1.2 --index-url https://download.pytorch.org/whl/cu121
+pip install -e .[base_models]
 pip uninstall triton
 ```
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
+
+### AIDO.RNA - mRNA Bench
+Inference using AIDO.RNA requires installing the following in its own 
+environment.
+```bash
+conda create --name aido_bench python=3.10
+conda activate aido_bench
+
+pip install -e .
+pip install modelgenerator
+pip install git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442
+pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769
+```
+
+### Almost Full - mRNA Bench (No Orthrus Bidirectionality)
+The inference-capable version of mRNABench that can generate embeddings using
+Orthrus (unidirectional), DNA-BERT2, NucleotideTransformer, RNA-FM, and HyenaDNA can be 
+installed as shown below. Note that this requires PyTorch version 2.2.2 with 
+CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
+```bash 
+conda create --name model_bench python=3.10
+conda activate model_bench
+
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+pip install -e .
+
+pip install mamba-ssm==1.2.0.post1
+pip install rna-fm
+pip install multimolecule
+pip uninstall triton
+```
+
+### Evo2 - mRNA Bench
+Inference using Evo2 requires installing the following in its own 
+environment. Note, I had an issue where the evo_40b models, when downloaded,
+had their merged checkpoints stored one directory above the huggingface hub.
+I had to manually move the checkpoint into its corresponding snapshot directory.
+/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/
+
+```bash
+conda create --name evo_bench python=3.11
+conda activate evo_bench
+
+conda install conda-forge::gcc # need updated gcc version
+
+cd path/to/mRNA/bench
+pip install -e .
+
+cd path/to/evo2
+pip install -e .
+pip install transformer_engine[pytorch]==1.13
+```
+
+Note, I also had to add the following bit of code to the Evo2 downloaded repository.
+This was added to evo2/evo2/models.py. This allows us to grab the layer names from Evo2
+model (can hard code it later, but in case we decide the pre-norm layers are not the ones
+we want to keep, its nice to be able to see what the layer names are actually called.)
+
+```python
+        self.hyena_model = StripedHyena(global_config)
+
+        load_checkpoint(self.hyena_model , weights_path)
+
+        return self.hyena_model 
+
+    def named_parameters(self):
+        """
+        Get named parameters of the model.
+        Returns:
+            Named parameters of the model.
+        """
+        if not hasattr(self, 'hyena_model'):
+            raise AttributeError("Model not loaded. Please load the model first.")
+        return self.hyena_model.named_parameters()
+```
 
 ### Post-install
 After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
@@ -36,6 +110,9 @@ import mrna_bench as mb
 
 path_to_dir_to_store_data = "DESIRED_PATH"
 mb.update_data_path(path_to_dir_to_store_data)
+
+path_to_dir_to_store_weights = "/data1/morrisq/ian/rna_benchmarks/model_weights"
+mb.update_model_weights_path(path_to_dir_to_store_weights)
 ```
 
 ## Usage

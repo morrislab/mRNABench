@@ -10,7 +10,8 @@ if TYPE_CHECKING:
 def load_model(
     model_name: str,
     model_version: str,
-    device: "torch.device"
+    device: "torch.device",
+    checkpoint: str = None
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
@@ -26,7 +27,12 @@ def load_model(
         from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
 
         model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
-        model = model_class(model_version, device)
+        
+        if model_name != "Orthrus" or checkpoint is None:
+            model = model_class(model_version, device)
+        else:
+            model = model_class(model_version, checkpoint, device)
+
     except ModuleNotFoundError:
         raise ModuleNotFoundError(
             "PyTorch not installed. Model benchmarking unavailable."
@@ -37,7 +43,8 @@ def load_model(
 
 def load_dataset(
     dataset_name: str,
-    force_redownload: bool = False
+    force_redownload: bool = False,
+    **kwargs # noqa
 ) -> BenchmarkDataset:
     """Load Benchmark Dataset.
 
@@ -45,4 +52,5 @@ def load_dataset(
         dataset_name: Name of the dataset.
         force_redownload: Forces data file redownload.
     """
-    return DATASET_CATALOG[dataset_name](force_redownload)
+
+    return DATASET_CATALOG[dataset_name](force_redownload, **kwargs)

@@ -12,7 +12,10 @@ RNAHLH_URL = "https://zenodo.org/records/14708163/files/rna_hl_human.npz"
 class RNAHalfLifeHuman(BenchmarkDataset):
     """RNA Halflife in Human Dataset."""
 
-    def __init__(self, force_redownload: bool = False):
+    def __init__(self, 
+        force_redownload: bool = False,
+        **kwargs # noqa
+    ):
         """Initialize RNAHalfLifeHuman dataset.
 
         Args:

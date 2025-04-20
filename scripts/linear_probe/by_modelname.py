@@ -6,6 +6,14 @@ import os
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
 from mrna_bench.models import MODEL_CATALOG
 
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_name", type=str)
 parser.add_argument("--model_version", type=str)
