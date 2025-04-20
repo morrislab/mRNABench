@@ -6,6 +6,10 @@ if TYPE_CHECKING:
     import torch
     from mrna_bench.models import EmbeddingModel
 
+# TODO:
+# Remove references to loading custom Orthrus model checkpoints
+# and replace with loading from HuggingFace hub.
+# and kwargs for loading datasets
 
 def load_model(
     model_name: str,

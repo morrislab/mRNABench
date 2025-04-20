@@ -7,6 +7,9 @@ from mrna_bench import get_model_weights_path
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 from mrna_bench.models import EmbeddingModel
 
+# TODO:
+# Remove references to loading custom Orthrus model checkpoints
+# and replace with loading from HuggingFace hub.
 
 class Orthrus(EmbeddingModel):
     """Inference wrapper for Orthrus.

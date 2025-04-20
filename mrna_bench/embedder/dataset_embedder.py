@@ -10,6 +10,8 @@ from mrna_bench.models import EmbeddingModel
 from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.embedder.embedder_utils import get_embedding_filepath
 
+# TODO:
+# Remove all references to transcript averaging (we no longer do this.)
 
 class DatasetEmbedder:
     """Embeds sequences associated with dataset using specified embedder.
