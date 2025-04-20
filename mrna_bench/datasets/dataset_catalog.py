@@ -20,8 +20,8 @@ from .lncrna_essentiality import (
 )
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
+from .rna_loc import RNALocalization
 from .prot_loc import ProteinLocalization
-from .prot_loc_van_nostrand import ProteinLocalizationVan
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
     MRLSampleEGFP,
@@ -30,7 +30,16 @@ from .mrl_sample import (
     MRLSampleVarying
 )
 
+from .eclip_binding import (
+    eCLIPBindingK562,
+    eCLIP_K562_RBPS_LIST,
+    eCLIPBindingHepG2,
+    eCLIP_HepG2_RBPS_LIST,
+)
+
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
+    "eclip-binding-k562": eCLIPBindingK562,
+    "eclip-binding-hepg2": eCLIPBindingHepG2,
     "go-mf": GOMolecularFunction,
     "pcg-ess-hap1": PCGEssHAP1,
     "pcg-ess-hek293ft": PCGEssHEK293FT,
@@ -46,8 +55,8 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "lncrna-ess-shared": LNCRNAEssShared,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
+    "rna-loc": RNALocalization,
     "prot-loc": ProteinLocalization,
-    "prot-loc-van": ProteinLocalizationVan,
     "mrl-sugimoto": MRLSugimoto,
     "mrl-sample-egfp": MRLSampleEGFP,
     "mrl-sample-mcherry": MRLSampleMCherry,
@@ -61,21 +70,27 @@ DATASET_DEFAULT_TASK: dict[str, str] = {
     "rnahl-mouse": "reg_ridge",
     "prot-loc": "multilabel",
     "mrl-sugimoto": "reg_ridge",
-    # "pcg-ess-hap1": "classification",
-    # "pcg-ess-hek293ft": "classification",
-    # "pcg-ess-k562": "classification",
-    # "pcg-ess-mda-mb-231": "classification",
-    # "pcg-ess-thp1": "classification",
-    # "pcg-ess-shared": "classification",
-    # "lncrna-ess-hap1": "classification",
-    # "lncrna-ess-hek293ft": "classification",
-    # "lncrna-ess-k562": "classification",
-    # "lncrna-ess-mda-mb-231": "classification",
-    # "lncrna-ess-thp1": "classification",
-    # "lncrna-ess-shared": "classification",
 }
 
 DATASET_INFO = {
+    "eclip-binding-k562": {
+        "dataset": "eclip-binding-k562",
+        "task": "classification",
+        "target_col": eCLIP_K562_RBPS_LIST,
+        "col_name": "eclip-binding-k562",
+        "split_type": "homology",
+        "isoform_resolved": True,
+        "transcript_avg": False,
+    },
+    "eclip-binding-hepg2": {
+        "dataset": "eclip-binding-hepg2",
+        "task": "classification",
+        "target_col": eCLIP_HepG2_RBPS_LIST,
+        "col_name": "eclip-binding-hepg2",
+        "split_type": "homology",
+        "isoform_resolved": True,
+        "transcript_avg": False,
+    },
     "go-mf": {
         "dataset": "go-mf",
         "task": "multilabel",  # reported as AUROC/AUPRC
@@ -171,6 +186,15 @@ DATASET_INFO = {
         "task": "reg_ridge",
         "target_col": "target",
         "col_name": "rnahl-mouse",
+        "split_type": "homology",
+        "isoform_resolved": False,
+        "transcript_avg": False,
+    },
+    "rna-loc": {
+        "dataset": "rna-loc",
+        "task": "multilabel",
+        "target_col": "target",
+        "col_name": "rna-loc",
         "split_type": "homology",
         "isoform_resolved": False,
         "transcript_avg": False,
