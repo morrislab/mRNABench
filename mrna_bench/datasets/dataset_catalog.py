@@ -64,14 +64,6 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "mrl-sample-varying": MRLSampleVarying,
 }
 
-DATASET_DEFAULT_TASK: dict[str, str] = {
-    "go-mf": "multilabel",
-    "rnahl-human": "reg_ridge",
-    "rnahl-mouse": "reg_ridge",
-    "prot-loc": "multilabel",
-    "mrl-sugimoto": "reg_ridge",
-}
-
 DATASET_INFO = {
     "eclip-binding-k562": {
         "dataset": "eclip-binding-k562",
@@ -80,7 +72,6 @@ DATASET_INFO = {
         "col_name": "eclip-binding-k562",
         "split_type": "homology",
         "isoform_resolved": True,
-        "transcript_avg": False,
     },
     "eclip-binding-hepg2": {
         "dataset": "eclip-binding-hepg2",
@@ -89,7 +80,6 @@ DATASET_INFO = {
         "col_name": "eclip-binding-hepg2",
         "split_type": "homology",
         "isoform_resolved": True,
-        "transcript_avg": False,
     },
     "go-mf": {
         "dataset": "go-mf",
@@ -98,16 +88,14 @@ DATASET_INFO = {
         "col_name": "go-mf",
         "split_type": "homology",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "mrl-sugimoto": {
         "dataset": "mrl-sugimoto",
-        "task": "reg_ridge",  # reported as MSE/R
+        "task": "reg_ridge",
         "target_col": "target",
         "col_name": "mrl-sugimoto",
         "split_type": "homology",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "mrl-sample-egfp-m1pseudo": {
         "dataset": "mrl-sample-egfp",
@@ -116,7 +104,6 @@ DATASET_INFO = {
         "col_name": "mrl-sample-egfp-m1pseudo",
         "split_type": "default",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "mrl-sample-egfp-pseudo": {
         "dataset": "mrl-sample-egfp",
@@ -125,7 +112,6 @@ DATASET_INFO = {
         "col_name": "mrl-sample-egfp-pseudo",
         "split_type": "default",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "mrl-sample-egfp-unmod": {
         "dataset": "mrl-sample-egfp",
@@ -134,7 +120,6 @@ DATASET_INFO = {
         "col_name": "mrl-sample-egfp-unmod",
         "split_type": "default",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "mrl-sample-mcherry": {
         "dataset": "mrl-sample-mcherry",
@@ -143,7 +128,6 @@ DATASET_INFO = {
         "col_name": "mrl-sample-mcherry",
         "split_type": "default",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "mrl-sample-designed": {
         "dataset": "mrl-sample-designed",
@@ -152,7 +136,6 @@ DATASET_INFO = {
         "col_name": "mrl-sample-designed",
         "split_type": "default",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "mrl-sample-varying": {
         "dataset": "mrl-sample-varying",
@@ -161,7 +144,6 @@ DATASET_INFO = {
         "col_name": "mrl-sample-varying",
         "split_type": "default",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "prot-loc": {
         "dataset": "prot-loc",
@@ -170,7 +152,6 @@ DATASET_INFO = {
         "col_name": "prot-loc",
         "split_type": "homology",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "rnahl-human": {
         "dataset": "rnahl-human",
@@ -179,7 +160,6 @@ DATASET_INFO = {
         "col_name": "rnahl-human",
         "split_type": "homology",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "rnahl-mouse": {
         "dataset": "rnahl-mouse",
@@ -188,7 +168,6 @@ DATASET_INFO = {
         "col_name": "rnahl-mouse",
         "split_type": "homology",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
     "rna-loc": {
         "dataset": "rna-loc",
@@ -197,7 +176,6 @@ DATASET_INFO = {
         "col_name": "rna-loc",
         "split_type": "homology",
         "isoform_resolved": False,
-        "transcript_avg": False,
     },
 }
 
@@ -214,7 +192,6 @@ for ttype in ["pcg", "lncrna"]:
             "col_name": f"{ttype}-ess-{cell}",
             "split_type": split_type,
             "isoform_resolved": True,
-            "transcript_avg": False,
         }
 
         if cell != "shared":
@@ -225,5 +202,4 @@ for ttype in ["pcg", "lncrna"]:
                 "col_name": f"{ttype}-ess-{cell}-day14-log2fc",
                 "split_type": split_type,
                 "isoform_resolved": True,
-                "transcript_avg": False,
             }
