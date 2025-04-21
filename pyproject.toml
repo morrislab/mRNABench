@@ -1,6 +1,6 @@
 [project]
 name = "mrna-bench"
-version = "1.1.2"
+version = "1.2.0"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
@@ -20,8 +20,7 @@ dependencies = [
     "scikit-learn",
     "numpy<2",
     "pandas<=2.2.2",
-    "requests",
-    "parasail"
+    "requests"
 ]
 
 [project.urls]
@@ -29,9 +28,9 @@ Repository = "https://github.com/morrislab/mRNABench"
 
 [project.optional-dependencies]
 base_models = [
-    "torch==2.1.2",
+    "torch==2.2.2",
     "transformers",
-    "mamba-ssm==2.1.0",
+    "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
     "accelerate",
     "multimolecule"
