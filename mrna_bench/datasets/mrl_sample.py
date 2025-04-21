@@ -82,7 +82,12 @@ class MRLSample(BenchmarkDataset):
     This class is a superclass which is inherited by the specific experiments.
     """
 
-    def __init__(self, dataset_name: str, force_redownload: bool = False):
+    def __init__(
+        self,
+        dataset_name: str,
+        force_redownload: bool = False,
+        hf_url: str | None = None
+    ):
         """Initialize MRLSample dataset.
 
         Args:
@@ -94,6 +99,7 @@ class MRLSample(BenchmarkDataset):
                     "varying"
                 }.
             force_redownload: Force raw data download even if pre-existing.
+            hf_url: URL to download the dataset from Hugging Face.
         """
         if type(self) is MRLSample:
             raise TypeError("MRLSample is an abstract class.")
@@ -101,9 +107,9 @@ class MRLSample(BenchmarkDataset):
         self.exp_target = dataset_name.split("-")[-1]
         assert self.exp_target in ["egfp", "mcherry", "designed", "varying"]
 
-        super().__init__(dataset_name, ["human"], force_redownload)
+        super().__init__(dataset_name, "synthetic", force_redownload, hf_url)
 
-    def get_raw_data(self):
+    def _download_raw_data(self):
         """Download raw data from source."""
         self.raw_data_files = []
 
@@ -141,7 +147,7 @@ class MRLSample(BenchmarkDataset):
 
         open(dlflag, "w").close()
 
-    def process_raw_data(self) -> pd.DataFrame:
+    def _process_raw_data(self) -> pd.DataFrame:
         """Process raw data into Pandas dataframe.
 
         Returns:
@@ -185,7 +191,7 @@ class MRLSample(BenchmarkDataset):
         else:
             out_df["sequence"] = PRIMER_SEQ + out_df["utr"] + EGFP_CDS
 
-        out_df["cds"] = out_df["utr"].apply(cast(Any, self.get_cds_track))
+        out_df["cds"] = out_df["utr"].apply(cast(Any, self._get_cds_track))
         out_df["splice"] = out_df["cds"].apply(lambda x: np.zeros_like(x))
 
         out_df.drop(columns=["utr"], inplace=True)
@@ -196,7 +202,7 @@ class MRLSample(BenchmarkDataset):
 
         return out_df
 
-    def get_cds_track(self, utr: str) -> np.ndarray:
+    def _get_cds_track(self, utr: str) -> np.ndarray:
         """Get CDS track for all sequences.
 
         Hard-coded numbers obtained by taking longest ORF in sequence.
@@ -223,6 +229,15 @@ class MRLSample(BenchmarkDataset):
 
         return cds_track
 
+    def _get_data_from_raw(self):
+        """Process raw data into Pandas dataframe.
+
+        Returns:
+            Pandas dataframe of processed sequences.
+        """
+        self._download_raw_data()
+        return self._process_raw_data()
+
 
 class MRLSampleEGFP(MRLSample):
     """Concrete class for MRL Sample for egfp experiments."""
@@ -233,7 +248,14 @@ class MRLSampleEGFP(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-egfp", force_redownload)
+        super().__init__(
+            "mrl-sample-egfp",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/quietflamingo/"
+                "mrl-sample/resolve/main/mrl-sample-egfp.parquet"
+            )
+        )
 
 
 class MRLSampleMCherry(MRLSample):
@@ -245,7 +267,14 @@ class MRLSampleMCherry(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-mcherry", force_redownload)
+        super().__init__(
+            "mrl-sample-mcherry",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/quietflamingo/"
+                "mrl-sample/resolve/main/mrl-sample-mcherry.parquet"
+            )
+        )
 
 
 class MRLSampleDesigned(MRLSample):
@@ -257,7 +286,14 @@ class MRLSampleDesigned(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-designed", force_redownload)
+        super().__init__(
+            "mrl-sample-designed",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/quietflamingo/"
+                "mrl-sample/resolve/main/mrl-sample-designed.parquet"
+            )
+        )
 
 
 class MRLSampleVarying(MRLSample):
@@ -269,4 +305,11 @@ class MRLSampleVarying(MRLSample):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        super().__init__("mrl-sample-varying", force_redownload)
+        super().__init__(
+            "mrl-sample-varying",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/quietflamingo/"
+                "mrl-sample/resolve/main/mrl-sample-varying.parquet"
+            )
+        )
