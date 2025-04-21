@@ -59,7 +59,6 @@ class RNAFM(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using RNA-FM.
@@ -71,14 +70,13 @@ class RNAFM(EmbeddingModel):
 
         Args:
             sequence: Sequence to embed.
-            overlap: Number of overlapping nucleotides between chunks.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
             RNA-FM representation of sequence with shape (1 x 640).
         """
         sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
         embedding_chunks = []
 
@@ -107,29 +105,24 @@ class RNAFM(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed sequence using mRNA-FM.
 
         Since mRNA-FM only accepts CDS, uses CDS track to extract CDS sequence
         and generate representation from it. CDS sequence must be a multiple
-        of three, complicating chunking with overlap. It is disabled for now.
+        of three.
 
         Args:
             sequence: Sequence to embed.
             cds: Binary encoding of first nucleotide of each codon in CDS.
             splice: Binary encoding of splice site locations.
-            overlap: Number of overlapping nucleotides between chunks.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
             mRNA-FM representation of CDS of sequence with shape (1 x H).
         """
-        if overlap != 0:
-            raise ValueError("mRNA-FM wrapper does not support overlap.")
-
-        _ = splice, overlap  # unused
+        _ = splice  # unused
 
         sequence = sequence.replace("T", "U")
 

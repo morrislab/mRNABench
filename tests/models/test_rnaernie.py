@@ -39,7 +39,7 @@ def test_rnaernie_forward_conversion(rnaernie):
         "chunk_sequence",
         side_effect=rnaernie.chunk_sequence
     ) as mock:
-        rnaernie.embed_sequence(text, overlap=0)
+        rnaernie.embed_sequence(text)
         mock.assert_called_once_with("ACUUGGCCA", rnaernie.max_length - 2, 0)
 
 
@@ -72,36 +72,6 @@ def test_rnaernie_forward_chunked(rnaernie):
         "model",
         side_effect=side_effect
     ) as mock_forward:
-        output = rnaernie.embed_sequence(text, overlap=0)
+        output = rnaernie.embed_sequence(text)
         assert torch.allclose(output, ground_truth_vals)
-        assert mock_forward.call_count == 2
-
-
-def test_rnaernie_forward_chunked_overlap(rnaernie):
-    """Test RNAErnie forward pass for chunked inputs with overlap."""
-    overlap = 100
-    spillover = 200
-    input_seq = "A" * (rnaernie.max_length - 2) + "G" * spillover
-
-    c1_ids = [1] + [6] * (rnaernie.max_length - 2) + [2]
-    c2_ids = [1] + [6] * overlap + [8] * spillover + [2]
-
-    def side_effect(input_ids, attention_mask):
-        if mock_forward.call_count == 1:
-            assert input_ids[0].tolist() == c1_ids
-        else:
-            assert input_ids[0].tolist() == c2_ids
-
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 768)
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
-
-    with patch.object(
-        rnaernie,
-        "model",
-        side_effect=side_effect
-    ) as mock_forward:
-        rnaernie.embed_sequence(input_seq, overlap=overlap)
         assert mock_forward.call_count == 2

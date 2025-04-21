@@ -1,7 +1,7 @@
 from collections.abc import Callable
 
 import torch
-import os 
+import os
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models.embedding_model import EmbeddingModel
@@ -10,11 +10,12 @@ from mrna_bench.models.embedding_model import EmbeddingModel
 class Evo2(EmbeddingModel):
     """Inference wrapper for Evo2.
 
-    Evo2 is a StripedHyena2-based DNA foundation model trained on the OpenGenome2
-    dataset using an autoregressive scheme at single nucleotide resolution. Owing
-    to its StripedHyena2 backbone, it has an ultra long context window. The `base`
-    variants can handle sequences up to 8192 nucleotides in length while the
-    larger variants can handle sequences up to 1 million nucleotides in length.
+    Evo2 is a StripedHyena2-based DNA foundation model trained on the
+    OpenGenome2 dataset using an autoregressive scheme at single nucleotide
+    resolution. Owing to its StripedHyena2 backbone, it has an ultra long
+    context window. The `base` variants can handle sequences up to 8192
+    nucleotides in length while the larger variants can handle sequences up to
+    1 million nucleotides in length.
 
     Link: https://github.com/ArcInstitute/evo2
     """

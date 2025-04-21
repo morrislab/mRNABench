@@ -55,22 +55,17 @@ class Orthrus(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable | None = None
     ) -> torch.Tensor:
         """Embed sequence using four track Orthrus.
 
         Args:
             sequence: Sequence to embed.
-            overlap: Unused.
             agg_fn: Currently unused.
 
         Returns:
             Orthrus representation of sequence.
         """
-        if overlap != 0:
-            raise ValueError("Orthrus does not chunk sequence.")
-
         if agg_fn is not None:
             raise NotImplementedError(
                 "Inference currently does not support alternative aggregation."
@@ -94,7 +89,6 @@ class Orthrus(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int = 0,
         agg_fn: Callable | None = None,
     ) -> torch.Tensor:
         """Embed sequence using six track Orthrus.
@@ -106,15 +100,11 @@ class Orthrus(EmbeddingModel):
             sequence: Sequence to embed.
             cds: CDS track for sequence to embed.
             splice: Splice site track for sequence to embed.
-            overlap: Unused.
             agg_fn: Currently unused.
 
         Returns:
             Orthrus representation of sequence.
         """
-        if overlap != 0:
-            raise ValueError("Orthrus does not chunk sequence.")
-
         if agg_fn is not None:
             raise NotImplementedError(
                 "Inference currently does not support alternative aggregation."

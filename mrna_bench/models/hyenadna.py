@@ -67,22 +67,17 @@ class HyenaDNA(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using HyenaDNA.
 
         Args:
             sequence: Sequence to embed.
-            overlap: Unused.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
             HyenaDNA representation of sequence.
         """
-        if overlap != 0:
-            raise ValueError("HyenaDNA does not chunk sequence.")
-
         with torch.inference_mode():
             inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
             inputs = inputs.to(self.device)
@@ -91,6 +86,6 @@ class HyenaDNA(EmbeddingModel):
         embedding_mean = agg_fn(hidden_states, dim=1)
         return embedding_mean
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, overlap, agg_fn):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not available for HyenaDNA.")

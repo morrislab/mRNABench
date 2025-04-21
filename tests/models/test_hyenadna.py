@@ -26,9 +26,3 @@ def test_hyena_forward(hyenadna):
 
     out = hyenadna.embed_sequence("ATGATG")
     assert out.shape == (1, 256)
-
-
-def test_hyena_errors_overlap(hyenadna):
-    """Test HyenaDNA throws error if overlap is not zero."""
-    with pytest.raises(ValueError):
-        hyenadna.embed_sequence("ATGATG", overlap=1)

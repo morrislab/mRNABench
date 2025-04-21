@@ -56,7 +56,7 @@ def test_rnafm_forward_replace(rnamodel):
         "chunk_sequence",
         side_effect=rnamodel.chunk_sequence
     ) as mock:
-        rnamodel.embed_sequence("ATGATG", overlap=0)
+        rnamodel.embed_sequence("ATGATG")
         mock.assert_called_once_with("AUGAUG", rnamodel.max_length - 2, 0)
 
 
@@ -71,7 +71,6 @@ def test_mrnafm_forward_replace(mrnamodel):
             "ATGATG",
             np.array([1, 0, 0] * 2),
             np.array([0] * 6),
-            overlap=0
         )
         mock.assert_called_once_with("AUGAUG", 3 * (mrnamodel.max_length - 2))
 
@@ -99,30 +98,7 @@ def test_rnafm_forward_chunking(rnamodel):
 
     with patch.object(rnamodel, "model") as mock_model:
         mock_model.side_effect = side_effect
-        rnamodel.embed_sequence(input_seq, overlap=0)
-
-
-def test_rnafm_forward_chunking_overlap(rnamodel):
-    """Test RNA-FM forward pass with chunking and overlap."""
-    spillover = int(rnamodel.max_length / 2)
-    overlap = 100
-    input_seq = "A" * (rnamodel.max_length + spillover)
-
-    def side_effect(tokens, repr_layers=[12]):
-        if mock_model.call_count == 1:
-            assert len(tokens[0]) == rnamodel.max_length - 1
-            assert tokens[0][0] == 0
-            assert tokens[0][-1] != 2
-        else:
-            # 2 tokens per previous chunk, plus extra token at end
-            assert len(tokens[0]) == overlap + spillover + 3
-            assert tokens[0][0] != 0
-            assert tokens[0][-1] == 2
-        return {"representations": [torch.zeros(1, 640)] * 13}
-
-    with patch.object(rnamodel, "model") as mock_model:
-        mock_model.side_effect = side_effect
-        rnamodel.embed_sequence(input_seq, overlap=overlap)
+        rnamodel.embed_sequence(input_seq)
 
 
 def test_mrna_forward_cds_slice(mrnamodel):
@@ -162,17 +138,6 @@ def test_mrnafm_forward_chunking(mrnamodel):
     with patch.object(mrnamodel, "model") as mock_model:
         mock_model.side_effect = side_effect
         mrnamodel.embed_sequence_sixtrack(input_seq, cds, splice)
-
-
-def test_mrnafm_forward_chunking_overlap_errors(mrnamodel):
-    """Test mRNA-FM throws error when using overlap."""
-    with pytest.raises(ValueError):
-        mrnamodel.embed_sequence_sixtrack(
-            "ATG",
-            np.array([0, 0, 0]),
-            np.array([0, 0, 0]),
-            overlap=1
-        )
 
 
 def test_get_cds_full(mrnamodel):

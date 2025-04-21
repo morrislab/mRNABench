@@ -54,46 +54,6 @@ def test_nt_forward_chunked(ntmodel):
         return mock_out
 
     with patch.object(ntmodel.model, "forward", side_effect=side_effect):
-        output = ntmodel.embed_sequence(
-            input_seq,
-            overlap=0,
-            agg_fn=torch.mean
-        ).cpu()
-
-        assert torch.allclose(output, ground_truth_vals)
-
-
-def test_nt_forward_chunked_overlap(ntmodel):
-    """Test NucleotideTransformer forward pass with chunking and overlap."""
-    tokenizer = ntmodel.tokenizer
-
-    spillover = 10
-    overlap = 15
-    # NOTE: ATGATG encodes to token 461
-    input_seq = "ATGATG" * (tokenizer.model_max_length + spillover)
-
-    ground_truth_vals = torch.mean(torch.cat([
-        torch.arange(ntmodel.max_length).float(),
-        torch.arange(spillover + overlap + 1).float()
-    ])).repeat(1, 512)
-
-    def side_effect(
-        input_ids,
-        attention_mask,
-        encoder_attention_mask,
-        output_hidden_states
-    ):
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 512)
-
-        mock_out = {"hidden_states": [pos]}
-        return mock_out
-
-    with patch.object(ntmodel.model, "forward", side_effect=side_effect):
-        output = ntmodel.embed_sequence(
-            input_seq,
-            overlap=overlap,
-            agg_fn=torch.mean
-        ).cpu()
+        output = ntmodel.embed_sequence(input_seq, agg_fn=torch.mean).cpu()
 
         assert torch.allclose(output, ground_truth_vals)

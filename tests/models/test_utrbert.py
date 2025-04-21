@@ -45,7 +45,7 @@ def test_utrbert_forward(utrbert3mer):
         "tokenizer",
         wraps=utrbert3mer.tokenizer
     ) as mock:
-        output = utrbert3mer.embed_sequence(input_seq, overlap=0)
+        output = utrbert3mer.embed_sequence(input_seq)
         mock.assert_called_once_with("AUGAUG", return_tensors="pt")
 
         assert output.shape == (1, 768)
@@ -84,8 +84,7 @@ def test_utrbert_utronly_forward(utrbert_utronly):
         output = utrbert_utronly.embed_sequence_sixtrack(
             input_seq,
             np.array([1, 0, 0, 0, 0, 0]),
-            np.array([0] * len(input_seq)),
-            overlap=0
+            np.array([0] * len(input_seq))
         )
         mock.assert_called_once_with("AUG", return_tensors="pt")
 
@@ -120,7 +119,7 @@ def test_utrbert_forward_chunked_3mer(utrbert3mer):
         return mock_out
 
     with patch.object(utrbert3mer, "model", side_effect=side_effect) as mock:
-        output = utrbert3mer.embed_sequence(input_seq, overlap=0)
+        output = utrbert3mer.embed_sequence(input_seq)
 
         assert torch.allclose(output, ground_truth)
 
@@ -153,42 +152,6 @@ def test_utrbert_forward_chunked_6mer(utrbert6mer):
         return mock_out
 
     with patch.object(utrbert6mer, "model", side_effect=side_effect) as mock:
-        output = utrbert6mer.embed_sequence(input_seq, overlap=0)
-
-        assert torch.allclose(output, ground_truth)
-
-
-def test_utrbert_forward_chunked_3mer_overlap(utrbert3mer):
-    """Test 3'UTR-BERT forward pass with chunked sequence and overlap."""
-    spillover = 100
-    overlap = 25
-    max_len = utrbert3mer.max_length
-
-    input_seq = "A" * (max_len + spillover)
-
-    token_len = len(input_seq) - (utrbert3mer.kmer_size - 1)
-
-    # Check that all only first token (CLS) is used for aggregation
-    ground_truth = torch.zeros(1, 768)
-
-    def side_effect(input_ids, attention_mask):
-        if mock.call_count == 1:
-            assert input_ids.shape[1] == max_len
-        elif mock.call_count == 2:
-            assert input_ids.shape[1] == token_len - max_len + 4 + overlap
-        else:
-            raise AssertionError("Unexpected call count")
-
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 768)
-
-        mock_out = {"hidden_states": [pos]}
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        mock_out = MockOut(last_hidden_state=pos)
-        return mock_out
-
-    with patch.object(utrbert3mer, "model", side_effect=side_effect) as mock:
-        output = utrbert3mer.embed_sequence(input_seq, overlap=overlap)
+        output = utrbert6mer.embed_sequence(input_seq)
 
         assert torch.allclose(output, ground_truth)

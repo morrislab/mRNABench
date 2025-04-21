@@ -99,7 +99,7 @@ class EmbeddingModel(ABC):
         sequence_tokens: list[int],
         chunk_length: int,
     ) -> list[list[int]]:
-        """Chunk tokenized sequence into specified length with overlap.
+        """Chunk tokenized sequence into specified length.
 
         Args:
             sequence_tokens: The tokenized sequence to be chunked.
@@ -108,13 +108,8 @@ class EmbeddingModel(ABC):
         Returns:
             A list of chunked tokens each with specified maximum length.
         """
-        if overlap_size >= chunk_length:
-            raise ValueError("overlap_size must be less than chunk_length")
-
-        step_size = chunk_length - overlap_size
-
         chunks = []
-        for i in range(0, len(sequence_tokens), step_size):
+        for i in range(0, len(sequence_tokens), chunk_length):
             chunk = sequence_tokens[i:i + chunk_length]
             chunks.append(chunk)
 

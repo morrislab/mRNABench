@@ -62,7 +62,6 @@ def test_splicebert_forward_chunked_1024(splicebert_1024):
     ):
         output = splicebert_1024.embed_sequence(
             input_seq,
-            overlap=0,
             agg_fn=torch.mean
         ).cpu()
 
@@ -100,7 +99,6 @@ def test_splicebert_forward_chunked_510(splicebert_510):
 
         output = splicebert_510.embed_sequence(
             input_seq,
-            overlap=0,
             agg_fn=torch.mean
         ).cpu()
 

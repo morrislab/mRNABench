@@ -60,21 +60,19 @@ class RNAMSM(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using RNA-MSM.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Nucleotide overlap between sequence chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
             RNA-MSM embedding of sequence with shape (1 x 768).
         """
         sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
         embedding_chunks = []
 
@@ -89,6 +87,6 @@ class RNAMSM(EmbeddingModel):
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, overlap, agg_fn):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not implemented for RNA-MSM."""
         raise NotImplementedError("RNA-MSM does not support sixtrack mode.")

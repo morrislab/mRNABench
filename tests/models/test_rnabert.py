@@ -39,7 +39,7 @@ def test_rnabert_forward_conversion(rnabert):
         "chunk_sequence",
         side_effect=rnabert.chunk_sequence
     ) as mock:
-        rnabert.embed_sequence(text, overlap=0)
+        rnabert.embed_sequence(text)
         mock.assert_called_once_with("ACUUGGCCA", rnabert.max_length - 2, 0)
 
 
@@ -72,36 +72,6 @@ def test_rnabert_forward_chunked(rnabert):
         "model",
         side_effect=side_effect
     ) as mock_forward:
-        output = rnabert.embed_sequence(text, overlap=0)
+        output = rnabert.embed_sequence(text)
         assert torch.allclose(output, ground_truth_vals)
-        assert mock_forward.call_count == 2
-
-
-def test_rnabert_forward_chunked_overlap(rnabert):
-    """Test RNABERT forward pass for chunked inputs with overlap."""
-    overlap = 100
-    spillover = 200
-    input_seq = "A" * (rnabert.max_length - 2) + "G" * spillover
-
-    c1_ids = [1] + [6] * (rnabert.max_length - 2) + [2]
-    c2_ids = [1] + [6] * overlap + [8] * spillover + [2]
-
-    def side_effect(input_ids, attention_mask):
-        if mock_forward.call_count == 1:
-            assert input_ids[0].tolist() == c1_ids
-        else:
-            assert input_ids[0].tolist() == c2_ids
-
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 120)
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
-
-    with patch.object(
-        rnabert,
-        "model",
-        side_effect=side_effect
-    ) as mock_forward:
-        rnabert.embed_sequence(input_seq, overlap=overlap)
         assert mock_forward.call_count == 2

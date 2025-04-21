@@ -80,7 +80,6 @@ class SpliceBERT(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using SpliceBERT.
@@ -91,13 +90,12 @@ class SpliceBERT(EmbeddingModel):
 
         Args:
             sequence: Sequence to embed.
-            overlap: Number of overlapping nucleotides between chunks.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
             SpliceBERT representation of sequence with shape (1 x 512).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length)
 
         # Pad last chunk for 510 nt models
         if self.max_length == 510:
@@ -128,6 +126,6 @@ class SpliceBERT(EmbeddingModel):
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, overlap, agg_fn):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not available for SpliceBERT.")

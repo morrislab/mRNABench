@@ -72,21 +72,19 @@ class UTRLM(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using UTR-LM.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Nucleotide overlap between sequence chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
             UTR-LM embedding of sequence with shape (1 x 128).
         """
         sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
         embedding_chunks = []
 
@@ -107,7 +105,6 @@ class UTRLM(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed ONLY the 5'UTR of a sequence using UTR-LM.
@@ -116,7 +113,6 @@ class UTRLM(EmbeddingModel):
             sequence: Sequence to embed.
             cds: CDS track for sequence to embed.
             splice: Unused.
-            overlap: Number of overlapping nucleotides between sequence chunks.
             agg_fn: Currently unused.
 
         Returns:
@@ -125,7 +121,7 @@ class UTRLM(EmbeddingModel):
         _ = splice
         five_utr_seq = self.get_fiveprime_utr(sequence, cds)
 
-        return self.embed_sequence(five_utr_seq, overlap, agg_fn)
+        return self.embed_sequence(five_utr_seq, agg_fn)
 
     def get_fiveprime_utr(self, sequence: str, cds: np.ndarray) -> str:
         """Return the portion of a sequence corresponding to the 5'UTR.

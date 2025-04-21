@@ -39,7 +39,7 @@ def test_rnamsm_forward_conversion(rnamsm):
         "chunk_sequence",
         side_effect=rnamsm.chunk_sequence
     ) as mock:
-        rnamsm.embed_sequence(text, overlap=0)
+        rnamsm.embed_sequence(text)
         mock.assert_called_once_with("ACUUGGCCA", rnamsm.max_length - 2, 0)
 
 
@@ -70,40 +70,6 @@ def test_rnamsm_forward_chunked(rnamsm):
     with patch("multimolecule.RnaMsmModel.forward") as mock_forward:
         mock_forward.side_effect = side_effect
 
-        output = rnamsm.embed_sequence(
-            text,
-            overlap=0,
-            agg_fn=torch.mean
-        ).cpu()
+        output = rnamsm.embed_sequence(text, agg_fn=torch.mean).cpu()
 
         assert torch.allclose(output, ground_truth_vals)
-
-
-def test_rnamsm_forward_chunked_overlap(rnamsm):
-    """Test RNA-MSM forward pass for chunked inputs with overlap."""
-    overlap = rnamsm.max_length // 8
-    input_seq = "A" * (rnamsm.max_length - 2) + "G" * (rnamsm.max_length // 4)
-
-    c1_ids = [1] + [6] * (rnamsm.max_length - 2) + [2]
-    c2_ids = [1] + [6] * overlap + [8] * (rnamsm.max_length // 4) + [2]
-
-    def side_effect(input_ids, attention_mask):
-        if mock_forward.call_count == 1:
-            assert input_ids[0].tolist() == c1_ids
-        else:
-            assert input_ids[0].tolist() == c2_ids
-
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 768)
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
-
-    with patch("multimolecule.RnaMsmModel.forward") as mock_forward:
-        mock_forward.side_effect = side_effect
-
-        rnamsm.embed_sequence(
-            input_seq,
-            overlap=overlap,
-            agg_fn=torch.mean
-        ).cpu()

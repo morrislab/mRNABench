@@ -68,22 +68,17 @@ class DNABERT2(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using DNABERT2.
 
         Args:
             sequence: Sequence to embed.
-            overlap: Unused.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
             DNABERT2 representation of sequence with shape (1 x 768).
         """
-        if overlap != 0:
-            raise ValueError("DNABERT2 does not chunk sequence.")
-
         inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
         inputs = inputs.to(self.device)
         hidden_states = self.model(inputs)[0]
@@ -91,6 +86,6 @@ class DNABERT2(EmbeddingModel):
         embedding_mean = agg_fn(hidden_states, dim=1)
         return embedding_mean
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, overlap, agg_fn):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not available for DNABERT.")

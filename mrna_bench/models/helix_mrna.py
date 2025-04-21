@@ -46,22 +46,18 @@ class HelixmRNAWrapper(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using Helix-mRNA.
 
         Args:
             sequence: Sequence to embed.
-            overlap: Unused.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
             Helix-mRNA representation of sequence with shape (1 x 256).
         """
         sequence = sequence.upper().replace("T", "U")
-        if overlap != 0:
-            raise ValueError("Helix-mRNA does not chunk sequence.")
 
         dataset = self.model.process_data(sequence)
         rna_embeddings = torch.Tensor(self.model.get_embeddings(dataset))
@@ -73,7 +69,6 @@ class HelixmRNAWrapper(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed sequence using Helix-mRNA.
@@ -88,16 +83,12 @@ class HelixmRNAWrapper(EmbeddingModel):
             sequence: Sequence to embed.
             cds: CDS track for sequence to embed.
             splice: Unused.
-            overlap: Unused.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
             Helix-mRNA representation of sequence with shape (1 x 256).
         """
         _ = splice  # Unused
-
-        if overlap != 0:
-            raise ValueError("Helix-mRNA does not chunk sequence.")
 
         modified_sequence = self.tokenize_cds(sequence, cds)
         embedding = self.embed_sequence(modified_sequence, agg_fn=agg_fn)

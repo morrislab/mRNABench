@@ -48,20 +48,18 @@ class AIDORNA(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using AIDO.RNA.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Number of tokens overlapping between chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
             AIDO.RNA embedding of sequence with shape (1 x H).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
         embedding_chunks = []
 
