@@ -57,7 +57,7 @@ def test_rnafm_forward_replace(rnamodel):
         side_effect=rnamodel.chunk_sequence
     ) as mock:
         rnamodel.embed_sequence("ATGATG")
-        mock.assert_called_once_with("AUGAUG", rnamodel.max_length - 2, 0)
+        mock.assert_called_once_with("AUGAUG", rnamodel.max_length - 2)
 
 
 def test_mrnafm_forward_replace(mrnamodel):

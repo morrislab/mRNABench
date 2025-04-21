@@ -50,47 +50,49 @@ class Evo2(EmbeddingModel):
 
         self.model = Evo2(model_version)
         self.tokenizer = self.model.tokenizer.tokenize
-        
-        all_prenorms = [name.strip('.scale') for name,_ in self.model.named_parameters() if "pre_norm" in name]
+
+        all_prenorms = []
+
+        for name, _ in self.model.named_parameters():
+            if "pre_norm" in name:
+                all_prenorms.append(name.strip('.scale'))
 
         # we will only take the middle and last layer output for simplicity
-        self.embedding_layers = [all_prenorms[len(all_prenorms)//2], 'norm']
+        self.embedding_layers = [all_prenorms[len(all_prenorms) // 2], 'norm']
 
         if model_version in ["evo2_40b", "evo2_7b"]:
-            max_length = 1_000_000
+            self.max_length = 1_000_000
 
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using Evo2.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Number of tokens overlapping between chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
             Evo2 embedding of sequence with shape (1 x H).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
         embedding_chunks = []
 
         with torch.inference_mode():
 
             for i, chunk in enumerate(chunks):
-                
+
                 input_ids = torch.tensor(
-                    self.tokenizer(chunk), 
+                    self.tokenizer(chunk),
                     dtype=torch.int
                 ).unsqueeze(0).to(self.device)
 
                 _, embeddings = self.model(
-                    input_ids = input_ids, 
-                    return_embeddings=True, 
+                    input_ids=input_ids,
+                    return_embeddings=True,
                     layer_names=self.embedding_layers
                 )
 
@@ -101,7 +103,10 @@ class Evo2(EmbeddingModel):
         # embedding is of type bfloat16, need to convert to float32
         # since numpy does not support bfloat16
         for layer_name in sorted(self.embedding_layers):
-            aggregate_embeddings.append(torch.mean(torch.cat([embedding_chunks[i][layer_name] for i in range(len(embedding_chunks))], dim=1), dim=1).float().cpu())
+            n_chunks = len(embedding_chunks)
+            chunks = [embedding_chunks[i][layer_name] for i in range(n_chunks)]
+            mean_chunks = torch.mean(torch.cat(chunks, dim=1), dim=1)
+            aggregate_embeddings.append(mean_chunks.float().cpu())
 
         aggregate_embedding = torch.vstack(aggregate_embeddings)
 

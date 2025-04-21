@@ -40,7 +40,7 @@ def test_ernierna_forward_conversion(ernierna):
         side_effect=ernierna.chunk_sequence
     ) as mock:
         ernierna.embed_sequence(text)
-        mock.assert_called_once_with("ACUUGGCCA", ernierna.max_length - 2, 0)
+        mock.assert_called_once_with("ACUUGGCCA", ernierna.max_length - 2)
 
 
 def test_ernierna_forward_chunked(ernierna):

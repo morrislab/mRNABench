@@ -40,7 +40,7 @@ def test_rnamsm_forward_conversion(rnamsm):
         side_effect=rnamsm.chunk_sequence
     ) as mock:
         rnamsm.embed_sequence(text)
-        mock.assert_called_once_with("ACUUGGCCA", rnamsm.max_length - 2, 0)
+        mock.assert_called_once_with("ACUUGGCCA", rnamsm.max_length - 2)
 
 
 def test_rnamsm_forward_chunked(rnamsm):

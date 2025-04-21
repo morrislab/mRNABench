@@ -1,7 +1,7 @@
 import json
 import numpy as np
-import pandas as pd 
-import os 
+import pandas as pd
+import os
 
 from pathlib import Path
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
@@ -10,9 +10,10 @@ from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 class LNCRNAEssentiality(BenchmarkDataset):
     """Long Non-Coding RNA Essentiality Dataset."""
 
-    LNCRNA_URL = "/data1/morrisq/dalalt1/Orthrus/processed_data/essentiality/sanjana_data/cell_line_essentiality/expression_fixed/lncRNA_essentiality.tsv"
+    LNCRNA_URL = "/data1/morrisq/dalalt1/Orthrus/processed_data/essentiality/sanjana_data/cell_line_essentiality/expression_fixed/lncRNA_essentiality.tsv" # noqa
 
-    def __init__(self, 
+    def __init__(
+        self,
         dataset_name: str,
         force_redownload: bool = False,
         **kwargs # noqa
@@ -34,9 +35,21 @@ class LNCRNAEssentiality(BenchmarkDataset):
         if type(self) is LNCRNAEssentiality:
             raise TypeError("LNCRNAEssentiality is an abstract class.")
 
-        valid_targets = ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]
-        self.exp_target = next((target for target in valid_targets if target in dataset_name), None)
-        assert self.exp_target is not None, f"Invalid experiment target in dataset name: {dataset_name}"
+        valid_targets = [
+            "hap1",
+            "hek293ft",
+            "k562",
+            "mda-mb-231",
+            "thp1",
+            "shared"
+        ]
+        self.exp_target = next(
+            (target for target in valid_targets if target in dataset_name),
+            None
+        )
+
+        err_msg = f"Invalid experiment target in dataset name: {dataset_name}"
+        assert self.exp_target is not None, err_msg
 
         super().__init__(
             dataset_name=dataset_name,
@@ -50,10 +63,9 @@ class LNCRNAEssentiality(BenchmarkDataset):
         Returns:
             Pandas dataframe of processed sequences.
         """
-        
         df = pd.read_csv(self.raw_data_path, sep="\t")
 
-        # the cds, and splice == strings of lists, convert -> lists -> numpy arrays
+        # cds, and splice == strings of lists, convert -> lists -> numpy arrays
         df["cds"] = df["cds"].apply(lambda x: np.array(json.loads(x)))
         df["splice"] = df["splice"].apply(lambda x: np.array(json.loads(x)))
 
@@ -61,21 +73,30 @@ class LNCRNAEssentiality(BenchmarkDataset):
 
     def subset_df(self, df: pd.DataFrame) -> pd.DataFrame:
         """Subset dataframe to only include relevant columns.
-        
+
         Args:
             df: Dataframe to subset
 
         Returns:
             Subsetted dataframe.
         """
-        
         if self.isoform_resolved:
             df = df[df["isoform_resolved"] == 1].reset_index(drop=True)
 
         # drop rows with missing target values in the target column
         df = df.dropna(subset=[self.target_col]).reset_index(drop=True)
 
-        df = df[['gene', 'gene_id', 'transcript', 'isoform_resolved', 'sequence', 'cds', 'splice'] + [self.target_col]]
+        keep_cols = [
+            "gene",
+            "gene_id",
+            "transcript",
+            "isoform_resolved",
+            "sequence",
+            "cds",
+            "splice",
+        ]
+
+        df = df[keep_cols + [self.target_col]]
 
         return df
 
@@ -88,7 +109,6 @@ class LNCRNAEssentiality(BenchmarkDataset):
         df.to_pickle(self.dataset_path + "/data_df.pkl")
 
         self.data_df = self.subset_df(df)
-
 
     def load_processed_df(self) -> bool:
         """Load processed dataframe from data storage path.
@@ -109,16 +129,29 @@ class LNCRNAEssentiality(BenchmarkDataset):
     def get_raw_data(self):
         """Collect the raw data from given local path."""
         raw_file_name = Path(self.LNCRNA_URL).name
-        raw_data_path = self.raw_data_dir + "/" + self.exp_target.upper() + "_" + raw_file_name
+        raw_data_path = "{}/{}_{}".format(
+            self.raw_data_dir,
+            self.exp_target.upper(),
+            raw_file_name
+        )
 
         if not os.path.exists(raw_data_path):
 
             df = pd.read_csv(self.LNCRNA_URL, sep="\t")
 
             # keep the columns that are relevant to this dataset
-            label_cols = [col for col in df.columns if self.exp_target.upper() in col]
+            lab_cols = [c for c in df.columns if self.exp_target.upper() in c]
+            keep_cols = [
+                "gene",
+                "gene_id",
+                "transcript",
+                "isoform_resolved",
+                "sequence",
+                "cds",
+                "splice",
+            ]
 
-            df = df[['gene', 'gene_id', 'transcript', 'isoform_resolved', 'sequence', 'cds', 'splice'] + label_cols]
+            df = df[keep_cols + lab_cols]
 
             df.to_csv(raw_data_path, sep="\t", index=False)
 
@@ -126,10 +159,12 @@ class LNCRNAEssentiality(BenchmarkDataset):
 
         self.raw_data_path = raw_data_path
 
+
 class LNCRNAEssHAP1(LNCRNAEssentiality):
     """Concrete class for HAP1 cell line experiments."""
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload=False,
         **kwargs # noqa
     ):
@@ -143,10 +178,12 @@ class LNCRNAEssHAP1(LNCRNAEssentiality):
 
         super().__init__("lncrna-ess-hap1", force_redownload)
 
+
 class LNCRNAEssHEK293FT(LNCRNAEssentiality):
     """Concrete class for HEK293FT cell line experiments."""
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload=False,
         **kwargs # noqa
     ):
@@ -160,10 +197,12 @@ class LNCRNAEssHEK293FT(LNCRNAEssentiality):
 
         super().__init__("lncrna-ess-hek293ft", force_redownload)
 
+
 class LNCRNAEssK562(LNCRNAEssentiality):
     """Concrete class for K562 cell line experiments."""
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload=False,
         **kwargs # noqa
     ):
@@ -177,10 +216,12 @@ class LNCRNAEssK562(LNCRNAEssentiality):
 
         super().__init__("lncrna-ess-k562", force_redownload)
 
+
 class LNCRNAEssMDA_MB_231(LNCRNAEssentiality):
     """Concrete class for MDA-MB-231 cell line experiments."""
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload=False,
         **kwargs # noqa
     ):
@@ -194,10 +235,12 @@ class LNCRNAEssMDA_MB_231(LNCRNAEssentiality):
 
         super().__init__("lncrna-ess-mda-mb-231", force_redownload)
 
+
 class LNCRNAEssTHP1(LNCRNAEssentiality):
     """Concrete class for THP1 cell line experiments."""
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload=False,
         **kwargs # noqa
     ):
@@ -211,10 +254,12 @@ class LNCRNAEssTHP1(LNCRNAEssentiality):
 
         super().__init__("lncrna-ess-thp1", force_redownload)
 
+
 class LNCRNAEssShared(LNCRNAEssentiality):
     """Concrete class for Shared cell line essentiality."""
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload=False,
         **kwargs # noqa
     ):

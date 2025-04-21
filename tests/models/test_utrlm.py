@@ -46,7 +46,7 @@ def test_utrlm_forward_conversion(utrlm):
         side_effect=utrlm.chunk_sequence
     ) as mock:
         utrlm.embed_sequence(text)
-        mock.assert_called_once_with("ACUUUGGCCA", utrlm.max_length - 2, 0)
+        mock.assert_called_once_with("ACUUUGGCCA", utrlm.max_length - 2)
 
 
 def test_utrlm_forward_chunked(utrlm):

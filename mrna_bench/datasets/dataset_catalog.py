@@ -184,7 +184,7 @@ for ttype in ["pcg", "lncrna"]:
     for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
         # Use uppercase for target column suffix (adjust if needed).
         cell_upper = cell.upper()
-        
+
         DATASET_INFO[f"{ttype}-ess-{cell}"] = {
             "dataset": f"{ttype}-ess-{cell}",
             "task": "classification",

@@ -1,8 +1,8 @@
 import json
 import shutil
 import numpy as np
-import pandas as pd 
-import os 
+import pandas as pd
+import os
 
 from pathlib import Path
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
@@ -11,9 +11,10 @@ from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 class RNALocalization(BenchmarkDataset):
     """RNA Subcellular Localization Dataset."""
 
-    RL_URL = "/data1/morrisq/dalalt1/Orthrus/processed_data/rna_localization/rna_subcellular_localization.tsv"
+    RL_URL = "/data1/morrisq/dalalt1/Orthrus/processed_data/rna_localization/rna_subcellular_localization.tsv" # noqa
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload: bool = False,
         **kwargs # noqa
     ):
@@ -34,10 +35,9 @@ class RNALocalization(BenchmarkDataset):
         Returns:
             Pandas dataframe of processed sequences.
         """
-        
         df = pd.read_csv(self.raw_data_path, sep="\t")
 
-        # the cds, and splice == strings of lists, convert -> lists -> numpy arrays
+        # cds, and splice == strings of lists, convert -> lists -> numpy arrays
         df["cds"] = df["cds"].apply(lambda x: np.array(json.loads(x)))
         df["splice"] = df["splice"].apply(lambda x: np.array(json.loads(x)))
         df["target"] = df["target"].apply(lambda x: np.array(json.loads(x)))
@@ -54,7 +54,6 @@ class RNALocalization(BenchmarkDataset):
 
         self.data_df = df
 
-
     def load_processed_df(self) -> bool:
         """Load processed dataframe from data storage path.
 
@@ -63,7 +62,7 @@ class RNALocalization(BenchmarkDataset):
         """
         try:
             df = pd.read_pickle(self.dataset_path + "/data_df.pkl")
-            
+
             self.data_df = df
 
         except FileNotFoundError:

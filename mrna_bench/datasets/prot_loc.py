@@ -15,7 +15,8 @@ PL_URL = (
 class ProteinLocalization(BenchmarkDataset):
     """Protein Subcellular Localization Dataset."""
 
-    def __init__(self, 
+    def __init__(
+        self,
         force_redownload: bool = False,
         **kwargs # noqa
     ):

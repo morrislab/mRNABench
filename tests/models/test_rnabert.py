@@ -40,7 +40,7 @@ def test_rnabert_forward_conversion(rnabert):
         side_effect=rnabert.chunk_sequence
     ) as mock:
         rnabert.embed_sequence(text)
-        mock.assert_called_once_with("ACUUGGCCA", rnabert.max_length - 2, 0)
+        mock.assert_called_once_with("ACUUGGCCA", rnabert.max_length - 2)
 
 
 def test_rnabert_forward_chunked(rnabert):
