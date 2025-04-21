@@ -6,16 +6,11 @@ if TYPE_CHECKING:
     import torch
     from mrna_bench.models import EmbeddingModel
 
-# TODO:
-# Remove references to loading custom Orthrus model checkpoints
-# and replace with loading from HuggingFace hub.
-# and kwargs for loading datasets
 
 def load_model(
     model_name: str,
     model_version: str,
     device: "torch.device",
-    checkpoint: str = None
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
@@ -31,11 +26,7 @@ def load_model(
         from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
 
         model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
-        
-        if model_name != "Orthrus" or checkpoint is None:
-            model = model_class(model_version, device)
-        else:
-            model = model_class(model_version, checkpoint, device)
+        model = model_class(model_version, device)
 
     except ModuleNotFoundError:
         raise ModuleNotFoundError(
@@ -47,8 +38,7 @@ def load_model(
 
 def load_dataset(
     dataset_name: str,
-    force_redownload: bool = False,
-    **kwargs # noqa
+    force_redownload: bool = False
 ) -> BenchmarkDataset:
     """Load Benchmark Dataset.
 
@@ -56,5 +46,4 @@ def load_dataset(
         dataset_name: Name of the dataset.
         force_redownload: Forces data file redownload.
     """
-
-    return DATASET_CATALOG[dataset_name](force_redownload, **kwargs)
+    return DATASET_CATALOG[dataset_name](force_redownload)

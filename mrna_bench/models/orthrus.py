@@ -4,12 +4,8 @@ import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.datasets.dataset_utils import str_to_ohe
 from mrna_bench.models import EmbeddingModel
 
-# TODO:
-# Remove references to loading custom Orthrus model checkpoints
-# and replace with loading from HuggingFace hub.
 
 class Orthrus(EmbeddingModel):
     """Inference wrapper for Orthrus.
@@ -27,12 +23,7 @@ class Orthrus(EmbeddingModel):
         """Get shortened name of model version."""
         return model_version.replace("-track", "")
 
-    def __init__(self, model_version: str, 
-        checkpoint : str, 
-        device: torch.device,
-        model_repository: str = "/data1/morrisq/ian/rna_contrast/runs/"
-        # model_repository: str = "/data1/morrisq/dalalt1/Orthrus/models/"
-    ):
+    def __init__(self, model_version: str, device: torch.device):
         """Initialize Orthrus model.
 
         Args:
@@ -50,30 +41,15 @@ class Orthrus(EmbeddingModel):
             raise ImportError(
                 "Install base_models optional dependency to use Orthrus."
             )
-        
-        if checkpoint is not None:
-            # if 'bidirectional' in model_version:
-            #     from mrna_bench.models.cerebrus_src import load_model
-            # else:
-            from mrna_bench.models.orthrus_src import load_model
 
-            model = load_model(
-                f"{model_repository}{model_version}",
-                checkpoint_name=checkpoint,
-            )
+        model_hf_path = "quietflamingo/{}".format(model_version)
+        model = AutoModel.from_pretrained(
+            model_hf_path,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
+        )
 
-            self.is_sixtrack = '6_track' in model_version or '6t' in model_version
-
-        else: 
-            model_hf_path = "quietflamingo/{}".format(model_version)
-            model = AutoModel.from_pretrained(
-                model_hf_path,
-                trust_remote_code=True,
-                cache_dir=get_model_weights_path()
-            )
-
-            self.is_sixtrack = model_version == "orthrus-large-6-track"
-        
+        self.is_sixtrack = model_version == "orthrus-large-6-track"
         self.model = model.to(device)
 
     def embed_sequence(
@@ -100,7 +76,7 @@ class Orthrus(EmbeddingModel):
                 "Inference currently does not support alternative aggregation."
             )
 
-        ohe_sequence = torch.from_numpy(str_to_ohe(sequence)).to(self.device, dtype=torch.float32)
+        ohe_sequence = self.model.seq_to_oh(sequence).to(self.device)
         model_input_tt = ohe_sequence.unsqueeze(0)
 
         lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
@@ -144,7 +120,7 @@ class Orthrus(EmbeddingModel):
                 "Inference currently does not support alternative aggregation."
             )
 
-        ohe_sequence = str_to_ohe(sequence)
+        ohe_sequence = self.model.seq_to_oh(sequence).numpy()
 
         model_input = np.hstack((
             ohe_sequence,

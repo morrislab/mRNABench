@@ -43,14 +43,12 @@ class EmbeddingModel(ABC):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed sequence.
 
         Args:
             sequence: String of nucleotides to embed (uses DNA bases).
-            overlap: Number of overlapping nucleotides between chunks.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
@@ -64,7 +62,6 @@ class EmbeddingModel(ABC):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
         """Embed sequence incorporating splice and cds information.
@@ -73,7 +70,6 @@ class EmbeddingModel(ABC):
             sequence: String of nucleotides to embed (uses DNA bases).
             cds: Binary encoding of first nucleotide of each codon in CDS.
             splice: Binary encoding of splice site locations.
-            overlap: Number of overlapping nucleotides between chunks.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
@@ -81,29 +77,18 @@ class EmbeddingModel(ABC):
         """
         pass
 
-    def chunk_sequence(
-        self,
-        sequence: str,
-        chunk_length: int,
-        overlap_size: int = 0
-    ) -> list[str]:
+    def chunk_sequence(self, sequence: str, chunk_length: int) -> list[str]:
         """Split sequence into chunks of specified length with given overlap.
 
         Args:
             sequence: The input string sequence to be chunked.
             chunk_length: The length of each chunk.
-            overlap_size: The number of overlapping characters between chunks.
 
         Returns:
             A list of string chunks, where each chunk has the specified length.
         """
-        if overlap_size >= chunk_length:
-            raise ValueError("overlap_size must be less than chunk_length")
-
-        step_size = chunk_length - overlap_size
-
         chunks = []
-        for i in range(0, len(sequence), step_size):
+        for i in range(0, len(sequence), chunk_length):
             chunk = sequence[i:i + chunk_length]
             chunks.append(chunk)
 
@@ -113,14 +98,12 @@ class EmbeddingModel(ABC):
         self,
         sequence_tokens: list[int],
         chunk_length: int,
-        overlap_size: int = 0
     ) -> list[list[int]]:
         """Chunk tokenized sequence into specified length with overlap.
 
         Args:
             sequence_tokens: The tokenized sequence to be chunked.
             chunk_length: The length of each chunk.
-            overlap_size: The number of overlapping tokens between chunks.
 
         Returns:
             A list of chunked tokens each with specified maximum length.

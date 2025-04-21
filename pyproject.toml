@@ -23,8 +23,9 @@ dependencies = [
     "requests",
     "parasail"
 ]
+
 [project.urls]
-Repository = "https://github.com/IanShi1996/mRNABench"
+Repository = "https://github.com/morrislab/mRNABench"
 
 [project.optional-dependencies]
 base_models = [

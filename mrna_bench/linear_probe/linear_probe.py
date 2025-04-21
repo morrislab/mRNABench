@@ -32,7 +32,6 @@ class LinearProbe:
         "reg_lin": LinearRegression(n_jobs=-1),
         "reg_ridge": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
         "classification": LogisticRegression(max_iter=5000, n_jobs=-1),
-        "classification": LogisticRegression(max_iter=5000, n_jobs=-1),
         "multilabel": MultiOutputClassifier(
             LogisticRegression(max_iter=5000, n_jobs=-1),
             n_jobs=-1
@@ -134,19 +133,16 @@ class LinearProbe:
         random_seed: int = 2541,
         persist: bool = False,
         dropna: bool = True,
-        return_model: bool = False
-    ) -> dict[str, float] | tuple[dict[str, float], object]:
+    ) -> dict[str, float]:
         """Perform data split and run linear probe.
 
         Args:
             random_seed: Random seed used for data split.
             persist: Save results to disk.
             dropna: Drop rows with NaN values in target column
-            return_model: If True, returns a tuple of (metrics, model) instead of just metrics.
 
         Returns:
-            If return_model is False (default): Dictionary of linear probing metrics per split.
-            If return_model is True: Tuple of (metrics dictionary, trained model).
+            Dictionary of linear probing metrics per split.
         """
         model = self.linear_models[self.task]
         splits = self.get_df_splits(random_seed, dropna)
@@ -176,24 +172,20 @@ class LinearProbe:
     def linear_probe_multirun(
         self,
         random_seeds: list[int],
-        persist: bool = False,
-        return_models: bool = False
-    ) -> dict[int, dict[str, float]] | tuple[dict[int, dict[str, float]], dict[int, object]]:
+        persist: bool = False
+    ) -> dict[int, dict[str, float]]:
         """Run multiple linear probes with distinct data split randomization.
 
         Args:
             random_seeds: Trandom seeds used per individual linear probe run.
             persist: Save results to data directory.
-            return_models: If True, returns a tuple of (metrics, models) instead of just metrics.
 
         Returns:
-            If return_models is False (default): Dictionary of metrics per random seed.
-            If return_models is True: Tuple of (metrics dictionary, models dictionary) where
-                each dictionary is keyed by random seed.
+            Dictionary of metrics per random seed used to generate data splits
+            for each individual linear probing run.
         """
         metrics = {}
-        models = {} if return_models else None
-        
+
         for random_seed in random_seeds:
             metric = self.run_linear_probe(random_seed, persist)
             metrics[random_seed] = metric
