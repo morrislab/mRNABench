@@ -198,6 +198,7 @@ class MRLSample(BenchmarkDataset):
 
         d_cols = ["sequence", "cds", "splice"]
         cols = ["mrl_" + c if c not in d_cols else c for c in out_df.columns]
+        cols = ["target_" + c for c in cols]
         out_df.columns = pd.Index(cols)
 
         return out_df
