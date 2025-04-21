@@ -197,8 +197,9 @@ class MRLSample(BenchmarkDataset):
         out_df.drop(columns=["utr"], inplace=True)
 
         d_cols = ["sequence", "cds", "splice"]
-        cols = ["mrl_" + c if c not in d_cols else c for c in out_df.columns]
-        cols = ["target_" + c for c in cols]
+
+        t_prefix = "target_mrl_"
+        cols = [t_prefix + c if c not in d_cols else c for c in out_df.columns]
         out_df.columns = pd.Index(cols)
 
         return out_df
@@ -230,7 +231,7 @@ class MRLSample(BenchmarkDataset):
 
         return cds_track
 
-    def _get_data_from_raw(self):
+    def _get_data_from_raw(self) -> pd.DataFrame:
         """Process raw data into Pandas dataframe.
 
         Returns:
