@@ -20,7 +20,7 @@ from .lncrna_essentiality import (
 )
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
-from .rna_loc import RNALocalization
+from .rna_loc_ietswaart import RNALocalizationIetswaart
 from .prot_loc import ProteinLocalization
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
@@ -55,7 +55,7 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "lncrna-ess-shared": LNCRNAEssShared,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
-    "rna-loc": RNALocalization,
+    "rna-loc-ietswaart": RNALocalizationIetswaart,
     "prot-loc": ProteinLocalization,
     "mrl-sugimoto": MRLSugimoto,
     "mrl-sample-egfp": MRLSampleEGFP,
@@ -83,7 +83,7 @@ DATASET_INFO = {
     },
     "go-mf": {
         "dataset": "go-mf",
-        "task": "multilabel",  # reported as AUROC/AUPRC
+        "task": "multilabel",
         "target_col": "target",
         "col_name": "go-mf",
         "split_type": "homology",
@@ -169,11 +169,11 @@ DATASET_INFO = {
         "split_type": "homology",
         "isoform_resolved": False,
     },
-    "rna-loc": {
-        "dataset": "rna-loc",
+    "rna-loc-ietswaart": {
+        "dataset": "rna-loc-ietswaart",
         "task": "multilabel",
         "target_col": "target",
-        "col_name": "rna-loc",
+        "col_name": "rna-loc-ietswaart",
         "split_type": "homology",
         "isoform_resolved": False,
     },

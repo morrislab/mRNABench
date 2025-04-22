@@ -202,6 +202,10 @@ class MRLSample(BenchmarkDataset):
         cols = [t_prefix + c if c not in d_cols else c for c in out_df.columns]
         out_df.columns = pd.Index(cols)
 
+        # Shuffle columns
+        cols = d_cols + [c for c in out_df.columns if c not in d_cols]
+        out_df = out_df[cols]
+
         return out_df
 
     def _get_cds_track(self, utr: str) -> np.ndarray:

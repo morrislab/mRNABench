@@ -11,11 +11,7 @@ MRLS_URL = "https://zenodo.org/records/14708163/files/mrl_isoform_resolved.npz"
 class MRLSugimoto(BenchmarkDataset):
     """Mean Ribosome Load Dataset from Sugimoto et al. 2022."""
 
-    def __init__(
-        self,
-        force_redownload: bool = False,
-        **kwargs # noqa
-    ):
+    def __init__(self, force_redownload: bool = False):
         """Initialize MRLSugimoto dataset.
 
         Args:
@@ -62,13 +58,12 @@ class MRLSugimoto(BenchmarkDataset):
             chrs.append(transcript_chr)
 
         df = pd.DataFrame({
-            "sequence": seq_str,
-            "target": [y for y in data["y"]],
             "gene": data["genes"],
             "chromosome": chrs,
-            "transcript_length": lens,
+            "sequence": seq_str,
             "cds": cds,
-            "splice": splice
+            "splice": splice,
+            "target": [y for y in data["y"]]
         })
 
         return df

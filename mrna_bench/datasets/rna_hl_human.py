@@ -12,11 +12,7 @@ RAW_URL = "https://zenodo.org/records/14708163/files/rna_hl_human.npz"
 class RNAHalfLifeHuman(BenchmarkDataset):
     """RNA Halflife in Human Dataset."""
 
-    def __init__(
-        self,
-        force_redownload: bool = False,
-        **kwargs # noqa
-    ):
+    def __init__(self, force_redownload: bool = False):
         """Initialize RNAHalfLifeHuman dataset.
 
         Args:
@@ -57,12 +53,11 @@ class RNAHalfLifeHuman(BenchmarkDataset):
         splice = [X[i, :lens[i], 5] for i in range(len(X))]
 
         df = pd.DataFrame({
-            "sequence": seq_str,
-            "target": [y for y in data["y"]],
             "gene": data["genes"],
-            "transcript_length": lens,
+            "sequence": seq_str,
             "cds": cds,
-            "splice": splice
+            "splice": splice,
+            "target": [y for y in data["y"]],
         })
 
         # Some sequences have no gene name, making the current chromosome
@@ -73,7 +68,7 @@ class RNAHalfLifeHuman(BenchmarkDataset):
         chrs = df["gene"].apply(lambda x: hg_genes.first_by_name(x).chromosome)
         chrs = chrs.apply(lambda x: x.replace("chr", ""))
 
-        df.insert(3, "chromosome", chrs)
+        df.insert(1, "chromosome", chrs)
         df.reset_index(inplace=True, drop=True)
 
         return df

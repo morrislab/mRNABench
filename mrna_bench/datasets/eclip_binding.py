@@ -1,9 +1,5 @@
-import json
-import numpy as np
 import pandas as pd
-import os
 
-from pathlib import Path
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 
 eCLIP_K562_RBPS_LIST = [
@@ -43,157 +39,38 @@ eCLIP_HepG2_RBPS_LIST = ['target_' + col for col in eCLIP_HepG2_RBPS_LIST]
 class eCLIPBinding(BenchmarkDataset):
     """eCLIP RBP Binding Dataset."""
 
-    ECLIP_URL = "/data1/morrisq/dalalt1/Orthrus/processed_data/eCLIP/combined_eCLIP_binding.tsv" # noqa
-
     def __init__(
         self,
         dataset_name: str,
         force_redownload: bool = False,
-        **kwargs # noqa
+        hf_url: str | None = None
     ):
         """Initialize eCLIPBinding dataset.
 
         Args:
             dataset_name: Dataset name formatted eclip-binding-{exp_name}
-                where exp_name is in: {
-                    "k562",
-                    "hepg2",
-                }.
+                where exp_name is in: {"k562", "hepg2"}.
             force_redownload: Force raw data download even if pre-existing.
+            hf_url: Hugging Face URL for dataset.
         """
         if type(self) is eCLIPBinding:
             raise TypeError("eCLIPBinding is an abstract class.")
 
-        self.isoform_resolved = kwargs.get("isoform_resolved", True)
-        self.target_col = kwargs["target_col"]
-
-        valid_targets = ["k562", "hepg2"]
-        self.exp_target = next(
-            (target for target in valid_targets if target in dataset_name),
-            None
-        )
-
-        err_msg = f"Invalid experiment target in dataset name: {dataset_name}"
-        assert self.exp_target is not None, err_msg
-
         super().__init__(
             dataset_name=dataset_name,
-            species=["human"],
-            force_redownload=force_redownload
+            species="human",
+            force_redownload=force_redownload,
+            hf_url=hf_url
         )
 
-    def process_raw_data(self) -> pd.DataFrame:
-        """Process raw data into Pandas dataframe.
-
-        Returns:
-            Pandas dataframe of processed sequences.
-        """
-        df = pd.read_csv(self.raw_data_path, sep="\t")
-
-        # cds, and splice == strings of lists, convert -> lists -> numpy arrays
-        df["cds"] = df["cds"].apply(lambda x: np.array(json.loads(x)))
-        df["splice"] = df["splice"].apply(lambda x: np.array(json.loads(x)))
-
-        return df
-
-    def subset_df(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Subset dataframe to only include relevant columns.
-
-        Args:
-            df: Dataframe to subset
-
-        Returns:
-            Subsetted dataframe.
-        """
-        if self.isoform_resolved:
-            df = df[df["isoform_resolved"] == 1].reset_index(drop=True)
-
-        # drop rows with missing target values in the target column
-        df = df.dropna(subset=[self.target_col]).reset_index(drop=True)
-
-        keep_cols = [
-            "gene",
-            "gene_id",
-            "transcript_id",
-            "isoform_resolved",
-            "sequence",
-            "cds",
-            "splice"
-        ]
-
-        df = df[keep_cols + [self.target_col]]
-
-        return df
-
-    def save_processed_df(self, df: pd.DataFrame):
-        """Save dataframe to data storage path.
-
-        Args:
-            df: Processed dataframe to save.
-        """
-        df.to_pickle(self.dataset_path + "/data_df.pkl")
-
-        self.data_df = self.subset_df(df)
-
-    def load_processed_df(self) -> bool:
-        """Load processed dataframe from data storage path.
-
-        Returns:
-            Whether dataframe was successfully loaded to class property.
-        """
-        try:
-            df = pd.read_pickle(self.dataset_path + "/data_df.pkl")
-
-            self.data_df = self.subset_df(df)
-
-        except FileNotFoundError:
-            print("Processed data frame not found.")
-            return False
-        return True
-
-    def get_raw_data(self):
-        """Collect the raw data from given local path."""
-        raw_file_name = Path(self.ECLIP_URL).name
-        raw_data_path = "{}/{}_{}".format(
-            self.raw_data_dir,
-            self.exp_target.upper(),
-            raw_file_name
-        )
-
-        if not os.path.exists(raw_data_path):
-            df = pd.read_csv(self.ECLIP_URL, sep="\t")
-
-            # keep the rows that are relevant to this dataset
-            df = df[df["cell_line"] == self.exp_target.upper()]
-            df = df.reset_index(drop=True)
-
-            # keep the columns that are relevant to this dataset
-            keep_cols = [
-                "gene",
-                "gene_id",
-                "transcript_id",
-                "isoform_resolved",
-                "sequence",
-                "cds",
-                "splice"
-            ]
-            df = df[keep_cols + self.all_cols]
-
-            df.to_csv(raw_data_path, sep="\t", index=False)
-
-            self.first_download = True
-
-        self.raw_data_path = raw_data_path
+    def _get_data_from_raw(self) -> pd.DataFrame:
+        raise NotImplementedError("eCLIP binding from raw under construction.")
 
 
 class eCLIPBindingK562(eCLIPBinding):
     """Concrete class for K562 cell line experiments."""
 
-    def __init__(
-        self,
-        force_redownload=False,
-        **kwargs # noqa
-    ):
+    def __init__(self, force_redownload=False):
         """Initialize K562 dataset.
 
         Args:
@@ -201,17 +78,20 @@ class eCLIPBindingK562(eCLIPBinding):
         """
         self.all_cols = eCLIP_K562_RBPS_LIST
 
-        super().__init__("eclip-binding-k562", force_redownload)
+        super().__init__(
+            "eclip-binding-k562",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/quietflamingo/"
+                "eclip/resolve/main/eclip-k562.parquet"
+            )
+        )
 
 
 class eCLIPBindingHepG2(eCLIPBinding):
     """Concrete class for HepG2 cell line experiments."""
 
-    def __init__(
-        self,
-        force_redownload=False,
-        **kwargs # noqa
-    ):
+    def __init__(self, force_redownload=False):
         """Initialize HepG2 dataset.
 
         Args:
@@ -219,4 +99,11 @@ class eCLIPBindingHepG2(eCLIPBinding):
         """
         self.all_cols = eCLIP_HepG2_RBPS_LIST
 
-        super().__init__("eclip-binding-hepg2", force_redownload)
+        super().__init__(
+            "eclip-binding-hepg2",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/quietflamingo/"
+                "eclip/resolve/main/eclip-hepg2.parquet"
+            )
+        )

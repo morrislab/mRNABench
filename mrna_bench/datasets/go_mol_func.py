@@ -12,11 +12,7 @@ GOMF_URL = "https://zenodo.org/records/14708163/files/go_dna_dataset.npz"
 class GOMolecularFunction(BenchmarkDataset):
     """GO Molecular Function Dataset."""
 
-    def __init__(
-        self,
-        force_redownload: bool = False,
-        **kwargs # noqa
-    ):
+    def __init__(self, force_redownload: bool = False):
         """Initialize GOMolecularFunction dataset.
 
         Args:
@@ -63,13 +59,12 @@ class GOMolecularFunction(BenchmarkDataset):
             chrs.append(transcript_chr)
 
         df = pd.DataFrame({
-            "sequence": seq_str,
-            "target": [y for y in data["y"]],
             "gene": data["genes"],
             "chromosome": chrs,
-            "transcript_length": lens,
+            "sequence": seq_str,
             "cds": cds,
-            "splice": splice
+            "splice": splice,
+            "target": [y for y in data["y"]]
         })
 
         return df

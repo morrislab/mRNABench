@@ -59,6 +59,9 @@ class BenchmarkDataset(ABC):
         Returns:
             pd.DataFrame: Processed dataframe.
         """
+        if self.hf_url is None:
+            raise ValueError("HuggingFace URL not provided.")
+
         processed_data_path = download_file(self.hf_url, self.raw_data_dir)
         return pd.read_parquet(processed_data_path)
 
@@ -70,6 +73,33 @@ class BenchmarkDataset(ABC):
         a huggingface url is instead provided.
         """
         pass
+
+    def subset_df(self, target_cols: list[str]) -> pd.DataFrame:
+        """Subset dataframe target columns.
+
+        Args:
+            df: Dataframe to subset.
+
+        Returns:
+            Subsetted dataframe.
+        """
+        if self.data_df is None:
+            raise RuntimeError("Dataframe not loaded.")
+        if not isinstance(self.data_df, pd.DataFrame):
+            raise TypeError("Dataframe is not a pandas DataFrame.")
+
+        # Set invariant columns
+        invariant_col_set = set([
+            "sequence",
+            "gene",
+            "chromosome",
+            "cds",
+            "splice"
+        ])
+
+        keep_col_set = invariant_col_set.union(set(target_cols))
+        keep_cols = [c for c in self.data_df.columns if c in keep_col_set]
+        return self.data_df[keep_cols]
 
     def init_folders(self):
         """Initialize folders for storing raw data.
