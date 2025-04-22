@@ -93,10 +93,20 @@ def test_real_data():
     data_df = dataset.data_df
 
     splitter = ChromosomeSplitter()
-    train_df, test_df = splitter.split_df(data_df, 0.2, 32)
-    train_df_prop = len(train_df)/(len(train_df) + len(test_df))
-    test_df_prop = len(test_df)/(len(train_df) + len(test_df))
 
-    # Check rough proportions are correct
-    assert abs(train_df_prop - 0.8) <= 0.05
-    assert abs(test_df_prop - 0.2) <= 0.05
+    for test_prop in [0.4,0.3,0.2,0.1]: 
+        train_df, test_df = splitter.split_df(data_df, test_prop, 32)
+        train_df_prop = len(train_df)/(len(train_df) + len(test_df))
+        test_df_prop = len(test_df)/(len(train_df) + len(test_df))
+
+        # Check rough proportions are correct
+        assert abs(train_df_prop - (1-test_prop)) <= 0.05
+        assert abs(test_df_prop - test_prop) <= 0.05
+
+        # Check that chromosomes are unique to each split
+        train_df_chroms = set(train_df['chromosome'])
+        test_df_chroms = set(test_df['chromosome'])
+        assert len(train_df_chroms.intersection(test_df_chroms)) == 0
+
+        # Check that full dataset is split/preserved
+        assert len(train_df) + len(test_df) == len(data_df)
