@@ -19,7 +19,6 @@ class LinearProbeBuilder:
         embedding_dir: str,
         model_short_name: str,
         dataset_name: str,
-        seq_chunk_overlap: int = 0
     ) -> np.ndarray:
         """Load pre-computed embeddings for dataset from persisted location.
 
@@ -27,7 +26,6 @@ class LinearProbeBuilder:
             embedding_dir: Directory where embedding is stored.
             model_short_name: Shortened name of embedding model version.
             dataset_name: Name of dataset which was embedded.
-            seq_chunk_overlap: Chunk overlap used when generating embedding.
 
         Returns:
             Embeddings for dataset computed using embedding model.
@@ -36,7 +34,6 @@ class LinearProbeBuilder:
             embedding_dir,
             model_short_name,
             dataset_name,
-            seq_chunk_overlap,
         ) + ".npz"
 
         embeddings = np.load(embeddings_fn)["embedding"]
@@ -83,25 +80,21 @@ class LinearProbeBuilder:
     def fetch_embedding_by_model_instance(
         self,
         model: EmbeddingModel,
-        seq_chunk_overlap: int = 0
     ) -> "LinearProbeBuilder":
         """Get embeddings for LinearProbe from EmbeddingModel instance.
 
         Args:
             model: EmbeddingModel instance used to generate embeddings.
-            seq_chunk_overlap: Chunk overlap used when generating embedding.
 
         Returns:
             LinearProbeBuilder with set embeddings.
         """
         self.model_short_name = model.short_name
-        self.seq_chunk_overlap = seq_chunk_overlap
 
         self.embeddings = self.load_persisted_embeddings(
             self.dataset.embedding_dir,
             self.model_short_name,
             self.dataset.dataset_name,
-            self.seq_chunk_overlap
         )
 
         return self
@@ -109,25 +102,21 @@ class LinearProbeBuilder:
     def fetch_embedding_by_model_name(
         self,
         model_short_name: str,
-        seq_chunk_overlap: int = 0
     ) -> "LinearProbeBuilder":
         """Get embeddings for LinearProbe using model short name.
 
         Args:
             model_short_name: Short name of model used to generate embeddings.
-            seq_chunk_overlap: Chunk overlap used when generating embedding.
 
         Returns:
             LinearProbeBuilder with set embeddings.
         """
         self.model_short_name = model_short_name
-        self.seq_chunk_overlap = seq_chunk_overlap
 
         self.embeddings = self.load_persisted_embeddings(
             self.dataset.embedding_dir,
             self.model_short_name,
             self.dataset.dataset_name,
-            self.seq_chunk_overlap
         )
 
         return self
@@ -147,14 +136,31 @@ class LinearProbeBuilder:
         emb_fn_arr = embedding_name.split("_")
 
         self.model_short_name = emb_fn_arr[1]
-        self.seq_chunk_overlap = int(emb_fn_arr[2][1:].replace(".npz", ""))
 
         self.embeddings = self.load_persisted_embeddings(
             self.dataset.embedding_dir,
             self.model_short_name,
             self.dataset.dataset_name,
-            self.seq_chunk_overlap
         )
+
+        return self
+
+    def fetch_embedding_by_embedding_instance(
+        self,
+        model_short_name: str,
+        embedding: np.ndarray,
+    ) -> "LinearProbeBuilder":
+        """Store embeddings for LinearProbe using an embedding instance.
+
+        Args:
+            model_short_name: Short name of model used to generate embeddings.
+            embedding: Locally generated embedding for dataset.
+
+        Returns:
+            LinearProbeBuilder with set embeddings.
+        """
+        self.model_short_name = model_short_name
+        self.embeddings = embedding
 
         return self
 
@@ -231,7 +237,6 @@ class LinearProbeBuilder:
             self.persister = LinearProbePersister(
                 self.dataset,
                 self.model_short_name,
-                self.seq_chunk_overlap,
                 self.split_type,
                 self.target_col,
                 self.task
