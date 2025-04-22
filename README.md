@@ -83,15 +83,13 @@ pip install transformer_engine[pytorch]==1.13
 
 ### Post-install
 After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
-
-NOTE: the "/" is required after the path for Evo2 model loading, else it will look for the weights in the wrong directory.
 ```python
 import mrna_bench as mb
 
 path_to_dir_to_store_data = "DESIRED_PATH"
 mb.update_data_path(path_to_dir_to_store_data)
 
-path_to_dir_to_store_weights = "/data1/morrisq/ian/rna_benchmarks/model_weights" + "/"
+path_to_dir_to_store_weights = "/data1/morrisq/ian/rna_benchmarks/model_weights"
 mb.update_model_weights_path(path_to_dir_to_store_weights)
 ```
 

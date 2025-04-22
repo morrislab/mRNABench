@@ -51,7 +51,9 @@ class Evo2(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            os.environ['HF_HUB_CACHE'] = get_model_weights_path()
+            # ensure that the model weight path has a trailing slash
+            weights_path = os.path.join(get_model_weights_path(), "") 
+            os.environ['HF_HUB_CACHE'] = weights_path
             from evo2 import Evo2
         except ImportError:
             raise ImportError("Evo2 must be installed to use this model.")
