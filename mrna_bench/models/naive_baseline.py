@@ -69,9 +69,9 @@ class NaiveBaseline(EmbeddingModel):
         a, t = sequence.count('A'), sequence.count('T')
         c, g = sequence.count('C'), sequence.count('G')
 
-        gc_content = (g + c) / (a + c + g + t)  # avoid Ns
+        gc_ratio = (g + c) / (a + c + g + t)  # avoid Ns
         gc_content = torch.tensor(
-            gc_content,
+            gc_ratio,
             dtype=torch.float32
         ).unsqueeze(0)
 
@@ -113,10 +113,10 @@ class NaiveBaseline(EmbeddingModel):
 
         # 3. Compute cds length
         # last 1 index + 3 to include the end of the last codon
-        cds_end = len(cds) - 1 - cds[::-1].index(1) + 3
+        cds_end = np.where(cds == 1)[0][-1] + 3
 
         # start of first codon
-        cds_start = cds.index(1)
+        cds_start = np.where(cds == 1)[0][0]
 
         cds_length = cds_end - cds_start
         cds_length = torch.tensor(cds_length, dtype=torch.float32).unsqueeze(0)
