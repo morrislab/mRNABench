@@ -1,6 +1,7 @@
 from typing import Type
 
 from .aido import AIDORNA
+from .dnabert_s import DNABERTS
 from .dnabert import DNABERT2
 from .ernierna import ERNIERNA
 from .evo2 import Evo2
@@ -23,6 +24,7 @@ from .embedding_model import EmbeddingModel
 
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "AIDO.RNA": AIDORNA,
+    "DNABERT-S": DNABERTS,
     "DNABERT2": DNABERT2,
     "ERNIE-RNA": ERNIERNA,
     "Evo2": Evo2,
@@ -49,6 +51,7 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "aido_rna_1b600m",
         "aido_rna_1b600m_cds"
     ],
+    "DNABERT-S": ["dnabert-s"],
     "DNABERT2": ["dnabert2"],
     "ERNIE-RNA": ["ernierna", "ernierna-ss"],
     "Evo2": [
