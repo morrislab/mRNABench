@@ -29,6 +29,7 @@ from .mrl_sample import (
     MRLSampleDesigned,
     MRLSampleVarying
 )
+from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 from .eclip_binding import (
     eCLIPBindingK562,
@@ -62,6 +63,8 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "mrl-sample-mcherry": MRLSampleMCherry,
     "mrl-sample-designed": MRLSampleDesigned,
     "mrl-sample-varying": MRLSampleVarying,
+    "vep-traitgym-complex": VEPTraitGymComplex,
+    "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
 
 DATASET_INFO = {
