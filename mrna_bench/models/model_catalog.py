@@ -1,11 +1,13 @@
 from typing import Type
 
 from .aido import AIDORNA
+from .dnabert_s import DNABERTS
 from .dnabert import DNABERT2
 from .ernierna import ERNIERNA
 from .evo2 import Evo2
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
+from .naive_baseline import NaiveBaseline
 from .nucleotide_transformer import NucleotideTransformer
 from .orthrus import Orthrus
 from .rinalmo import RiNALMo
@@ -22,11 +24,13 @@ from .embedding_model import EmbeddingModel
 
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "AIDO.RNA": AIDORNA,
+    "DNABERT-S": DNABERTS,
     "DNABERT2": DNABERT2,
     "ERNIE-RNA": ERNIERNA,
     "Evo2": Evo2,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
+    "NaiveBaseline": NaiveBaseline,
     "NucleotideTransformer": NucleotideTransformer,
     "RiNALMo": RiNALMo,
     "Orthrus": Orthrus,
@@ -47,6 +51,7 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "aido_rna_1b600m",
         "aido_rna_1b600m_cds"
     ],
+    "DNABERT-S": ["dnabert-s"],
     "DNABERT2": ["dnabert2"],
     "ERNIE-RNA": ["ernierna", "ernierna-ss"],
     "Evo2": [
@@ -63,6 +68,10 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "hyenadna-medium-160k-seqlen-hf",
         "hyenadna-small-32k-seqlen-hf",
         "hyenadna-tiny-16k-seqlen-d128-hf"
+    ],
+    "NaiveBaseline": [
+        "naive-4-track",
+        "naive-6-track"
     ],
     "NucleotideTransformer": [
         "2.5b-multi-species",

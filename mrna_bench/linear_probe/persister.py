@@ -11,7 +11,6 @@ class LinearProbePersister:
         self,
         dataset: BenchmarkDataset,
         model_short_name: str,
-        seq_chunk_overlap: int,
         task: str,
         target_col: str,
         split_type: str
@@ -21,14 +20,12 @@ class LinearProbePersister:
         Args:
             dataset_name: Name of the dataset evaluated.
             model_short_name: Name of model evaluated.
-            seq_chunk_overlap: Sequence overlap used for embedding datapoints.
             task: Task evaluated.
             target_col: Target column evaluated.
             split_type: Type of data split used.
         """
         self.dataset = dataset
         self.model_short_name = model_short_name
-        self.seq_chunk_overlap = seq_chunk_overlap
         self.task = task
         self.target_col = target_col
         self.split_type = split_type
@@ -43,10 +40,9 @@ class LinearProbePersister:
         Returns:
             File name used for storing linear probing results.
         """
-        out_fn = "result_lp_{}_{}_o{}_{}_tcol-{}_split-{}".format(
+        out_fn = "result_lp_{}_{}_{}_tcol-{}_split-{}".format(
             self.dataset.dataset_name,
             self.model_short_name,
-            self.seq_chunk_overlap,
             self.task,
             self.target_col,
             self.split_type
