@@ -4,6 +4,8 @@ import numpy as np
 import torch
 
 from mrna_bench.models import EmbeddingModel
+
+import itertools
 from sklearn.feature_extraction.text import CountVectorizer
 
 
@@ -21,6 +23,27 @@ class NaiveBaseline(EmbeddingModel):
         """Get shortened name of model version."""
         return model_version.replace("-track", "")
 
+    @staticmethod
+    def generate_vocab(
+        kmer_list: list[int] = [3, 4, 5, 6, 7],
+        alphabet: str = "ACGT"
+    ) -> list[str]:
+        """Generate k-mer vocabulary in the given range.
+        Args:
+            kmer_list: List of k-mer lengths to generate.
+            alphabet: Alphabet to use for generating k-mers.
+        Returns:
+            List of k-mers in the given range.
+        """
+
+        kmers: list[str] = []
+        for k in sorted(kmer_list):
+            kmers.extend(
+                ''.join(p) for p in itertools.product(alphabet, repeat=k)
+            )
+
+        return kmers
+
     def __init__(self, model_version: str, device: torch.device):
         """Initialize NaiveBaseline model.
 
@@ -37,6 +60,13 @@ class NaiveBaseline(EmbeddingModel):
         self.is_sixtrack = model_version == "naive-6-track"
         self.model = "naive_baseline"
         self.device = device
+
+        self.kmer_vectorizer = CountVectorizer(
+            analyzer='char',
+            ngram_range=(3, 7),
+            vocabulary=self.generate_vocab(),
+            lowercase=False,
+        )
 
     def embed_sequence(
         self,
@@ -58,8 +88,7 @@ class NaiveBaseline(EmbeddingModel):
             )
 
         # 1. Compute k-mer count (k=3-7)
-        vectorizer = CountVectorizer(analyzer='char', ngram_range=(3, 7))
-        kmer_counts = vectorizer.fit_transform([sequence]).toarray()
+        kmer_counts = self.kmer_vectorizer.transform([sequence]).toarray()
         kmer_features = torch.tensor(
             kmer_counts,
             dtype=torch.float32
@@ -78,7 +107,7 @@ class NaiveBaseline(EmbeddingModel):
         embedding = torch.cat(
             (kmer_features, gc_content),
             dim=0
-        ).to(self.device)
+        ).unsqueeze(0)
 
         return embedding
 
@@ -109,7 +138,7 @@ class NaiveBaseline(EmbeddingModel):
             )
 
         # 1. Compute k-mer count (k=3-7) and 2. Compute GC content
-        embedding = self.embed_sequence(sequence)
+        embedding = self.embed_sequence(sequence).squeeze(0)
 
         # 3. Compute cds length
         # last 1 index + 3 to include the end of the last codon
@@ -119,15 +148,21 @@ class NaiveBaseline(EmbeddingModel):
         cds_start = np.where(cds == 1)[0][0]
 
         cds_length = cds_end - cds_start
-        cds_length = torch.tensor(cds_length, dtype=torch.float32).unsqueeze(0)
+        cds_length = torch.tensor(
+            cds_length,
+            dtype=torch.float32
+        ).unsqueeze(0)
 
         # 4. Compute exon count
         exon_count = np.sum(splice)
-        exon_count = torch.tensor(exon_count, dtype=torch.float32).unsqueeze(0)
+        exon_count = torch.tensor(
+            exon_count,
+            dtype=torch.float32
+        ).unsqueeze(0)
 
         embedding = torch.cat(
             (embedding, cds_length, exon_count),
             dim=0
-        ).to(self.device)
+        ).unsqueeze(0)
 
         return embedding

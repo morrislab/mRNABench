@@ -9,6 +9,7 @@ import torch
 from mrna_bench.models import EmbeddingModel
 from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.embedder.embedder_utils import get_embedding_filepath
+from sklearn.preprocessing import StandardScaler
 
 
 class DatasetEmbedder:
@@ -160,3 +161,77 @@ class DatasetEmbedder:
 
         for file in processed_files_paths:
             Path(file).unlink()
+
+
+class KmerDatasetEmbedder(DatasetEmbedder):
+    """Embeds sequences associated with dataset using specified embedder.
+
+    This class is built to split the sequences in a dataset into chunks of
+    sequences which can then be processed in parallel. This is denoted d_chunk,
+    whereas s_chunk denotes the sequence chunking that occur within each model
+    to handle sequences that exceed model maximum length.
+
+    This class specifically handles
+    """
+
+    def __init__(
+        self,
+        model: EmbeddingModel,
+        dataset: BenchmarkDataset,
+        d_chunk_ind: int = 0,
+        d_num_chunks: int = 0
+    ):
+        super().__init__(model, dataset, d_chunk_ind, d_num_chunks)
+
+    def embed_dataset(self) -> torch.Tensor:
+        """Compute embeddings for current dataset chunk.
+
+        Returns:
+            Embeddings for current dataset chunk in original order.
+        """
+        dataset_chunk = self.get_dataset_chunk()
+
+        dataset_embeddings = []
+        for _, row in tqdm(dataset_chunk.iterrows(), total=len(dataset_chunk)):
+            if self.model.is_sixtrack:
+                embedding = self.model.embed_sequence_sixtrack(
+                    row["sequence"],
+                    row["cds"].astype(np.int32),
+                    row["splice"].astype(np.int32)
+                )
+            else:
+                embedding = self.model.embed_sequence(row["sequence"])
+            dataset_embeddings.append(embedding)
+
+        embeddings = torch.cat(dataset_embeddings, dim=0)
+
+        # Desparsify the embeddings
+        embeddings = self.desparsify_embeddings_and_scale(embeddings)
+
+        return embeddings
+
+    def desparsify_embeddings_and_scale(
+        self,
+        embeddings: torch.Tensor,
+    ) -> torch.Tensor:
+        """Removes rows with 0s across all columns and
+        scales the embeddings.
+
+        Args:
+            embeddings: Embeddings to desparsify.
+        Returns:
+            Desparsified embeddings.
+        """
+        # Remove rows with 0s across all columns
+        non_zero_cols = torch.any(embeddings != 0, dim=0)
+        desparsified_embeddings = embeddings[:, non_zero_cols]
+
+        # Scale the embeddings
+        desparsified_and_scaled_embeddings = torch.tensor((
+            StandardScaler()
+            .fit_transform(
+                desparsified_embeddings
+            )
+        ), dtype=torch.float32)
+
+        return desparsified_and_scaled_embeddings
