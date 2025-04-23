@@ -14,13 +14,20 @@ class Evo2(EmbeddingModel):
     OpenGenome2 dataset using an autoregressive scheme at single nucleotide
     resolution. Owing to its StripedHyena2 backbone, it has an ultra long
     context window. The `base` variants can handle sequences up to 8192
-    nucleotides in length while the larger variants can handle sequences up to
-    1 million nucleotides in length.
+    nucleotides in length while the larger variants can handle sequences up
+    to 1 million nucleotides in length.
 
     Link: https://github.com/ArcInstitute/evo2
     """
 
     max_length = 8_192
+    version_to_middle_layer = {
+        "evo2_40b": "blocks.25.pre_norm",
+        "evo2_7b": "blocks.16.pre_norm",
+        "evo2_40b_base": "blocks.25.pre_norm",
+        "evo2_7b_base": "blocks.16.pre_norm",
+        "evo2_1b_base": "blocks.12.pre_norm"
+    }
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -43,7 +50,9 @@ class Evo2(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            os.environ['HF_HUB_CACHE'] = get_model_weights_path()
+            # ensure that the model weight path has a trailing slash
+            weights_path = os.path.join(get_model_weights_path(), "")
+            os.environ['HF_HUB_CACHE'] = weights_path
             from evo2 import Evo2
         except ImportError:
             raise ImportError("Evo2 must be installed to use this model.")
@@ -51,14 +60,11 @@ class Evo2(EmbeddingModel):
         self.model = Evo2(model_version)
         self.tokenizer = self.model.tokenizer.tokenize
 
-        all_prenorms = []
-
-        for name, _ in self.model.named_parameters():
-            if "pre_norm" in name:
-                all_prenorms.append(name.strip('.scale'))
-
         # we will only take the middle and last layer output for simplicity
-        self.embedding_layers = [all_prenorms[len(all_prenorms) // 2], 'norm']
+        self.embedding_layers = [
+            self.version_to_middle_layer[model_version],
+            'norm'
+        ]
 
         if model_version in ["evo2_40b", "evo2_7b"]:
             self.max_length = 1_000_000
@@ -104,11 +110,14 @@ class Evo2(EmbeddingModel):
         # since numpy does not support bfloat16
         for layer_name in sorted(self.embedding_layers):
             n_chunks = len(embedding_chunks)
-            chunks = [embedding_chunks[i][layer_name] for i in range(n_chunks)]
-            mean_chunks = torch.mean(torch.cat(chunks, dim=1), dim=1)
+            layer_chunks = [
+                embedding_chunks[i][layer_name] for i in range(n_chunks)
+            ]
+            mean_chunks = torch.mean(torch.cat(layer_chunks, dim=1), dim=1)
             aggregate_embeddings.append(mean_chunks.float().cpu())
 
-        aggregate_embedding = torch.vstack(aggregate_embeddings)
+        # concatenate the embeddings across the layers
+        aggregate_embedding = torch.cat(aggregate_embeddings, dim=1)
 
         return aggregate_embedding
 

@@ -75,32 +75,10 @@ conda install conda-forge::gcc # need updated gcc version
 cd path/to/mRNA/bench
 pip install -e .
 
+git clone --recurse-submodules git@github.com:ArcInstitute/evo2.git
 cd path/to/evo2
-pip install -e .
+pip install .
 pip install transformer_engine[pytorch]==1.13
-```
-
-Note, I also had to add the following bit of code to the Evo2 downloaded repository.
-This was added to evo2/evo2/models.py. This allows us to grab the layer names from Evo2
-model (can hard code it later, but in case we decide the pre-norm layers are not the ones
-we want to keep, its nice to be able to see what the layer names are actually called.)
-
-```python
-        self.hyena_model = StripedHyena(global_config)
-
-        load_checkpoint(self.hyena_model , weights_path)
-
-        return self.hyena_model 
-
-    def named_parameters(self):
-        """
-        Get named parameters of the model.
-        Returns:
-            Named parameters of the model.
-        """
-        if not hasattr(self, 'hyena_model'):
-            raise AttributeError("Model not loaded. Please load the model first.")
-        return self.hyena_model.named_parameters()
 ```
 
 ### Post-install

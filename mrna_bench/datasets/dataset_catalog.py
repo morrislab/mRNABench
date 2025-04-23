@@ -74,7 +74,6 @@ DATASET_INFO = {
         "target_col": eCLIP_K562_RBPS_LIST,
         "col_name": "eclip-binding-k562",
         "split_type": "homology",
-        "isoform_resolved": True,
     },
     "eclip-binding-hepg2": {
         "dataset": "eclip-binding-hepg2",
@@ -82,7 +81,6 @@ DATASET_INFO = {
         "target_col": eCLIP_HepG2_RBPS_LIST,
         "col_name": "eclip-binding-hepg2",
         "split_type": "homology",
-        "isoform_resolved": True,
     },
     "go-mf": {
         "dataset": "go-mf",
@@ -90,7 +88,6 @@ DATASET_INFO = {
         "target_col": "target",
         "col_name": "go-mf",
         "split_type": "homology",
-        "isoform_resolved": False,
     },
     "mrl-sugimoto": {
         "dataset": "mrl-sugimoto",
@@ -98,7 +95,6 @@ DATASET_INFO = {
         "target_col": "target",
         "col_name": "mrl-sugimoto",
         "split_type": "homology",
-        "isoform_resolved": False,
     },
     "mrl-sample-egfp-m1pseudo": {
         "dataset": "mrl-sample-egfp",
@@ -106,7 +102,6 @@ DATASET_INFO = {
         "target_col": "mrl_egfp_m1pseudo",
         "col_name": "mrl-sample-egfp-m1pseudo",
         "split_type": "default",
-        "isoform_resolved": False,
     },
     "mrl-sample-egfp-pseudo": {
         "dataset": "mrl-sample-egfp",
@@ -114,7 +109,6 @@ DATASET_INFO = {
         "target_col": "mrl_egfp_pseudo",
         "col_name": "mrl-sample-egfp-pseudo",
         "split_type": "default",
-        "isoform_resolved": False,
     },
     "mrl-sample-egfp-unmod": {
         "dataset": "mrl-sample-egfp",
@@ -122,7 +116,6 @@ DATASET_INFO = {
         "target_col": "mrl_egfp_unmod",
         "col_name": "mrl-sample-egfp-unmod",
         "split_type": "default",
-        "isoform_resolved": False,
     },
     "mrl-sample-mcherry": {
         "dataset": "mrl-sample-mcherry",
@@ -130,7 +123,6 @@ DATASET_INFO = {
         "target_col": "mrl_mcherry",
         "col_name": "mrl-sample-mcherry",
         "split_type": "default",
-        "isoform_resolved": False,
     },
     "mrl-sample-designed": {
         "dataset": "mrl-sample-designed",
@@ -138,7 +130,6 @@ DATASET_INFO = {
         "target_col": "mrl_designed",
         "col_name": "mrl-sample-designed",
         "split_type": "default",
-        "isoform_resolved": False,
     },
     "mrl-sample-varying": {
         "dataset": "mrl-sample-varying",
@@ -146,7 +137,6 @@ DATASET_INFO = {
         "target_col": "mrl_varying_length",
         "col_name": "mrl-sample-varying",
         "split_type": "default",
-        "isoform_resolved": False,
     },
     "prot-loc": {
         "dataset": "prot-loc",
@@ -154,7 +144,6 @@ DATASET_INFO = {
         "target_col": "target",
         "col_name": "prot-loc",
         "split_type": "homology",
-        "isoform_resolved": False,
     },
     "rnahl-human": {
         "dataset": "rnahl-human",
@@ -162,7 +151,6 @@ DATASET_INFO = {
         "target_col": "target",
         "col_name": "rnahl-human",
         "split_type": "homology",
-        "isoform_resolved": False,
     },
     "rnahl-mouse": {
         "dataset": "rnahl-mouse",
@@ -170,7 +158,6 @@ DATASET_INFO = {
         "target_col": "target",
         "col_name": "rnahl-mouse",
         "split_type": "homology",
-        "isoform_resolved": False,
     },
     "rna-loc-ietswaart": {
         "dataset": "rna-loc-ietswaart",
@@ -178,8 +165,7 @@ DATASET_INFO = {
         "target_col": "target",
         "col_name": "rna-loc-ietswaart",
         "split_type": "homology",
-        "isoform_resolved": False,
-    }
+    },
 }
 
 for ttype in ["pcg", "lncrna"]:
@@ -194,7 +180,6 @@ for ttype in ["pcg", "lncrna"]:
             "target_col": f"essential_{cell_upper}",
             "col_name": f"{ttype}-ess-{cell}",
             "split_type": split_type,
-            "isoform_resolved": True,
         }
 
         if cell != "shared":
@@ -204,5 +189,4 @@ for ttype in ["pcg", "lncrna"]:
                 "target_col": f"day14_log2fc_{cell_upper}",
                 "col_name": f"{ttype}-ess-{cell}-day14-log2fc",
                 "split_type": split_type,
-                "isoform_resolved": True,
             }
