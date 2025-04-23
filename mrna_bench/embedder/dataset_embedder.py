@@ -190,7 +190,7 @@ class KmerDatasetEmbedder(DatasetEmbedder):
             Embeddings for current dataset chunk in original order.
         """
         embeddings = super().embed_dataset()
-        
+
         # Desparsify the embeddings
         embeddings = self.desparsify_embeddings_and_scale(embeddings)
 
