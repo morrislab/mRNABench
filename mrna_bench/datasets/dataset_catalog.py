@@ -29,6 +29,7 @@ from .mrl_sample import (
     MRLSampleDesigned,
     MRLSampleVarying
 )
+from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 from .eclip_binding import (
     eCLIPBindingK562,
@@ -62,6 +63,8 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "mrl-sample-mcherry": MRLSampleMCherry,
     "mrl-sample-designed": MRLSampleDesigned,
     "mrl-sample-varying": MRLSampleVarying,
+    "vep-traitgym-complex": VEPTraitGymComplex,
+    "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
 
 DATASET_INFO = {
@@ -168,38 +171,5 @@ DATASET_INFO = {
         "col_name": "rnahl-mouse",
         "split_type": "homology",
         "isoform_resolved": False,
-    },
-    "rna-loc-ietswaart": {
-        "dataset": "rna-loc-ietswaart",
-        "task": "multilabel",
-        "target_col": "target",
-        "col_name": "rna-loc-ietswaart",
-        "split_type": "homology",
-        "isoform_resolved": False,
-    },
+    }
 }
-
-for ttype in ["pcg", "lncrna"]:
-    split_type = "homology" if ttype == "pcg" else "ss"
-    for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
-        # Use uppercase for target column suffix (adjust if needed).
-        cell_upper = cell.upper()
-
-        DATASET_INFO[f"{ttype}-ess-{cell}"] = {
-            "dataset": f"{ttype}-ess-{cell}",
-            "task": "classification",
-            "target_col": f"essential_{cell_upper}",
-            "col_name": f"{ttype}-ess-{cell}",
-            "split_type": split_type,
-            "isoform_resolved": True,
-        }
-
-        if cell != "shared":
-            DATASET_INFO[f"{ttype}-ess-{cell}-day14-log2fc"] = {
-                "dataset": f"{ttype}-ess-{cell}",
-                "task": "reg_ridge",
-                "target_col": f"day14_log2fc_{cell_upper}",
-                "col_name": f"{ttype}-ess-{cell}-day14-log2fc",
-                "split_type": split_type,
-                "isoform_resolved": True,
-            }
