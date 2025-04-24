@@ -44,18 +44,18 @@ class DNABERT2(EmbeddingModel):
             raise ValueError("Only dnabert2 model version available.")
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "quietflamingo/dnabert2-fixed",
+            "quietflamingo/dnabert2-no-flashattention",
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
 
         config = BertConfig.from_pretrained(
-            "quietflamingo/dnabert2-fixed",
+            "quietflamingo/dnabert2-no-flashattention",
             cache_dir=get_model_weights_path()
         )
 
         self.model = AutoModel.from_pretrained(
-            "quietflamingo/dnabert2-fixed",
+            "quietflamingo/dnabert2-no-flashattention",
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             config=config
