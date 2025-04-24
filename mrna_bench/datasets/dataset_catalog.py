@@ -33,9 +33,9 @@ from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 from .eclip_binding import (
     eCLIPBindingK562,
-    eCLIP_K562_RBPS_LIST,
+    eCLIP_K562_TOP_RBPS_LIST,
     eCLIPBindingHepG2,
-    eCLIP_HepG2_RBPS_LIST,
+    eCLIP_HepG2_TOP_RBPS_LIST
 )
 
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
@@ -71,13 +71,13 @@ DATASET_INFO = {
     "eclip-binding-k562": {
         "dataset": "eclip-binding-k562",
         "task": "classification",
-        "target_col": eCLIP_K562_RBPS_LIST,
+        "target_col": eCLIP_K562_TOP_RBPS_LIST,
         "split_type": "homology",
     },
     "eclip-binding-hepg2": {
         "dataset": "eclip-binding-hepg2",
         "task": "classification",
-        "target_col": eCLIP_HepG2_RBPS_LIST,
+        "target_col": eCLIP_HepG2_TOP_RBPS_LIST,
         "split_type": "homology",
     },
     "go-mf": {
@@ -167,9 +167,9 @@ DATASET_INFO = {
 }
 
 for ttype in ["pcg", "lncrna"]:
-    split_type = "homology" if ttype == "pcg" else "ss"
+    split_type = "homology" if ttype == "pcg" else "default"
     for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
-        # Use uppercase for target column suffix (adjust if needed).
+
         cell_upper = cell.upper()
 
         DATASET_INFO[f"{ttype}-ess-{cell}"] = {
