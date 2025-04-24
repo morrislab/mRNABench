@@ -110,21 +110,24 @@ class LinearProbe:
 
         splits = {
             "train_X": np.array(train_df["embeddings"].tolist()),
-            "val_X": np.array(val_df["embeddings"].tolist()),
-            "test_X": np.array(test_df["embeddings"].tolist()),
             "train_y": train_df[self.target_col].to_numpy(),
-            "val_y": val_df[self.target_col].to_numpy(),
-            "test_y": test_df[self.target_col].to_numpy(),
         }
+
+        if not val_df.empty:
+            splits["val_X"] = np.array(val_df["embeddings"].tolist())
+            splits["val_y"] = val_df[self.target_col].to_numpy()
+
+        if not test_df.empty:
+            splits["test_X"] = np.array(test_df["embeddings"].tolist())
+            splits["test_y"] = test_df[self.target_col].to_numpy()
 
         if isinstance(splits["train_y"][0], np.ndarray):
             splits["train_y"] = np.vstack(list(splits["train_y"]))
-            splits["val_y"] = np.vstack(list(splits["val_y"]))
-            splits["test_y"] = np.vstack(list(splits["test_y"]))
-        else:
-            splits["train_y"] = splits["train_y"]
-            splits["val_y"] = splits["val_y"]
-            splits["test_y"] = splits["test_y"]
+
+            if "val_y" in splits:
+                splits["val_y"] = np.vstack(list(splits["val_y"]))
+            if "test_y" in splits:
+                splits["test_y"] = np.vstack(list(splits["test_y"]))
 
         return splits
 
