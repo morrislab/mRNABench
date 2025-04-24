@@ -30,6 +30,8 @@ M_URL = "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE114002&format=file"
 
 PRIMER_SEQ = "GGGACATCGTAGAGAGTCGTACTTA"
 
+START_CODON = "ATG"
+
 EGFP_CDS = (
     "atgggcgaattaagtaagggcgaggagctgttcaccgg"
     "ggtggtgcccatcctggtcgagctggacggcgacgtaaacggccacaagttcagcgtgtccggcg"
@@ -62,6 +64,10 @@ MCHERRY_CDS = (
     "ttctagttgccagccatctgttgtttg"
 ).upper()
 
+KOZAK_RULES = {
+    "strong": [['A', 'G'], ['C', 'A'], ['C', 'G', 'A']],
+    "weak":  [['T'], ['G'], ['T', 'C']],
+}
 
 class MRLSample(BenchmarkDataset):
     """Mean Ribosome Load Dataset from Sample et al. 2019.
@@ -262,7 +268,83 @@ class MRLSampleEGFP(MRLSample):
                 "mrl-sample/resolve/main/mrl-sample-egfp.parquet"
             )
         )
+    
+    def _process_raw_data(self) -> pd.DataFrame:
+        """Post-processing step to add following columns to the dataframe:
+            - u_start: Whether there is an upstream start codon
+            - u_oof_start: Whether there is an out-of-frame upstream start codon
+            - kozak_quality: One of "strong", "weak", "mixed"
+        """
+        df = super()._process_raw_data()
 
+        # Extract utr sequence
+        df['utr'] = df.apply(lambda x: x['sequence'][len(PRIMER_SEQ):-len(EGFP_CDS)], axis=1)
+
+        # Classify each utr as having an upstream start codon, and whether
+        # that start codon is out-of-frame
+        df[['u_start', 'u_oof_start']] = df['utr'].apply(
+            lambda x: pd.Series(self._has_upstream_start(x))
+        )
+
+        # Classify the strength of the Kozak prefix in each utr
+        df['kozak_quality'] = df['utr'].apply(self._kozak_quality)
+
+        df.drop(columns=["utr"], inplace=True)
+
+        return df
+    
+    @staticmethod
+    def _has_upstream_start(utr: str) -> tuple:
+        """Look for any upstream start codons, and whether they are out-of-frame
+            Args:
+                utr: utr sequence.
+
+            Returns:
+                Tuple of (bool, bool), indicating whether an upstream start codon exists,
+                and whether it is also out-of-frame
+        """
+        # Find all start codon positions
+        atg_positions = []
+        for i in range(len(utr)-2):
+            if utr[i:i+3].upper() == START_CODON:
+                atg_positions.append(i)
+        
+        has_upstream_start = len(atg_positions) > 0
+        has_oof_start = False
+        # Check if any ATG is out of frame relative to CDS
+        for pos in atg_positions:
+            # Distance from end of UTR to ATG start
+            dist_to_end = len(utr) - pos
+            # If not divisible by 3, it's out of frame
+            if dist_to_end % 3 != 0:
+                has_oof_start = True
+        return int(has_upstream_start), int(has_oof_start)
+
+    @staticmethod
+    def _kozak_quality(utr: str) -> str:
+        """
+        Classifies the Kozak sequence quality from the last 3 bases of the utr.
+
+        Args:
+            utr: utr sequence
+
+        Returns:
+            One of "strong", "weak", or "mixed" based on positional base preferences.
+        """
+        # Since CDS is constant in this data, only the last 3-mer of the UTR matters
+        kozak_prefix = utr[-3:]
+
+        def matches(rule):
+            return all(base in matching_bases for base, matching_bases in zip(kozak_prefix, KOZAK_RULES[rule]))
+
+        strong = matches("strong")
+        weak = matches("weak")
+
+        # If it falls into both buckets, or neither - 
+        # this is a "mixed" or "in between" sequence
+        if strong == weak:
+            return "mixed"
+        return "strong" if strong else "weak"
 
 class MRLSampleMCherry(MRLSample):
     """Concrete class for MRL Sample for mCherry experiments."""
