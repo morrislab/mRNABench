@@ -171,7 +171,7 @@ class KmerDatasetEmbedder(DatasetEmbedder):
     whereas s_chunk denotes the sequence chunking that occur within each model
     to handle sequences that exceed model maximum length.
 
-    This class specifically handles
+    This class specifically handles the naive Kmer embedding model.
     """
 
     def __init__(
@@ -181,6 +181,14 @@ class KmerDatasetEmbedder(DatasetEmbedder):
         d_chunk_ind: int = 0,
         d_num_chunks: int = 0
     ):
+        """Initialize KmerDatasetEmbedder.
+
+        Args:
+            model: Model used to embed sequences.
+            dataset: Dataset to embed.
+            d_chunk_ind: Current dataset chunk to be processed.
+            d_num_chunks: Total number of chunks to divide dataset into.
+        """
         super().__init__(model, dataset, d_chunk_ind, d_num_chunks)
 
     def embed_dataset(self) -> torch.Tensor:
@@ -200,11 +208,11 @@ class KmerDatasetEmbedder(DatasetEmbedder):
         self,
         embeddings: torch.Tensor,
     ) -> torch.Tensor:
-        """Removes rows with 0s across all columns and
-        scales the embeddings.
+        """Remove rows with 0s across all columns and scales the embeddings.
 
         Args:
             embeddings: Embeddings to desparsify.
+
         Returns:
             Desparsified embeddings.
         """
