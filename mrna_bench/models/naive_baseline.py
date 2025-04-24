@@ -29,13 +29,14 @@ class NaiveBaseline(EmbeddingModel):
         alphabet: str = "ACGT"
     ) -> list[str]:
         """Generate k-mer vocabulary in the given range.
+
         Args:
             kmer_list: List of k-mer lengths to generate.
             alphabet: Alphabet to use for generating k-mers.
+
         Returns:
             List of k-mers in the given range.
         """
-
         kmers: list[str] = []
         for k in sorted(kmer_list):
             kmers.extend(
