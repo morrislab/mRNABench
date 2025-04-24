@@ -56,7 +56,6 @@ def test_fetch_embedding_instance(mock_builder: LinearProbeBuilder):
 
         assert mock_builder.model_short_name == "test_model"
         assert mock_builder.embeddings is not None
-        assert mock_builder.seq_chunk_overlap == 0
 
 
 def test_fetch_embedding_model_name(mock_builder: LinearProbeBuilder):
@@ -68,7 +67,6 @@ def test_fetch_embedding_model_name(mock_builder: LinearProbeBuilder):
 
         assert mock_builder.model_short_name == "test_model"
         assert mock_builder.embeddings is not None
-        assert mock_builder.seq_chunk_overlap == 0
 
 
 def test_fetch_embedding_file_name(mock_builder: LinearProbeBuilder):
@@ -82,7 +80,6 @@ def test_fetch_embedding_file_name(mock_builder: LinearProbeBuilder):
 
         assert mock_builder.model_short_name == "model-name"
         assert mock_builder.embeddings is not None
-        assert mock_builder.seq_chunk_overlap == 10
 
 
 def test_build_splitter(mock_builder: LinearProbeBuilder):
@@ -138,7 +135,6 @@ def test_build(mock_builder: LinearProbeBuilder):
     """Check that build returns a LinearProbe instance."""
     mock_builder.embeddings = Mock()
     mock_builder.model_short_name = "test_model"
-    mock_builder.seq_chunk_overlap = 0
     mock_builder.target_col = "target"
     mock_builder.task = "task"
     mock_builder.splitter = Mock()
