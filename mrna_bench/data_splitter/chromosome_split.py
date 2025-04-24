@@ -3,6 +3,7 @@ import numpy as np
 
 from mrna_bench.data_splitter.data_splitter import DataSplitter
 
+
 class ChromosomeSplitter(DataSplitter):
     """Hold-out chromosome(s) for train-test split."""
 
@@ -12,7 +13,7 @@ class ChromosomeSplitter(DataSplitter):
         test_size: float,
         random_seed: int
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Split dataframe into train and test split by holding out chromosome(s).
+        """Split dataframe into train/test split by holding out chromosome(s).
 
         Args:
             df: Dataframe to split.
@@ -26,7 +27,7 @@ class ChromosomeSplitter(DataSplitter):
 
         # Get unique chromosomes and their sizes
         chr_counts = df["chromosome"].value_counts()
-        
+
         # Randomly shuffle chromosomes
         np.random.seed(random_seed)
         chromosomes = chr_counts.index.tolist()
@@ -38,40 +39,54 @@ class ChromosomeSplitter(DataSplitter):
         test_chroms, train_chroms = [], []
         for chr in chromosomes:
             # If adding this chromosome won't exceed target test size, add it
-            if curr_test_size < target_test_size and chr_counts[chr] <= target_test_size - curr_test_size:
+            if curr_test_size < target_test_size and \
+                    chr_counts[chr] <= target_test_size - curr_test_size:
                 test_chroms.append(chr)
                 curr_test_size += chr_counts[chr]
             # Otherwise, add it to train set
             else:
                 train_chroms.append(chr)
 
-        # If we couldn't get any chromosomes (test_size too small), take smallest chromosome
+        # If we couldn't get any chromosomes (test_size too small),
+        # take smallest chromosome
         chr_counts_sorted = chr_counts.sort_values(ascending=True)
         if not test_chroms:
             test_chroms = [chr_counts_sorted.index[0]]
             train_chroms.remove(test_chroms[0])
-            
+
         # Create train/test split
         test_df = df[df["chromosome"].isin(test_chroms)]
         train_df = df[~df["chromosome"].isin(test_chroms)]
 
-        print("Train chromosomes:", train_chroms, " Test chromosomes:", test_chroms)
-        print("Target test size:", test_size, " Actual test size:", len(test_df)/(len(test_df)+len(train_df)), "\n")
-        
+        print(
+            "Train chromosomes:", train_chroms,
+            " Test chromosomes:", test_chroms
+        )
+
+        print(
+            "Target test size:", test_size,
+            " Actual test size:",
+            len(test_df) / (len(test_df) + len(train_df)),
+            "\n"
+        )
+
         return train_df, test_df
-    
+
     def _validate_input_df(self, df: pd.DataFrame) -> None:
         """Validate input dataframe for chromosome splitting.
-        
+
         Args:
             df: Input dataframe to validate
-            
+
         Raises:
-            ValueError: If dataframe is empty or contains only one unique chromosome
+            ValueError: If dataframe is empty or
+                        contains only one unique chromosome
         """
         if len(df) == 0:
             raise ValueError("Passed in empty dataframe.")
 
         if len(df["chromosome"].unique()) == 1:
-            raise ValueError("Cannot split data with only one unique chromosome - "
-                           "chromosome-based splitting requires at least 2 different chromosomes")
+            raise ValueError(
+                "Cannot split data with only one unique chromosome. "
+                "Chromosome splitting requires >= 2 different chromosomes."
+            )

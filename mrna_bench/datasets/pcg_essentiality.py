@@ -1,3 +1,5 @@
+import pandas as pd
+
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 
 
@@ -49,6 +51,11 @@ class PCGEssentiality(BenchmarkDataset):
             species="human",
             force_redownload=force_redownload,
             hf_url=hf_url
+        )
+
+    def _get_data_from_raw(self) -> pd.DataFrame:
+        raise NotImplementedError(
+            "Code documenting PCG Essentiality is still in progress."
         )
 
 
