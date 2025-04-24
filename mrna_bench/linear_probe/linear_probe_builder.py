@@ -239,9 +239,9 @@ class LinearProbeBuilder:
             self.persister = LinearProbePersister(
                 self.dataset,
                 self.model_short_name,
-                self.split_type,
+                self.task,
                 self.target_col,
-                self.task
+                self.split_type
             )
 
         return LinearProbe(
