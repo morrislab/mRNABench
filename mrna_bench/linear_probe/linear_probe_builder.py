@@ -133,6 +133,8 @@ class LinearProbeBuilder:
         Returns:
             LinearProbeBuilder with set embeddings.
         """
+        embedding_name = embedding_name.replace(".npz", "")
+
         emb_fn_arr = embedding_name.split("_")
 
         self.model_short_name = emb_fn_arr[1]
@@ -237,9 +239,9 @@ class LinearProbeBuilder:
             self.persister = LinearProbePersister(
                 self.dataset,
                 self.model_short_name,
-                self.split_type,
+                self.task,
                 self.target_col,
-                self.task
+                self.split_type
             )
 
         return LinearProbe(

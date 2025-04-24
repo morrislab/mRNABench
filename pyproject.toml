@@ -33,12 +33,14 @@ base_models = [
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
     "accelerate",
-    "multimolecule"
+    "multimolecule",
+    "modelgenerator==0.1.1-4"
 ]
 dev = [
     "mypy",
     "flake8",
-    "flake8-docstrings"
+    "flake8-docstrings",
+    "pytest"
 ]
 
 [build-system]
