@@ -270,11 +270,12 @@ class MRLSampleEGFP(MRLSample):
         )
     
     def _process_raw_data(self) -> pd.DataFrame:
-        """Post-processing step to add following columns to the dataframe:
+        """Add post-processing to add following columns to the dataframe:
             - u_start: Whether there is an upstream start codon
             - u_oof_start: Whether there is an out-of-frame upstream start codon
             - kozak_quality: One of "strong", "weak", "mixed"
         """
+        # Call super class processing first
         df = super()._process_raw_data()
 
         # Extract utr sequence
