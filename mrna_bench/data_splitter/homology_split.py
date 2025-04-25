@@ -100,13 +100,15 @@ class HomologySplitter(DataSplitter):
         Args:
             default_split_ratio: Ratio of training, validation, test splits.
             **kwargs: Homology specific arguments:
-                - species: List of species that genes are from.
+                - species: Species that genes are from.
                 - homology_map_path: Path to homology maps.
                 - force_redownload: Forces redownload of homology maps.
         """
         super().__init__(default_split_ratio)
 
-        self.species: list[str] = kwargs["species"]
+        # TODO: Temporary fix for converting species from list to str
+        self.species: list[str] = [kwargs["species"]]
+
         homology_map_path: str | None = kwargs.get("homology_map_path", None)
         force_redownload: bool = kwargs.get("force_redownload", False)
 

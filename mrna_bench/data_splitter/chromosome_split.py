@@ -13,7 +13,7 @@ class ChromosomeSplitter(DataSplitter):
         test_size: float,
         random_seed: int
     ) -> tuple[pd.DataFrame, pd.DataFrame]:
-        """Split dataframe into train/test split by holding out chromosome(s).
+        """Split dataframe by holding out chromosome(s).
 
         Args:
             df: Dataframe to split.
@@ -39,8 +39,8 @@ class ChromosomeSplitter(DataSplitter):
         test_chroms, train_chroms = [], []
         for chr in chromosomes:
             # If adding this chromosome won't exceed target test size, add it
-            if curr_test_size < target_test_size and \
-                    chr_counts[chr] <= target_test_size - curr_test_size:
+            space = target_test_size - curr_test_size
+            if curr_test_size < target_test_size and chr_counts[chr] <= space:
                 test_chroms.append(chr)
                 curr_test_size += chr_counts[chr]
             # Otherwise, add it to train set
@@ -58,17 +58,13 @@ class ChromosomeSplitter(DataSplitter):
         test_df = df[df["chromosome"].isin(test_chroms)]
         train_df = df[~df["chromosome"].isin(test_chroms)]
 
-        print(
-            "Train chromosomes:", train_chroms,
-            " Test chromosomes:", test_chroms
-        )
+        chr_out = "Train chromosomes: {}  Test chromosomes: {}"
+        print(chr_out.format(train_chroms, test_chroms))
 
-        print(
-            "Target test size:", test_size,
-            " Actual test size:",
-            len(test_df) / (len(test_df) + len(train_df)),
-            "\n"
-        )
+        # Check if test size is correct
+        actual_ratio = len(test_df) / (len(test_df) + len(train_df))
+        split_size_out = "Train size: {}  Test size: {}"
+        print(split_size_out.format(test_size, actual_ratio))
 
         return train_df, test_df
 
@@ -79,14 +75,15 @@ class ChromosomeSplitter(DataSplitter):
             df: Input dataframe to validate
 
         Raises:
-            ValueError: If dataframe is empty or
-                        contains only one unique chromosome
+            ValueError: If dataframe is empty or contains only one unique
+                chromosome.
         """
         if len(df) == 0:
             raise ValueError("Passed in empty dataframe.")
 
         if len(df["chromosome"].unique()) == 1:
             raise ValueError(
-                "Cannot split data with only one unique chromosome. "
-                "Chromosome splitting requires >= 2 different chromosomes."
+                "Cannot split data with only one unique chromosome - "
+                "chromosome-based splitting requires at least 2 "
+                "different chromosomes"
             )

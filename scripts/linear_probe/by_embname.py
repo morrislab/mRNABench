@@ -23,11 +23,8 @@ if __name__ == "__main__":
     prober = (
         LinearProbeBuilder(args.dataset_name)
         .fetch_embedding_by_filename(args.embedding_fn)
-        .build_splitter(
-            args.split_type,
-            eval_all_splits=True,
-            species=["human"])
-        .build_evaluator(args.task)
+        .build_splitter(args.split_type, species="human")
+        .build_evaluator(args.task, eval_all_splits=True)
         .set_target(args.target_col)
         .use_persister()
         .build()

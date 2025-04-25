@@ -72,6 +72,12 @@ class Orthrus(EmbeddingModel):
                 "Inference currently does not support alternative aggregation."
             )
 
+        if self.is_sixtrack:
+            raise ValueError((
+                "Currently loaded model is six track."
+                "Use embed_sequence_sixtrack instead."
+            ))
+
         ohe_sequence = self.model.seq_to_oh(sequence).to(self.device)
         model_input_tt = ohe_sequence.unsqueeze(0)
 

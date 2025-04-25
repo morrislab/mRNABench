@@ -71,7 +71,7 @@ def test_fetch_embedding_model_name(mock_builder: LinearProbeBuilder):
 
 def test_fetch_embedding_file_name(mock_builder: LinearProbeBuilder):
     """Check that fetch functions set embeddings and model names."""
-    embedding_fn = "dataset_model-name_o10.npz"
+    embedding_fn = "dataset_model-name.npz"
 
     with patch.object(LinearProbeBuilder, "load_persisted_embeddings") as mock:
         mock.return_value = np.zeros((10, 10))

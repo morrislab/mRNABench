@@ -33,6 +33,7 @@ class NaiveBaseline(EmbeddingModel):
         Args:
             kmer_list: List of k-mer lengths to generate.
             alphabet: Alphabet to use for generating k-mers.
+
         Returns:
             List of k-mers in the given range.
         """

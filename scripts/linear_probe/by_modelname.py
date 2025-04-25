@@ -35,11 +35,8 @@ if __name__ == "__main__":
         .fetch_embedding_by_model_name(
             model_short_name,
             args.seq_chunk_overlap)
-        .build_splitter(
-            args.split_type,
-            eval_all_splits=True,
-            species=["human"])
-        .build_evaluator(args.task)
+        .build_splitter(args.split_type, species="human")
+        .build_evaluator(args.task, eval_all_splits=True)
         .set_target(args.target)
         .use_persister()
         .build()
