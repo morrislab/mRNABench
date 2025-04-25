@@ -9,7 +9,11 @@ from mrna_bench.models import EmbeddingModel
 class CodonBERT(EmbeddingModel):
     """Inference wrapper for CodonBERT.
 
-    CodonBERT is a transformer-based
+    CodonBERT is a transformer-based RNA languge model that is
+    pretrained on more than 10 million mRNA sequences from mammals,
+    bacteria, and human viruses using MLM. It is specifically trained
+    on coding regions of mRNA sequences, and is designed for predicting
+    mRNA-specific properties.
 
     Link: https://github.com/Sanofi-Public/CodonBERT
     """

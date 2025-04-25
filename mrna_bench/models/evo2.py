@@ -1,9 +1,8 @@
 from collections.abc import Callable
 
 import torch
-import os
 
-from mrna_bench import get_model_weights_path
+from mrna_bench import set_model_cache_var, revert_model_cache_var
 from mrna_bench.models.embedding_model import EmbeddingModel
 
 
@@ -50,14 +49,12 @@ class Evo2(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            # ensure that the model weight path has a trailing slash
-            weights_path = os.path.join(get_model_weights_path(), "")
-            os.environ['HF_HUB_CACHE'] = weights_path
+            old_hf_cache = set_model_cache_var()
             from evo2 import Evo2
         except ImportError:
             raise ImportError("Evo2 must be installed to use this model.")
 
-        self.model = Evo2(model_version)
+        self.model = Evo2(model_version).to(device)
         self.tokenizer = self.model.tokenizer.tokenize
 
         # we will only take the middle and last layer output for simplicity
@@ -68,6 +65,8 @@ class Evo2(EmbeddingModel):
 
         if model_version in ["evo2_40b", "evo2_7b"]:
             self.max_length = 1_000_000
+
+        revert_model_cache_var(old_hf_cache)
 
     def embed_sequence(
         self,
@@ -83,7 +82,7 @@ class Evo2(EmbeddingModel):
         Returns:
             Evo2 embedding of sequence with shape (1 x H).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
+        chunks = self.chunk_sequence(sequence, self.max_length)
 
         embedding_chunks = []
 

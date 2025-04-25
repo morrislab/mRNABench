@@ -5,6 +5,7 @@ from .aido import AIDORNA
 from .dnabert_s import DNABERTS
 from .dnabert import DNABERT2
 from .ernierna import ERNIERNA
+from .evo1 import Evo1
 from .evo2 import Evo2
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
@@ -29,6 +30,7 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "DNABERT-S": DNABERTS,
     "DNABERT2": DNABERT2,
     "ERNIE-RNA": ERNIERNA,
+    "Evo1": Evo1,
     "Evo2": Evo2,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
@@ -57,6 +59,11 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
     "DNABERT-S": ["dnabert-s"],
     "DNABERT2": ["dnabert2"],
     "ERNIE-RNA": ["ernierna", "ernierna-ss"],
+    "Evo1": [
+        "evo-1.5-8k-base",
+        "evo-1-8k-base",
+        "evo-1-131k-base"
+    ],
     "Evo2": [
         "evo2_40b",
         "evo2_7b",

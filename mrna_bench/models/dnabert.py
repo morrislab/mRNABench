@@ -43,19 +43,20 @@ class DNABERT2(EmbeddingModel):
         if model_version != "dnabert2":
             raise ValueError("Only dnabert2 model version available.")
 
+        # TODO: Why does it keep downloading to local cache?
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "zhihan1996/DNABERT-2-117M",
+            "quietflamingo/dnabert2-no-flashattention",
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
 
         config = BertConfig.from_pretrained(
-            "zhihan1996/DNABERT-2-117M",
+            "quietflamingo/dnabert2-no-flashattention",
             cache_dir=get_model_weights_path()
         )
 
         self.model = AutoModel.from_pretrained(
-            "zhihan1996/DNABERT-2-117M",
+            "quietflamingo/dnabert2-no-flashattention",
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             config=config

@@ -49,6 +49,7 @@ class NucleotideTransformer(EmbeddingModel):
                 "NucleotideTransformer."
             ))
 
+        # TODO: Why does it keep downloading to local cache?
         self.tokenizer = AutoTokenizer.from_pretrained(
             "InstaDeepAI/nucleotide-transformer-{}".format(model_version),
             trust_remote_code=True,

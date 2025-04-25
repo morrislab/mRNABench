@@ -1,15 +1,14 @@
 from collections.abc import Callable
 
 import os
-from pathlib import Path
 import tarfile
 
 import torch
 
 from mrna_bench.models.embedding_model import EmbeddingModel
-from mrna_bench.utils import get_data_path, download_file
+from mrna_bench.utils import get_model_weights_path, download_file
 
-
+# TODO: Change to HF
 MODEL_WEIGHT_URL = "https://zenodo.org/records/7995778/files/models.tar.gz"
 
 
@@ -59,10 +58,12 @@ class SpliceBERT(EmbeddingModel):
         self.is_sixtrack = False
 
         # Download all model weights
-        weight_path = Path(get_data_path()) / "model_weights" / "splice-bert"
-        weight_path.mkdir(parents=True, exist_ok=True)
+        weight_path = os.path.join(get_model_weights_path(), "splice-bert")
+        os.makedirs(weight_path, exist_ok=True)
 
-        if not (weight_path / "models").exists():
+        models_parent_dir = os.path.join(weight_path, "models")
+
+        if not os.path.exists(models_parent_dir):
             print("Fetching SpliceBERT weights.")
             dl_path = download_file(MODEL_WEIGHT_URL, str(weight_path))
 
@@ -71,7 +72,7 @@ class SpliceBERT(EmbeddingModel):
 
             os.remove(dl_path)
 
-        model_path = weight_path / "models" / model_version
+        model_path = os.path.join(models_parent_dir, model_version)
         self.tokenizer = AutoTokenizer.from_pretrained(model_path)
         self.model = AutoModel.from_pretrained(model_path).to(device)
 
