@@ -34,7 +34,8 @@ base_models = [
     "rna-fm==0.2.2",
     "accelerate",
     "multimolecule",
-    "modelgenerator==0.1.1-4"
+    "modelgenerator==0.1.1-4",
+    "evo-model"
 ]
 dev = [
     "mypy",

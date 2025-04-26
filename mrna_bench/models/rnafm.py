@@ -4,6 +4,7 @@ import warnings
 import numpy as np
 import torch
 
+from mrna_bench import set_model_cache_var, revert_model_cache_var
 from mrna_bench.models.embedding_model import EmbeddingModel
 
 
@@ -38,8 +39,10 @@ class RNAFM(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
+            old_torch_cache = set_model_cache_var("TORCH_HOME")
             import fm
         except ImportError:
+            revert_model_cache_var(old_torch_cache)
             raise ImportError(
                 "Install base_models optional dependency to use RNA-FM."
             )
@@ -55,6 +58,8 @@ class RNAFM(EmbeddingModel):
 
         self.model = model.to(device).eval()
         self.batch_converter = alphabet.get_batch_converter()
+
+        revert_model_cache_var(old_torch_cache)
 
     def embed_sequence(
         self,

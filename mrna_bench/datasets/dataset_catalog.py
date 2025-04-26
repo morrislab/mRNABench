@@ -33,9 +33,9 @@ from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 from .eclip_binding import (
     eCLIPBindingK562,
-    eCLIP_K562_RBPS_LIST,
+    eCLIP_K562_TOP_RBPS_LIST,
     eCLIPBindingHepG2,
-    eCLIP_HepG2_RBPS_LIST,
+    eCLIP_HepG2_TOP_RBPS_LIST
 )
 
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
@@ -71,114 +71,111 @@ DATASET_INFO = {
     "eclip-binding-k562": {
         "dataset": "eclip-binding-k562",
         "task": "classification",
-        "target_col": eCLIP_K562_RBPS_LIST,
-        "col_name": "eclip-binding-k562",
+        "target_col": eCLIP_K562_TOP_RBPS_LIST,
         "split_type": "homology",
     },
     "eclip-binding-hepg2": {
         "dataset": "eclip-binding-hepg2",
         "task": "classification",
-        "target_col": eCLIP_HepG2_RBPS_LIST,
-        "col_name": "eclip-binding-hepg2",
+        "target_col": eCLIP_HepG2_TOP_RBPS_LIST,
         "split_type": "homology",
     },
     "go-mf": {
         "dataset": "go-mf",
         "task": "multilabel",
         "target_col": "target",
-        "col_name": "go-mf",
         "split_type": "homology",
     },
     "mrl-sugimoto": {
         "dataset": "mrl-sugimoto",
         "task": "reg_ridge",
         "target_col": "target",
-        "col_name": "mrl-sugimoto",
         "split_type": "homology",
     },
     "mrl-sample-egfp-m1pseudo": {
         "dataset": "mrl-sample-egfp",
         "task": "reg_ridge",
-        "target_col": "mrl_egfp_m1pseudo",
-        "col_name": "mrl-sample-egfp-m1pseudo",
+        "target_col": "target_mrl_egfp_m1pseudo",
         "split_type": "default",
     },
     "mrl-sample-egfp-pseudo": {
         "dataset": "mrl-sample-egfp",
         "task": "reg_ridge",
-        "target_col": "mrl_egfp_pseudo",
-        "col_name": "mrl-sample-egfp-pseudo",
+        "target_col": "target_mrl_egfp_pseudo",
         "split_type": "default",
     },
     "mrl-sample-egfp-unmod": {
         "dataset": "mrl-sample-egfp",
         "task": "reg_ridge",
-        "target_col": "mrl_egfp_unmod",
-        "col_name": "mrl-sample-egfp-unmod",
+        "target_col": "target_mrl_egfp_unmod",
         "split_type": "default",
     },
     "mrl-sample-mcherry": {
         "dataset": "mrl-sample-mcherry",
         "task": "reg_ridge",
-        "target_col": "mrl_mcherry",
-        "col_name": "mrl-sample-mcherry",
+        "target_col": "target_mrl_mcherry",
         "split_type": "default",
     },
     "mrl-sample-designed": {
         "dataset": "mrl-sample-designed",
         "task": "reg_ridge",
-        "target_col": "mrl_designed",
-        "col_name": "mrl-sample-designed",
+        "target_col": "target_mrl_designed",
         "split_type": "default",
     },
     "mrl-sample-varying": {
         "dataset": "mrl-sample-varying",
         "task": "reg_ridge",
-        "target_col": "mrl_varying_length",
-        "col_name": "mrl-sample-varying",
+        "target_col": "target_mrl_varying_length",
         "split_type": "default",
     },
     "prot-loc": {
         "dataset": "prot-loc",
         "task": "multilabel",
         "target_col": "target",
-        "col_name": "prot-loc",
         "split_type": "homology",
     },
     "rnahl-human": {
         "dataset": "rnahl-human",
         "task": "reg_ridge",
         "target_col": "target",
-        "col_name": "rnahl-human",
         "split_type": "homology",
     },
     "rnahl-mouse": {
         "dataset": "rnahl-mouse",
         "task": "reg_ridge",
         "target_col": "target",
-        "col_name": "rnahl-mouse",
         "split_type": "homology",
     },
     "rna-loc-ietswaart": {
         "dataset": "rna-loc-ietswaart",
         "task": "multilabel",
         "target_col": "target",
-        "col_name": "rna-loc-ietswaart",
+        "split_type": "homology",
+    },
+    "vep-traitgym-complex": {
+        "dataset": "vep-traitgym-complex",
+        "task": "classification",
+        "target_col": "target",
+        "split_type": "homology",
+    },
+    "vep-traitgym-mendelian": {
+        "dataset": "vep-traitgym-mendelian",
+        "task": "classification",
+        "target_col": "target",
         "split_type": "homology",
     },
 }
 
 for ttype in ["pcg", "lncrna"]:
-    split_type = "homology" if ttype == "pcg" else "ss"
+    split_type = "homology" if ttype == "pcg" else "default"
     for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
-        # Use uppercase for target column suffix (adjust if needed).
+
         cell_upper = cell.upper()
 
         DATASET_INFO[f"{ttype}-ess-{cell}"] = {
             "dataset": f"{ttype}-ess-{cell}",
             "task": "classification",
-            "target_col": f"essential_{cell_upper}",
-            "col_name": f"{ttype}-ess-{cell}",
+            "target_col": f"target_essential_{cell_upper}",
             "split_type": split_type,
         }
 
@@ -186,7 +183,6 @@ for ttype in ["pcg", "lncrna"]:
             DATASET_INFO[f"{ttype}-ess-{cell}-day14-log2fc"] = {
                 "dataset": f"{ttype}-ess-{cell}",
                 "task": "reg_ridge",
-                "target_col": f"day14_log2fc_{cell_upper}",
-                "col_name": f"{ttype}-ess-{cell}-day14-log2fc",
+                "target_col": f"target_day14_log2fc_{cell_upper}",
                 "split_type": split_type,
             }

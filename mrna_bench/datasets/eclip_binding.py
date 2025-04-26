@@ -18,6 +18,12 @@ eCLIP_K562_RBPS_LIST = [
     'YWHAG', 'ZC3H11A', 'ZNF622', 'ZRANB2'
 ]
 
+eCLIP_K562_TOP_RBPS_LIST = [
+    'YBX3', 'UCHL5', 'ZNF622', 'DDX3X', 'LIN28B', 'PUM2', 'PABPC4', 'DDX24',
+    'IGF2BP1', 'IGF2BP2', 'RBM15', 'FAM120A', 'PUM1', 'SND1', 'DDX6', 'METAP2',
+    'FXR2', 'PCBP1', 'TIA1', 'FMR1'
+]
+
 eCLIP_HepG2_RBPS_LIST = [
     'AKAP1', 'AQR', 'BCCIP', 'BUD13', 'CDC40', 'CSTF2', 'CSTF2T', 'DDX3X',
     'DDX52', 'DDX55', 'DDX6', 'DGCR8', 'DHX30', 'DKC1', 'DROSHA', 'EFTUD2',
@@ -32,8 +38,24 @@ eCLIP_HepG2_RBPS_LIST = [
     'UTP18', 'WDR43', 'XPO5', 'YBX3', 'ZC3H11A'
 ]
 
-eCLIP_K562_RBPS_LIST = ['target_' + col for col in eCLIP_K562_RBPS_LIST]
-eCLIP_HepG2_RBPS_LIST = ['target_' + col for col in eCLIP_HepG2_RBPS_LIST]
+eCLIP_HepG2_TOP_RBPS_LIST = [
+    'PPIG', 'DDX3X', 'LARP4', 'LIN28B', 'G3BP1', 'NCBP2', 'IGF2BP1', 'AKAP1',
+    'PCBP2', 'PABPN1', 'SND1', 'UCHL5', 'DDX55', 'FXR2', 'EIF3H', 'IGF2BP3',
+    'SRSF1', 'HLTF', 'LSM11', 'PRPF4'
+]
+
+eCLIP_K562_RBPS_LIST = [
+    'target_' + col for col in eCLIP_K562_RBPS_LIST
+]
+eCLIP_HepG2_RBPS_LIST = [
+    'target_' + col for col in eCLIP_HepG2_RBPS_LIST
+]
+eCLIP_K562_TOP_RBPS_LIST = [
+    'target_' + col for col in eCLIP_K562_TOP_RBPS_LIST
+]
+eCLIP_HepG2_TOP_RBPS_LIST = [
+    'target_' + col for col in eCLIP_HepG2_TOP_RBPS_LIST
+]
 
 
 class eCLIPBinding(BenchmarkDataset):

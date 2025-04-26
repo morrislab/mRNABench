@@ -2,6 +2,7 @@ from collections.abc import Callable
 
 import torch
 
+from mrna_bench import set_model_cache_var, revert_model_cache_var
 from mrna_bench.models.embedding_model import EmbeddingModel
 
 
@@ -37,13 +38,17 @@ class AIDORNA(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
+            old_hf_cache = set_model_cache_var()
             from modelgenerator.tasks import Embed
         except ImportError:
+            revert_model_cache_var(old_hf_cache)
             raise ImportError("AIDO.RNA missing required dependencies.")
 
         model = Embed.from_config({"model.backbone": model_version}).eval()
 
         self.model = model.to(device)
+
+        revert_model_cache_var(old_hf_cache)
 
     def embed_sequence(
         self,

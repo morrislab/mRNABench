@@ -13,54 +13,23 @@ If you are interested in the benchmark datasets **only**, you can run:
 pip install mrna-bench
 ```
 
-### Orthrus - mRNA Bench (Bidirectional / Unidirectional)
+### Base Models
 The inference-capable version of mRNABench that can generate embeddings using
-Orthrus can be installed as shown below. Note that this requires PyTorch version 
-2.1.2 with CUDA 12.1.
+most models (except Evo2 and Helix mRNA) can be installed as shown below. Note that this requires PyTorch version
+2.2.2 with CUDA 12.1.
+
 ```bash
 conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
-pip install torch==2.1.2 --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
 pip install -e .[base_models]
-pip uninstall triton
 ```
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
 
-### AIDO.RNA - mRNA Bench
-Inference using AIDO.RNA requires installing the following in its own 
-environment.
-```bash
-conda create --name aido_bench python=3.10
-conda activate aido_bench
-
-pip install -e .
-pip install modelgenerator
-pip install git+https://github.com/genbio-ai/openfold.git@c4aa2fd0d920c06d3fd80b177284a22573528442
-pip install git+https://github.com/NVIDIA/dllogger.git@0540a43971f4a8a16693a9de9de73c1072020769
-```
-
-### Almost Full - mRNA Bench (No Orthrus Bidirectionality)
-The inference-capable version of mRNABench that can generate embeddings using
-Orthrus (unidirectional), DNA-BERT2, NucleotideTransformer, RNA-FM, and HyenaDNA can be 
-installed as shown below. Note that this requires PyTorch version 2.2.2 with 
-CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
-```bash 
-conda create --name model_bench python=3.10
-conda activate model_bench
-
-pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install -e .
-
-pip install mamba-ssm==1.2.0.post1
-pip install rna-fm
-pip install multimolecule
-pip uninstall triton
-```
-
-### Evo2 - mRNA Bench
-Inference using Evo2 requires installing the following in its own 
+### Evo2
+Inference using Evo2 requires installing the following in its own
 environment. Note, I had an issue where the evo_40b models, when downloaded,
 had their merged checkpoints stored one directory above the huggingface hub.
 I had to manually move the checkpoint into its corresponding snapshot directory.
@@ -137,7 +106,7 @@ Also see the `scripts/` folder for example scripts that uses slurm to embed data
 The models supported by the `base_models` installation are catalogued below.
 
 | Model Name | &nbsp;&nbsp;Model&nbsp;Versions&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Description | Citation |
-| :--------: |  ---------------------- | ------------- | :------: | 
+| :--------: |  ---------------------- | ------------- | :------: |
 | `Orthrus` | `orthrus-large-6-track`<br> `orthrus-base-4-track` | Mamba-based RNA FM pre-trained using contrastive learning on ~45M RNA transcripts to capture functional and evolutionary relationships. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
 | `RNA-FM` | `rna-fm` <br> `mrna-fm` | Transformer-based RNA FM pre-trained using MLM on 23M ncRNA sequences. mRNA-FM trained on mRNA CDS regions using codon tokenizer. | [[Github]](https://github.com/ml4bio/RNA-FM) |
 | `DNABERT2` | `dnabert2` | Transformer-based DNA FM pre-trained using MLM on multispecies genomic dataset. Uses BPE and other modern architectural improvements for efficiency. | [[Github]](https://github.com/MAGICS-LAB/DNABERT_2) |

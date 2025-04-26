@@ -3,7 +3,9 @@ from mrna_bench.utils import (
     update_data_path,
     get_data_path,
     get_model_weights_path,
-    update_model_weights_path
+    update_model_weights_path,
+    set_model_cache_var,
+    revert_model_cache_var
 )
 
 __all__ = [
@@ -12,5 +14,7 @@ __all__ = [
     "update_data_path",
     "get_data_path",
     "get_model_weights_path",
-    "update_model_weights_path"
+    "update_model_weights_path",
+    "set_model_cache_var",
+    "revert_model_cache_var",
 ]

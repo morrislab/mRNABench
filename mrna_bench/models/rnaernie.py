@@ -1,8 +1,8 @@
 from typing import Callable
 
-
 import torch
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -43,11 +43,13 @@ class RNAErnie(EmbeddingModel):
             )
 
         self.tokenizer = RnaTokenizer.from_pretrained(
-            "multimolecule/{}".format(model_version)
+            "multimolecule/{}".format(model_version),
+            cache_dir=get_model_weights_path()
         )
 
         self.model = RnaErnieModel.from_pretrained(
-            "multimolecule/{}".format(model_version)
+            "multimolecule/{}".format(model_version),
+            cache_dir=get_model_weights_path()
         ).to(device)
 
         self.is_sixtrack = False

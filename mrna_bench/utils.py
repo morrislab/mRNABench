@@ -180,3 +180,40 @@ def get_model_weights_path() -> str:
     """
     dm = DataManager()
     return dm.get_model_weights_path()
+
+
+def set_model_cache_var(cache_var: str = "HF_HUB_CACHE") -> str | None:
+    """Set the HF_HUB_CACHE environment variable.
+
+    This function sets the HF_HUB_CACHE environment variable to the
+    directory where model weights are stored. This is necessary for
+    downloading models from Hugging Face Hub.
+
+    Args:
+        cache_var: The name of the cache variable to set.
+
+    Returns:
+        The path to the previously set cache_var directory.
+    """
+    old_value = os.environ.get(cache_var)
+    new_value = os.path.join(get_model_weights_path(), "")
+    os.environ[cache_var] = new_value
+    return old_value
+
+
+def revert_model_cache_var(
+    old_value: str | None,
+    cache_var: str = "HF_HUB_CACHE"
+):
+    """Reverts HF_HUB_CACHE to the old value.
+
+    Restores the HF_HUB_CACHE environment variable to its previous
+    value. If the old value is None, the variable is removed.
+
+    Args:
+        old_value: The previous value of HF_HUB_CACHE.
+    """
+    if old_value is None:
+        os.environ.pop(cache_var, None)
+    else:
+        os.environ[cache_var] = old_value
