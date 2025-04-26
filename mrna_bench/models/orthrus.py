@@ -42,7 +42,6 @@ class Orthrus(EmbeddingModel):
                 "Install base_models optional dependency to use Orthrus."
             )
 
-        # TODO: Why does it keep downloading to local cache?
         model_hf_path = "quietflamingo/{}".format(model_version)
         model = AutoModel.from_pretrained(
             model_hf_path,

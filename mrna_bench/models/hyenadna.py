@@ -46,7 +46,6 @@ class HyenaDNA(EmbeddingModel):
                 "Install base_models optional dependency to use HyenaDNA."
             )
 
-        # TODO: Why does it keep downloading to local cache?
         checkpoint = "LongSafari/{}".format(model_version)
         tokenizer = AutoTokenizer.from_pretrained(
             checkpoint,

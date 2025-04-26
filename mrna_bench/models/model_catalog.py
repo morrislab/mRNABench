@@ -1,9 +1,9 @@
 from typing import Type
 
-from .codonbert import CodonBERT
 from .aido import AIDORNA
-from .dnabert_s import DNABERTS
+from .codonbert import CodonBERT
 from .dnabert import DNABERT2
+from .dnabert_s import DNABERTS
 from .ernierna import ERNIERNA
 from .evo1 import Evo1
 from .evo2 import Evo2

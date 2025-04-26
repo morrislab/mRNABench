@@ -41,6 +41,7 @@ class AIDORNA(EmbeddingModel):
             old_hf_cache = set_model_cache_var()
             from modelgenerator.tasks import Embed
         except ImportError:
+            revert_model_cache_var(old_hf_cache)
             raise ImportError("AIDO.RNA missing required dependencies.")
 
         model = Embed.from_config({"model.backbone": model_version}).eval()

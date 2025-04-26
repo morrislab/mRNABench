@@ -52,6 +52,7 @@ class Evo2(EmbeddingModel):
             old_hf_cache = set_model_cache_var()
             from evo2 import Evo2
         except ImportError:
+            revert_model_cache_var(old_hf_cache)
             raise ImportError("Evo2 must be installed to use this model.")
 
         self.model = Evo2(model_version).to(device)

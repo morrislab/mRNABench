@@ -43,7 +43,6 @@ class DNABERT2(EmbeddingModel):
         if model_version != "dnabert2":
             raise ValueError("Only dnabert2 model version available.")
 
-        # TODO: Why does it keep downloading to local cache?
         self.tokenizer = AutoTokenizer.from_pretrained(
             "quietflamingo/dnabert2-no-flashattention",
             trust_remote_code=True,

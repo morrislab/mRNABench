@@ -43,6 +43,7 @@ class Evo1(EmbeddingModel):
             old_hf_cache = set_model_cache_var()
             from evo import Evo
         except ImportError:
+            revert_model_cache_var(old_hf_cache)
             raise ImportError("Evo must be installed to use this model.")
 
         evo_model = Evo(model_version)

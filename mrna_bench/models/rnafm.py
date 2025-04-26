@@ -42,6 +42,7 @@ class RNAFM(EmbeddingModel):
             old_torch_cache = set_model_cache_var("TORCH_HOME")
             import fm
         except ImportError:
+            revert_model_cache_var(old_torch_cache)
             raise ImportError(
                 "Install base_models optional dependency to use RNA-FM."
             )
