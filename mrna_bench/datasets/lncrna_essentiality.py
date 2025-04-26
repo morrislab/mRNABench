@@ -39,7 +39,7 @@ class LNCRNAEssentiality(BenchmarkDataset):
             "shared"
         ]
 
-        if dataset_name.split("-")[-1] not in valid_cell_lines:
+        if "-".join(dataset_name.split("-")[2:]) not in valid_cell_lines:
             raise ValueError(
                 "Invalid experiment target in dataset name: {}.".format(
                     dataset_name
