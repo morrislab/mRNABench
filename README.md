@@ -1,5 +1,5 @@
 # mRNABench
-This repository contains a workflow to benchmark the embedding quality of genomic foundation models on (m)RNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
+This repository contains a workflow to benchmark the embedding quality of genomic foundation models on mRNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
 
 **Jump to:** [Model Catalog](#model-catalog) [Dataset Catalog](#dataset-catalog)
 
@@ -23,7 +23,7 @@ conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install -e mrna-bench[base_models]
+pip install mrna-bench[base_models]
 ```
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
