@@ -51,7 +51,8 @@ pip install transformer_engine[pytorch]==1.13
 ```
 
 ### Post-install
-After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
+> [!IMPORTANT]
+> After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
 ```python
 import mrna_bench as mb
 
