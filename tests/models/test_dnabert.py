@@ -25,9 +25,3 @@ def test_dnabert2_forward(dnabert2):
 
     out = dnabert2.embed_sequence("ATGATG")
     assert out.shape == (1, 768)
-
-
-def test_dnabert2_errors_overlap(dnabert2):
-    """Test DNABERT2 throws error when using overlap."""
-    with pytest.raises(ValueError):
-        dnabert2.embed_sequence("ATGATG", overlap=1)

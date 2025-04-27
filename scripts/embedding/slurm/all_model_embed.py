@@ -12,6 +12,10 @@ args = parser.parse_args()
 
 if __name__ == "__main__":
     for model_name, model_versions in MODEL_VERSION_MAP.items():
+        if model_name in ["Evo2", "Helix-mRNA", "AIDO.RNA"]:
+            # Skip models with specific environment requirements
+            continue
+
         for model_version in model_versions:
             subprocess.run([
                 "sbatch",
@@ -19,7 +23,6 @@ if __name__ == "__main__":
                 model_name,
                 model_version,
                 args.dataset_name,
-                "0",
                 "0",
                 "0",
             ])

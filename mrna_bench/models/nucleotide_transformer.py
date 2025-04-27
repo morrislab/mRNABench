@@ -66,14 +66,12 @@ class NucleotideTransformer(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using NucleotideTransformer.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Number of tokens overlapping between chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
@@ -81,11 +79,7 @@ class NucleotideTransformer(EmbeddingModel):
         """
         tokenized = self.tokenizer.encode_plus(sequence, verbose=False)
 
-        chunks = self.chunk_tokens(
-            tokenized["input_ids"],
-            self.max_length,
-            overlap
-        )
+        chunks = self.chunk_tokens(tokenized["input_ids"], self.max_length)
 
         embedding_chunks = []
 
@@ -108,6 +102,6 @@ class NucleotideTransformer(EmbeddingModel):
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, overlap, agg_fn):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not available for NT.")

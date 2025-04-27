@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 def load_model(
     model_name: str,
     model_version: str,
-    device: "torch.device"
+    device: "torch.device",
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
@@ -27,6 +27,7 @@ def load_model(
 
         model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
         model = model_class(model_version, device)
+
     except ModuleNotFoundError:
         raise ModuleNotFoundError(
             "PyTorch not installed. Model benchmarking unavailable."

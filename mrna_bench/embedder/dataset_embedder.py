@@ -8,7 +8,8 @@ import torch
 
 from mrna_bench.models import EmbeddingModel
 from mrna_bench.datasets import BenchmarkDataset
-from mrna_bench.embedder.embedder_utils import get_output_filepath
+from mrna_bench.embedder.embedder_utils import get_embedding_filepath
+from sklearn.preprocessing import StandardScaler
 
 
 class DatasetEmbedder:
@@ -16,7 +17,7 @@ class DatasetEmbedder:
 
     This class is built to split the sequences in a dataset into chunks of
     sequences which can then be processed in parallel. This is denoted d_chunk,
-    while s_chunk denotes the sequence chunking that occur within each model
+    whereas s_chunk denotes the sequence chunking that occur within each model
     to handle sequences that exceed model maximum length.
     """
 
@@ -24,25 +25,20 @@ class DatasetEmbedder:
         self,
         model: EmbeddingModel,
         dataset: BenchmarkDataset,
-        s_chunk_overlap: int = 0,
         d_chunk_ind: int = 0,
-        d_num_chunks: int = 0,
+        d_num_chunks: int = 0
     ):
         """Initialize DatasetEmbedder.
 
         Args:
             model: Model used to embed sequences.
             dataset: Dataset to embed.
-            s_chunk_overlap: Number of overlapping tokens between chunks in
-                individual sequences when using chunking to handle input
-                exceeding maximum model length.
             d_chunk_ind: Current dataset chunk to be processed.
             d_num_chunks: Total number of chunks to divide dataset into.
         """
         self.model = model
         self.dataset = dataset
         self.data_df = dataset.data_df
-        self.s_chunk_overlap = s_chunk_overlap
 
         self.d_chunk_ind = d_chunk_ind
         self.d_num_chunks = d_num_chunks
@@ -81,14 +77,10 @@ class DatasetEmbedder:
                 embedding = self.model.embed_sequence_sixtrack(
                     row["sequence"],
                     row["cds"].astype(np.int32),
-                    row["splice"].astype(np.int32),
-                    self.s_chunk_overlap,
+                    row["splice"].astype(np.int32)
                 )
             else:
-                embedding = self.model.embed_sequence(
-                    row["sequence"],
-                    self.s_chunk_overlap,
-                )
+                embedding = self.model.embed_sequence(row["sequence"])
             dataset_embeddings.append(embedding)
 
         embeddings = torch.cat(dataset_embeddings, dim=0)
@@ -100,11 +92,10 @@ class DatasetEmbedder:
         Args:
             embedding: Embedding to persist.
         """
-        out_path = get_output_filepath(
+        out_path = get_embedding_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name,
-            self.s_chunk_overlap,
             self.d_chunk_ind,
             self.d_num_chunks
         )
@@ -121,26 +112,25 @@ class DatasetEmbedder:
         processed_files_paths = []
         processed_chunk_inds = []
 
+        glob_pattern = "{}_{}_*.npz".format(
+            self.dataset.dataset_name,
+            self.model.short_name
+        )
+
         # Check that all chunks are processed
-        for file in Path(self.dataset.embedding_dir).iterdir():
+        for file in Path(self.dataset.embedding_dir).glob(glob_pattern):
             if not file.is_file():
                 continue
 
-            file_name = file.stem
-            file_name_arr = file_name.split("_")
+            file_name_arr = file.stem.split("_")
+            if len(file_name_arr) < 3:
+                continue  # merged file, skip
 
-            if file_name_arr[0] != self.dataset.dataset_name:
-                continue
-            if file_name_arr[1] != self.model.short_name:
-                continue
-            if int(file_name_arr[2][1:]) != self.s_chunk_overlap:
+            start, end = map(int, file_name_arr[2].split("-"))
+            if end != self.d_num_chunks:
                 continue
 
-            chunk_coords = file_name_arr[3].split("-")
-            if int(chunk_coords[-1]) != self.d_num_chunks:
-                continue
-
-            processed_chunk_inds.append(int(chunk_coords[0]))
+            processed_chunk_inds.append(start)
             processed_files_paths.append(file)
 
         if len(set(all_chunks) - set(processed_chunk_inds)) > 0:
@@ -160,14 +150,81 @@ class DatasetEmbedder:
 
         all_embeddings = np.concatenate(embeddings, axis=0)
 
-        out_fn = get_output_filepath(
+        out_fn = get_embedding_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
-            self.dataset.dataset_name,
-            self.s_chunk_overlap
+            self.dataset.dataset_name
         )
 
         np.savez_compressed(out_fn, embedding=all_embeddings)
 
         for file in processed_files_paths:
             Path(file).unlink()
+
+
+class KmerDatasetEmbedder(DatasetEmbedder):
+    """Embeds sequences associated with dataset using specified embedder.
+
+    This class is built to split the sequences in a dataset into chunks of
+    sequences which can then be processed in parallel. This is denoted d_chunk,
+    whereas s_chunk denotes the sequence chunking that occur within each model
+    to handle sequences that exceed model maximum length.
+
+    This class specifically handles the naive Kmer embedding model.
+    """
+
+    def __init__(
+        self,
+        model: EmbeddingModel,
+        dataset: BenchmarkDataset,
+        d_chunk_ind: int = 0,
+        d_num_chunks: int = 0
+    ):
+        """Initialize KmerDatasetEmbedder.
+
+        Args:
+            model: Model used to embed sequences.
+            dataset: Dataset to embed.
+            d_chunk_ind: Current dataset chunk to be processed.
+            d_num_chunks: Total number of chunks to divide dataset into.
+        """
+        super().__init__(model, dataset, d_chunk_ind, d_num_chunks)
+
+    def embed_dataset(self) -> torch.Tensor:
+        """Compute embeddings for current dataset chunk.
+
+        Returns:
+            Embeddings for current dataset chunk in original order.
+        """
+        embeddings = super().embed_dataset()
+
+        # Desparsify the embeddings
+        embeddings = self.desparsify_embeddings_and_scale(embeddings)
+
+        return embeddings
+
+    def desparsify_embeddings_and_scale(
+        self,
+        embeddings: torch.Tensor,
+    ) -> torch.Tensor:
+        """Remove rows with 0s across all columns and scales the embeddings.
+
+        Args:
+            embeddings: Embeddings to desparsify.
+
+        Returns:
+            Desparsified embeddings.
+        """
+        # Remove rows with 0s across all columns
+        non_zero_cols = torch.any(embeddings != 0, dim=0)
+        desparsified_embeddings = embeddings[:, non_zero_cols]
+
+        # Scale the embeddings
+        desparsified_and_scaled_embeddings = torch.tensor((
+            StandardScaler()
+            .fit_transform(
+                desparsified_embeddings
+            )
+        ), dtype=torch.float32)
+
+        return desparsified_and_scaled_embeddings

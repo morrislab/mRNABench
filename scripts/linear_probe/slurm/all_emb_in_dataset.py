@@ -20,5 +20,6 @@ if __name__ == "__main__":
             embedding_fn,
             args.dataset,
             args.task,
-            args.target
+            args.target,
+            "homology"
         ])

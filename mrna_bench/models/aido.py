@@ -2,6 +2,7 @@ from collections.abc import Callable
 
 import torch
 
+from mrna_bench import set_model_cache_var, revert_model_cache_var
 from mrna_bench.models.embedding_model import EmbeddingModel
 
 
@@ -37,31 +38,33 @@ class AIDORNA(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
+            old_hf_cache = set_model_cache_var()
             from modelgenerator.tasks import Embed
         except ImportError:
+            revert_model_cache_var(old_hf_cache)
             raise ImportError("AIDO.RNA missing required dependencies.")
 
         model = Embed.from_config({"model.backbone": model_version}).eval()
 
         self.model = model.to(device)
 
+        revert_model_cache_var(old_hf_cache)
+
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using AIDO.RNA.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Number of tokens overlapping between chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
             AIDO.RNA embedding of sequence with shape (1 x H).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length - 2, overlap)
+        chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
         embedding_chunks = []
 

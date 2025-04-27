@@ -1,5 +1,5 @@
 # mRNABench
-This repository contains a workflow to benchmark the embedding quality of genomic foundation models on (m)RNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
+This repository contains a workflow to benchmark the embedding quality of genomic foundation models on mRNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
 
 **Jump to:** [Model Catalog](#model-catalog) [Dataset Catalog](#dataset-catalog)
 
@@ -13,29 +13,54 @@ If you are interested in the benchmark datasets **only**, you can run:
 pip install mrna-bench
 ```
 
-### Full Version
+### Base Models
 The inference-capable version of mRNABench that can generate embeddings using
-Orthrus, DNA-BERT2, NucleotideTransformer, RNA-FM, and HyenaDNA can be 
-installed as shown below. Note that this requires PyTorch version 2.2.2 with 
-CUDA 12.1 and Triton uninstalled (due to a DNA-BERT2 issue).
+most models (except Evo2 and Helix mRNA) can be installed as shown below. Note that this requires PyTorch version
+2.2.2 with CUDA 12.1.
+
 ```bash
 conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
 pip install mrna-bench[base_models]
-pip uninstall triton
 ```
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
 
+### Evo2
+Inference using Evo2 requires installing the following in its own
+environment. Note, I had an issue where the evo_40b models, when downloaded,
+had their merged checkpoints stored one directory above the huggingface hub.
+I had to manually move the checkpoint into its corresponding snapshot directory.
+/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/
+
+```bash
+conda create --name evo_bench python=3.11
+conda activate evo_bench
+
+conda install conda-forge::gcc # need updated gcc version
+
+cd path/to/mRNA/bench
+pip install -e .
+
+git clone --recurse-submodules git@github.com:ArcInstitute/evo2.git
+cd path/to/evo2
+pip install .
+pip install transformer_engine[pytorch]==1.13
+```
+
 ### Post-install
-After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
+> [!IMPORTANT]
+> After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
 ```python
 import mrna_bench as mb
 
 path_to_dir_to_store_data = "DESIRED_PATH"
 mb.update_data_path(path_to_dir_to_store_data)
+
+path_to_dir_to_store_weights = "/data1/morrisq/ian/rna_benchmarks/model_weights"
+mb.update_model_weights_path(path_to_dir_to_store_weights)
 ```
 
 ## Usage
@@ -54,7 +79,7 @@ import torch
 
 import mrna_bench as mb
 from mrna_bench.embedder import DatasetEmbedder
-from mrna_bench.linear_probe import LinearProbe
+from mrna_bench.linear_probe import LinearProbeBuilder
 
 device = torch.device("cuda")
 
@@ -65,15 +90,15 @@ embedder = DatasetEmbedder(model, dataset)
 embeddings = embedder.embed_dataset()
 embeddings = embeddings.detach().cpu().numpy()
 
-prober = LinearProbe(
-    dataset=dataset,
-    embeddings=embeddings,
-    task="multilabel",
-    target_col="target",
-    split_type="homology"
+prober = (LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance("orthrus-large-6", embeddings)
+    .build_splitter("homology", species="human", eval_all_splits=False)
+    .build_evaluator("multilabel")
+    .set_target("target")
+    .build()
 )
 
-metrics = prober.run_linear_probe()
+metrics = prober.run_linear_probe(2541)
 print(metrics)
 ```
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
@@ -82,7 +107,7 @@ Also see the `scripts/` folder for example scripts that uses slurm to embed data
 The models supported by the `base_models` installation are catalogued below.
 
 | Model Name | &nbsp;&nbsp;Model&nbsp;Versions&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; | Description | Citation |
-| :--------: |  ---------------------- | ------------- | :------: | 
+| :--------: |  ---------------------- | ------------- | :------: |
 | `Orthrus` | `orthrus-large-6-track`<br> `orthrus-base-4-track` | Mamba-based RNA FM pre-trained using contrastive learning on ~45M RNA transcripts to capture functional and evolutionary relationships. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
 | `RNA-FM` | `rna-fm` <br> `mrna-fm` | Transformer-based RNA FM pre-trained using MLM on 23M ncRNA sequences. mRNA-FM trained on mRNA CDS regions using codon tokenizer. | [[Github]](https://github.com/ml4bio/RNA-FM) |
 | `DNABERT2` | `dnabert2` | Transformer-based DNA FM pre-trained using MLM on multispecies genomic dataset. Uses BPE and other modern architectural improvements for efficiency. | [[Github]](https://github.com/MAGICS-LAB/DNABERT_2) |
@@ -108,10 +133,11 @@ The current datasets catalogued are:
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
 |---|---|---|---|---|
 | GO Molecular Function | <code>go-mf</code> | Classification of the molecular function of a transcript's  product as defined by the GO Resource. | `multilabel` | [website](https://geneontology.org/) |
-| Mean Ribosome Load (Sugimoto) | <code>mrl&#8209;sugimoto</code> | Mean Ribosome Load per transcript isoform as measured in Sugimoto et al. 2022. | `regression` | [paper](https://www.nature.com/articles/s41594-022-00819-2) |
+| Mean Ribosome Load (Sugimoto) | <code>mrl&#8209;sugimoto</code> | Mean ribosome load (MRL) per transcript isoform as measured in Sugimoto et al. 2022. | `regression` | [paper](https://www.nature.com/articles/s41594-022-00819-2) |
 | RNA Half-life (Human) | <code>rnahl&#8209;human</code> | RNA half-life of human transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
 | RNA Half-life (Mouse) | <code>rnahl&#8209;mouse</code> | RNA half-life of mouse transcripts collected by Agarwal et al. 2022. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
 | Protein Subcellular Localization | <code>prot&#8209;loc</code> | Subcellular localization of transcript protein product defined in Protein Atlas. | `multilabel` | [website](https://www.proteinatlas.org/) |
+| Mean Ribosome Load (Sample) | <code>mrl&#8209;sample&#8209;egfp</code> <br><code>mrl&#8209;sample&#8209;mcherry</code><br><code>mrl&#8209;sample&#8209;designed</code><br><code>mrl&#8209;sample&#8209;varying</code> | Mean ribosome load (MRL) measured in an MPRA of both random and designed 5'UTR regions (50nts) attached to a construct with either eGFP or mCherry. | `regression` | [paper](https://pubmed.ncbi.nlm.nih.gov/31267113/)|
 | Protein Coding Gene Essentiality | <code>pcg&#8209;ess</code> | Essentiality of PCGs as measured by CRISPR knockdown. Log-fold expression and binary essentiality available on several cell lines. | `regression` `classification`| [paper](https://www.cell.com/cell/fulltext/S0092-8674(24)01203-0)|
 
 ### Adding a new dataset

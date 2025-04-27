@@ -19,6 +19,8 @@ class RiNALMo(EmbeddingModel):
     https://huggingface.co/multimolecule/rinalmo
     """
 
+    max_length = 8192
+
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
@@ -53,30 +55,33 @@ class RiNALMo(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using RiNALMo.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
             RiNALMo embedding of sequence with shape (1 x 1280).
         """
-        if overlap != 0:
-            raise ValueError("RiNALMo does not require sequence chunking.")
+        sequence = sequence.replace("T", "U")
+        chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
-        sequence_in = sequence.replace("T", "U")
-        toks = self.tokenizer(sequence_in, return_tensors="pt").to(self.device)
+        embedding_chunks = []
 
-        hidden_output = self.model(**toks).last_hidden_state
-        output = agg_fn(hidden_output, dim=1)
+        for chunk in chunks:
+            toks = self.tokenizer(chunk, return_tensors="pt").to(self.device)
 
-        return output
+            cls_output = self.model(**toks).last_hidden_state
+            embedding_chunks.append(cls_output)
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, overlap, agg_fn):
+        embedding = torch.cat(embedding_chunks, dim=1)
+
+        aggregate_embedding = agg_fn(embedding, dim=1)
+        return aggregate_embedding
+
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not available for NT.")

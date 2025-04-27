@@ -71,14 +71,12 @@ class UTRBERT(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using 3UTRBERT.
 
         Args:
             sequence: Sequence to be embedded.
-            overlap: Nucleotide overlap between sequence chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
@@ -88,7 +86,7 @@ class UTRBERT(EmbeddingModel):
         tokens = self.tokenizer(sequence, return_tensors="pt")
         input_ids = list(tokens["input_ids"][0][1:-1])
 
-        chunks = self.chunk_tokens(input_ids, self.max_length - 2, overlap)
+        chunks = self.chunk_tokens(input_ids, self.max_length - 2)
 
         embedding_chunks = []
 
@@ -114,7 +112,6 @@ class UTRBERT(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int = 0,
         agg_fn: Callable = torch.mean
     ) -> torch.Tensor:
         """Embed sequence using only 3'UTR region using 3UTRBERT.
@@ -123,7 +120,6 @@ class UTRBERT(EmbeddingModel):
             sequence: Sequence to be embedded.
             cds: CDS indices.
             splice: Unused.
-            overlap: Nucleotide overlap between sequence chunks.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
@@ -131,7 +127,7 @@ class UTRBERT(EmbeddingModel):
         """
         _ = splice  # Unused
         cds_sequence = self.get_threeprime_utr(sequence, cds)
-        return self.embed_sequence(cds_sequence, overlap, agg_fn)
+        return self.embed_sequence(cds_sequence, agg_fn)
 
     def get_threeprime_utr(self, sequence: str, cds: np.ndarray) -> str:
         """Get 3'UTR region of sequence.

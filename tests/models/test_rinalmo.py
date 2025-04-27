@@ -37,14 +37,6 @@ def test_rinalmo_forward(rinalmo):
     )
 
 
-def test_rinalmo_errors_overlap(rinalmo):
-    """Test RiNALMo throws error if overlap is not zero."""
-    text = "ACTTTGGCCA"
-
-    with pytest.raises(ValueError):
-        rinalmo.embed_sequence(text, overlap=1, agg_fn=torch.mean).cpu()
-
-
 def test_rinalmo_forward_converts_tu(rinalmo):
     """Test that RiNALMo forward pass automatically converts T->U."""
     text = "ACTTTGGCCA"

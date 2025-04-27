@@ -45,20 +45,3 @@ def test_orthrus_forward_four(orthrus_4):
 
     assert orthrus_4.is_sixtrack is False
     assert out.shape == (1, 256)
-
-
-def test_orthrus_no_overlap(orthrus_4, orthrus_6):
-    """Test Orthrus throws error when using overlap."""
-    with pytest.raises(ValueError):
-        orthrus_6.embed_sequence_sixtrack(
-            "ATG",
-            np.array([0, 0, 0]),
-            np.array([0, 0, 0]),
-            overlap=1
-        )
-
-    with pytest.raises(ValueError):
-        orthrus_4.embed_sequence(
-            "ATG",
-            overlap=1
-        )

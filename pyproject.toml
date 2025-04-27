@@ -1,10 +1,13 @@
 [project]
 name = "mrna-bench"
-version = "1.1.2"
+version = "1.2.0"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
-    { name = "Ruian (Ian) Shi", email = "ian.shi@mail.utoronto.ca" }
+    { name = "Ruian (Ian) Shi", email = "ian.shi@mail.utoronto.ca" },
+    { name = "Taykhoom Dalal" },
+    { name = "Phil Fradkin" },
+    { name = "Divya Koyyalagunta" }
 ]
 requires-python = ">= 3.10"
 license = { file = "LICENSE" }  # Include a LICENSE file in your repo
@@ -22,8 +25,9 @@ dependencies = [
     "pandas<=2.2.2",
     "requests"
 ]
+
 [project.urls]
-Repository = "https://github.com/IanShi1996/mRNABench"
+Repository = "https://github.com/morrislab/mRNABench"
 
 [project.optional-dependencies]
 base_models = [
@@ -32,12 +36,15 @@ base_models = [
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
     "accelerate",
-    "multimolecule"
+    "multimolecule",
+    "modelgenerator==0.1.1-4",
+    "evo-model"
 ]
 dev = [
     "mypy",
     "flake8",
-    "flake8-docstrings"
+    "flake8-docstrings",
+    "pytest"
 ]
 
 [build-system]

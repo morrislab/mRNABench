@@ -6,6 +6,8 @@ import torch
 
 from mrna_bench.models.helix_mrna import HelixmRNAWrapper
 
+pytest.importorskip("helical")
+
 
 @pytest.fixture(scope="module")
 def device() -> torch.device:

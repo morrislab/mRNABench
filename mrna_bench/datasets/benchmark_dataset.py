@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from mrna_bench.utils import get_data_path
+from mrna_bench.utils import download_file, get_data_path
 
 
 class BenchmarkDataset(ABC):
@@ -16,29 +16,90 @@ class BenchmarkDataset(ABC):
     def __init__(
         self,
         dataset_name: str,
-        species: list[str] = ["human"],
+        species: str = "human",
         force_redownload: bool = False,
+        hf_url: str | None = None
     ):
         """Initialize BenchmarkDataset.
 
         Args:
             dataset_name: Name of the benchmark dataset. Should have no
                 spaces, use '-' instead.
-            species: Species dataset is collected from.
+            species: Species the dataset is collected from.
             force_redownload: Forces raw data redownload.
+            hf_url: URL to download processed data from HuggingFace Hub.
         """
         self.dataset_name = dataset_name
         self.species = species
 
         self.force_redownload = force_redownload
+        self.hf_url = hf_url
 
         self.data_storage_path = get_data_path()
         self.init_folders()
 
         if force_redownload or not self.load_processed_df():
-            self.get_raw_data()
-            self.data_df = self.process_raw_data()
+            if hf_url is not None:
+                print("Downloading data from HuggingFace Hub...")
+                try:
+                    self.data_df = self.get_data_hf()
+                except Exception as e:
+                    print(f"Error downloading from HuggingFace: {e}")
+                    print("Attempting to process from raw data.")
+                    self.data_df = self._get_data_from_raw()
+            else:
+                print("No HF URL provided. Processing from raw.")
+                self.data_df = self._get_data_from_raw()
+
             self.save_processed_df(self.data_df)
+
+    def get_data_hf(self) -> pd.DataFrame:
+        """Download processed data from HuggingFace.
+
+        Returns:
+            pd.DataFrame: Processed dataframe.
+        """
+        if self.hf_url is None:
+            raise ValueError("HuggingFace URL not provided.")
+
+        processed_data_path = download_file(self.hf_url, self.raw_data_dir)
+        return pd.read_parquet(processed_data_path)
+
+    @abstractmethod
+    def _get_data_from_raw(self) -> pd.DataFrame:
+        """Abstract method to download and process data from raw source.
+
+        This class can be implemented in the subclass with a passthrough if
+        a huggingface url is instead provided.
+        """
+        pass
+
+    def subset_df(self, target_cols: list[str]) -> pd.DataFrame:
+        """Subset dataframe target columns.
+
+        Args:
+            df: Dataframe to subset.
+
+        Returns:
+            Subsetted dataframe.
+        """
+        if self.data_df is None:
+            raise RuntimeError("Dataframe not loaded.")
+        if not isinstance(self.data_df, pd.DataFrame):
+            raise TypeError("Dataframe is not a pandas DataFrame.")
+
+        # Set invariant columns
+        invariant_col_set = set([
+            "sequence",
+            "gene",
+            "chromosome",
+            "cds",
+            "splice"
+        ])
+
+        keep_col_set = invariant_col_set.union(set(target_cols))
+        keep_cols = [c for c in self.data_df.columns if c in keep_col_set]
+        return self.data_df[keep_cols]
 
     def init_folders(self):
         """Initialize folders for storing raw data.
@@ -69,7 +130,7 @@ class BenchmarkDataset(ABC):
         Args:
             df: Processed dataframe to save.
         """
-        df.to_pickle(self.dataset_path + "/data_df.pkl")
+        df.to_parquet(self.dataset_path + "/data_df.parquet")
 
     def load_processed_df(self) -> bool:
         """Load processed dataframe from data storage path.
@@ -78,18 +139,47 @@ class BenchmarkDataset(ABC):
             Whether dataframe was successfully loaded to class property.
         """
         try:
-            self.data_df = pd.read_pickle(self.dataset_path + "/data_df.pkl")
+            df_path = self.dataset_path + "/data_df.parquet"
+            self.data_df = pd.read_parquet(df_path)
         except FileNotFoundError:
             print("Processed data frame not found.")
             return False
         return True
 
-    @abstractmethod
-    def get_raw_data(self):
-        """Abstract method to get the raw data for the task."""
-        pass
+    def get_splits(
+        self,
+        split_ratios: tuple[float, float, float],
+        random_seed: int = 2541,
+        split_type: str = "homology",
+        split_kwargs: dict = {}
+    ) -> dict[str, pd.DataFrame]:
+        """Get data splits for the dataset.
 
-    @abstractmethod
-    def process_raw_data(self) -> pd.DataFrame:
-        """Abstract method to process the dataset for the task."""
-        pass
+        Args:
+            split_ratios: Ratios for train, val, test splits.
+            random_seed: Random seed for reproducibility.
+            split_type: Type of split to use.
+            split_kwargs: Additional arguments for the split type.
+
+        Returns:
+            Dictionary of dataframes containing splits.
+        """
+        from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
+
+        if split_type == "homology" and split_kwargs == {}:
+            split_kwargs["species"] = self.species
+
+        splitter = SPLIT_CATALOG[split_type](**split_kwargs)
+        splits = splitter.get_all_splits_df(
+            self.data_df,
+            split_ratios,
+            random_seed
+        )
+
+        split_df = {
+            "train_df": splits[0],
+            "val_df": splits[1],
+            "test_df": splits[2]
+        }
+
+        return split_df

@@ -85,9 +85,8 @@ class HomologySplitter(DataSplitter):
 
     def __init__(
         self,
-        species: list[str],
-        homology_map_path: str | None = None,
-        force_redownload: bool = False
+        default_split_ratio: tuple[float, float, float] = (0.7, 0.15, 0.15),
+        **kwargs
     ):
         """Initialize HomologySplitter.
 
@@ -99,11 +98,19 @@ class HomologySplitter(DataSplitter):
         Homology map files should be named as: {species}_homology_map.csv
 
         Args:
-            species: List of species that genes are from.
-            homology_map_path: Path to homology maps.
-            force_redownload: Forces redownload of homology maps.
+            default_split_ratio: Ratio of training, validation, test splits.
+            **kwargs: Homology specific arguments:
+                - species: Species that genes are from.
+                - homology_map_path: Path to homology maps.
+                - force_redownload: Forces redownload of homology maps.
         """
-        super().__init__()
+        super().__init__(default_split_ratio)
+
+        # TODO: Temporary fix for converting species from list to str
+        self.species: list[str] = [kwargs["species"]]
+
+        homology_map_path: str | None = kwargs.get("homology_map_path", None)
+        force_redownload: bool = kwargs.get("force_redownload", False)
 
         if homology_map_path is None:
             data_storage_path = get_data_path()
@@ -129,7 +136,6 @@ class HomologySplitter(DataSplitter):
 
             Path(out).unlink()
 
-        self.species = species
         self.homology_df = self.get_homology_df()
 
     def get_homology_df(self) -> pd.DataFrame:

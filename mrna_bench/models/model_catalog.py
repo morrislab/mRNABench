@@ -1,10 +1,15 @@
 from typing import Type
 
 from .aido import AIDORNA
+from .codonbert import CodonBERT
 from .dnabert import DNABERT2
+from .dnabert_s import DNABERTS
 from .ernierna import ERNIERNA
+from .evo1 import Evo1
+from .evo2 import Evo2
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
+from .naive_baseline import NaiveBaseline
 from .nucleotide_transformer import NucleotideTransformer
 from .orthrus import Orthrus
 from .rinalmo import RiNALMo
@@ -21,10 +26,15 @@ from .embedding_model import EmbeddingModel
 
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "AIDO.RNA": AIDORNA,
+    "CodonBERT": CodonBERT,
+    "DNABERT-S": DNABERTS,
     "DNABERT2": DNABERT2,
     "ERNIE-RNA": ERNIERNA,
+    "Evo1": Evo1,
+    "Evo2": Evo2,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
+    "NaiveBaseline": NaiveBaseline,
     "NucleotideTransformer": NucleotideTransformer,
     "RiNALMo": RiNALMo,
     "Orthrus": Orthrus,
@@ -39,14 +49,28 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
 
 
 MODEL_VERSION_MAP: dict[str, list[str]] = {
+    "CodonBERT": ["codonbert"],
     "AIDO.RNA": [
         "aido_rna_650m",
         "aido_rna_650m_cds",
         "aido_rna_1b600m",
         "aido_rna_1b600m_cds"
     ],
+    "DNABERT-S": ["dnabert-s"],
     "DNABERT2": ["dnabert2"],
     "ERNIE-RNA": ["ernierna", "ernierna-ss"],
+    "Evo1": [
+        "evo-1.5-8k-base",
+        "evo-1-8k-base",
+        "evo-1-131k-base"
+    ],
+    "Evo2": [
+        "evo2_40b",
+        "evo2_7b",
+        "evo2_40b_base",
+        "evo2_7b_base",
+        "evo2_1b_base"
+    ],
     "Helix-mRNA": ["helix-mrna"],
     "HyenaDNA": [
         "hyenadna-large-1m-seqlen-hf",
@@ -54,6 +78,10 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "hyenadna-medium-160k-seqlen-hf",
         "hyenadna-small-32k-seqlen-hf",
         "hyenadna-tiny-16k-seqlen-d128-hf"
+    ],
+    "NaiveBaseline": [
+        "naive-4-track",
+        "naive-6-track"
     ],
     "NucleotideTransformer": [
         "2.5b-multi-species",

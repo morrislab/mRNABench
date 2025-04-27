@@ -45,8 +45,8 @@ def test_utrlm_forward_conversion(utrlm):
         "chunk_sequence",
         side_effect=utrlm.chunk_sequence
     ) as mock:
-        utrlm.embed_sequence(text, overlap=0)
-        mock.assert_called_once_with("ACUUUGGCCA", utrlm.max_length - 2, 0)
+        utrlm.embed_sequence(text)
+        mock.assert_called_once_with("ACUUUGGCCA", utrlm.max_length - 2)
 
 
 def test_utrlm_forward_chunked(utrlm):
@@ -71,50 +71,7 @@ def test_utrlm_forward_chunked(utrlm):
     with patch("multimolecule.UtrLmModel.forward") as mock_forward:
         mock_forward.side_effect = side_effect
 
-        output = utrlm.embed_sequence(
-            text,
-            overlap=0,
-            agg_fn=torch.mean
-        ).cpu()
-
-        assert torch.allclose(output, ground_truth_vals)
-
-
-def test_utrlm_forward_chunked_overlap(utrlm):
-    """Test UTR-LM forward pass for chunked inputs with overlap."""
-    overlap = utrlm.max_length // 8
-    input_seq = "A" * (utrlm.max_length - 2) + "G" * (utrlm.max_length // 4)
-
-    c1_ids = [1] + [6] * (utrlm.max_length - 2) + [2]
-    c2_ids = [1] + [6] * overlap + [8] * (utrlm.max_length // 4) + [2]
-
-    ground_truth_vals = torch.mean(torch.cat([
-        torch.arange(utrlm.max_length).float(),
-        torch.arange((len(input_seq) - utrlm.max_length) + 4 + overlap).float()
-    ])).repeat(1, 128)
-
-    def side_effect(input_ids, attention_mask):
-        # Evaluate overlap
-        input_ids = input_ids.float().cpu()[0]
-
-        is_chunk_1 = torch.equal(input_ids, torch.Tensor(c1_ids))
-        is_chunk_2 = torch.equal(input_ids, torch.Tensor(c2_ids))
-        assert is_chunk_1 or is_chunk_2
-
-        pos = torch.arange(len(input_ids)).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 128)
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
-
-    with patch("multimolecule.UtrLmModel.forward") as mock_forward:
-        mock_forward.side_effect = side_effect
-
-        output = utrlm.embed_sequence(
-            input_seq,
-            overlap=overlap,
-            agg_fn=torch.mean
-        ).cpu()
+        output = utrlm.embed_sequence(text, agg_fn=torch.mean).cpu()
 
         assert torch.allclose(output, ground_truth_vals)
 
@@ -140,7 +97,6 @@ def test_utrlm_forward_5utr(utrlm_5utr):
             text,
             cds,
             cds,
-            overlap=0,
             agg_fn=torch.mean
         ).cpu()
 
@@ -171,7 +127,6 @@ def test_utrlm_forward_5utr_missing(utrlm_5utr):
             text,
             cds,
             cds,
-            overlap=0,
             agg_fn=torch.mean
         ).cpu()
 
