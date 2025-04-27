@@ -55,7 +55,7 @@ class Evo2(EmbeddingModel):
             revert_model_cache_var(old_hf_cache)
             raise ImportError("Evo2 must be installed to use this model.")
 
-        self.model = Evo2(model_version).to(device)
+        self.model = Evo2(model_version)
         self.tokenizer = self.model.tokenizer.tokenize
 
         # we will only take the middle and last layer output for simplicity
