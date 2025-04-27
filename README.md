@@ -23,7 +23,7 @@ conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install -e .[base_models]
+pip install -e mrna-bench[base_models]
 ```
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
@@ -78,7 +78,7 @@ import torch
 
 import mrna_bench as mb
 from mrna_bench.embedder import DatasetEmbedder
-from mrna_bench.linear_probe import LinearProbe
+from mrna_bench.linear_probe import LinearProbeBuilder
 
 device = torch.device("cuda")
 
@@ -89,15 +89,15 @@ embedder = DatasetEmbedder(model, dataset)
 embeddings = embedder.embed_dataset()
 embeddings = embeddings.detach().cpu().numpy()
 
-prober = LinearProbe(
-    dataset=dataset,
-    embeddings=embeddings,
-    task="multilabel",
-    target_col="target",
-    split_type="homology"
+prober = LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance("orthrus-large-6", embeddings)
+    .build_splitter("homology", species="human")
+    .build_evaluator("multilabel", eval_all_splits=False)
+    .set_target("target")
+    .build()
 )
 
-metrics = prober.run_linear_probe()
+metrics = prober.run_linear_probe(2541)
 print(metrics)
 ```
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
