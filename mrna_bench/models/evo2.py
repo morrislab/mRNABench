@@ -113,8 +113,8 @@ class Evo2(EmbeddingModel):
             layer_chunks = [
                 embedding_chunks[i][layer_name] for i in range(n_chunks)
             ]
-            mean_chunks = torch.mean(torch.cat(layer_chunks, dim=1), dim=1)
-            aggregate_embeddings.append(mean_chunks.float().cpu())
+            agg_chunks = agg_fn(torch.cat(layer_chunks, dim=1), dim=1)
+            aggregate_embeddings.append(agg_chunks.float().cpu())
 
         # concatenate the embeddings across the layers
         aggregate_embedding = torch.cat(aggregate_embeddings, dim=1)
