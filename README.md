@@ -1,5 +1,5 @@
 # mRNABench
-This repository contains a workflow to benchmark the embedding quality of genomic foundation models on (m)RNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
+This repository contains a workflow to benchmark the embedding quality of genomic foundation models on mRNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
 
 **Jump to:** [Model Catalog](#model-catalog) [Dataset Catalog](#dataset-catalog)
 
@@ -23,7 +23,7 @@ conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install -e .[base_models]
+pip install mrna-bench[base_models]
 ```
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
@@ -51,7 +51,8 @@ pip install transformer_engine[pytorch]==1.13
 ```
 
 ### Post-install
-After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
+> [!IMPORTANT]
+> After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
 ```python
 import mrna_bench as mb
 
@@ -78,7 +79,7 @@ import torch
 
 import mrna_bench as mb
 from mrna_bench.embedder import DatasetEmbedder
-from mrna_bench.linear_probe import LinearProbe
+from mrna_bench.linear_probe import LinearProbeBuilder
 
 device = torch.device("cuda")
 
@@ -89,15 +90,15 @@ embedder = DatasetEmbedder(model, dataset)
 embeddings = embedder.embed_dataset()
 embeddings = embeddings.detach().cpu().numpy()
 
-prober = LinearProbe(
-    dataset=dataset,
-    embeddings=embeddings,
-    task="multilabel",
-    target_col="target",
-    split_type="homology"
+prober = LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance("orthrus-large-6", embeddings)
+    .build_splitter("homology", species="human")
+    .build_evaluator("multilabel", eval_all_splits=False)
+    .set_target("target")
+    .build()
 )
 
-metrics = prober.run_linear_probe()
+metrics = prober.run_linear_probe(2541)
 print(metrics)
 ```
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
