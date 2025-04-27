@@ -112,26 +112,25 @@ class DatasetEmbedder:
         processed_files_paths = []
         processed_chunk_inds = []
 
+        glob_pattern = "{}_{}_*.npz".format(
+            self.dataset.dataset_name,
+            self.model.short_name
+        )
+
         # Check that all chunks are processed
-        for file in Path(self.dataset.embedding_dir).iterdir():
+        for file in Path(self.dataset.embedding_dir).glob(glob_pattern):
             if not file.is_file():
                 continue
 
-            file_name = file.stem
-            file_name_arr = file_name.split("_")
+            file_name_arr = file.stem.split("_")
+            if len(file_name_arr) < 3:
+                continue  # merged file, skip
 
-            if file_name_arr[0] != self.dataset.dataset_name:
-                continue
-            if file_name_arr[1] != self.model.short_name:
-                continue
-            if int(file_name_arr[2][1:]) != self.s_chunk_overlap:
+            start, end = map(int, file_name_arr[2].split("-"))
+            if end != self.d_num_chunks:
                 continue
 
-            chunk_coords = file_name_arr[3].split("-")
-            if int(chunk_coords[-1]) != self.d_num_chunks:
-                continue
-
-            processed_chunk_inds.append(int(chunk_coords[0]))
+            processed_chunk_inds.append(start)
             processed_files_paths.append(file)
 
         if len(set(all_chunks) - set(processed_chunk_inds)) > 0:

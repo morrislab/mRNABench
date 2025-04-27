@@ -142,17 +142,22 @@ class NaiveBaseline(EmbeddingModel):
         embedding = self.embed_sequence(sequence).squeeze(0)
 
         # 3. Compute cds length
-        # last 1 index + 3 to include the end of the last codon
-        cds_end = np.where(cds == 1)[0][-1] + 3
+        cds_positions = np.where(cds == 1)[0]
+        if cds_positions.size == 0:
+            cds_length = torch.tensor(
+                0.0,
+                dtype=torch.float32
+            ).unsqueeze(0)
+        else:
+            # last 1 index + 3 to include the end of the last codon
+            cds_end = cds_positions[-1] + 3
 
-        # start of first codon
-        cds_start = np.where(cds == 1)[0][0]
-
-        cds_length = cds_end - cds_start
-        cds_length = torch.tensor(
-            cds_length,
-            dtype=torch.float32
-        ).unsqueeze(0)
+            # start of first codon
+            cds_start = cds_positions[0]
+            cds_length = torch.tensor(
+                cds_end - cds_start,
+                dtype=torch.float32
+            ).unsqueeze(0)
 
         # 4. Compute exon count
         exon_count = np.sum(splice)
