@@ -2,6 +2,8 @@ from collections.abc import Callable
 
 from .benchmark_dataset import BenchmarkDataset
 from .go_mol_func import GOMolecularFunction
+from .go_cc import GOCellularComponent
+from .go_bp import GOBiologicalProcess
 from .pcg_essentiality import (
     PCGEssHAP1,
     PCGEssHEK293FT,
@@ -42,6 +44,8 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "eclip-binding-k562": eCLIPBindingK562,
     "eclip-binding-hepg2": eCLIPBindingHepG2,
     "go-mf": GOMolecularFunction,
+    "go-cc": GOCellularComponent,
+    "go-bp": GOBiologicalProcess,
     "pcg-ess-hap1": PCGEssHAP1,
     "pcg-ess-hek293ft": PCGEssHEK293FT,
     "pcg-ess-k562": PCGEssK562,
