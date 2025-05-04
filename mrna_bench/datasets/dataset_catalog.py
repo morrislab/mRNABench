@@ -1,9 +1,9 @@
 from collections.abc import Callable
 
 from .benchmark_dataset import BenchmarkDataset
+from .go_bio_proc import GOBiologicalProcess
+from .go_cell_comp import GOCellularComponent
 from .go_mol_func import GOMolecularFunction
-from .go_cc import GOCellularComponent
-from .go_bp import GOBiologicalProcess
 from .pcg_essentiality import (
     PCGEssHAP1,
     PCGEssHEK293FT,
@@ -22,7 +22,9 @@ from .lncrna_essentiality import (
 )
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
+from .rna_loc_fazal import RNALocalizationFazal
 from .rna_loc_ietswaart import RNALocalizationIetswaart
+from .mrl_hl_lbkwk import MRLHLLBKWK
 from .prot_loc import ProteinLocalization
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
@@ -43,9 +45,9 @@ from .eclip_binding import (
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "eclip-binding-k562": eCLIPBindingK562,
     "eclip-binding-hepg2": eCLIPBindingHepG2,
-    "go-mf": GOMolecularFunction,
-    "go-cc": GOCellularComponent,
     "go-bp": GOBiologicalProcess,
+    "go-cc": GOCellularComponent,
+    "go-mf": GOMolecularFunction,
     "pcg-ess-hap1": PCGEssHAP1,
     "pcg-ess-hek293ft": PCGEssHEK293FT,
     "pcg-ess-k562": PCGEssK562,
@@ -60,8 +62,10 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "lncrna-ess-shared": LNCRNAEssShared,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
+    "rna-loc-fazal": RNALocalizationFazal,
     "rna-loc-ietswaart": RNALocalizationIetswaart,
     "prot-loc": ProteinLocalization,
+    "mrl-hl-lbkwk": MRLHLLBKWK,
     "mrl-sugimoto": MRLSugimoto,
     "mrl-sample-egfp": MRLSampleEGFP,
     "mrl-sample-mcherry": MRLSampleMCherry,
@@ -84,11 +88,35 @@ DATASET_INFO = {
         "target_col": eCLIP_HepG2_TOP_RBPS_LIST,
         "split_type": "homology",
     },
+    "go-bp": {
+        "dataset": "go-bp",
+        "task": "multilabel",
+        "target_col": "target",
+        "split_type": "homology",
+    },
+    "go-cc": {
+        "dataset": "go-cc",
+        "task": "multilabel",
+        "target_col": "target",
+        "split_type": "homology",
+    },
     "go-mf": {
         "dataset": "go-mf",
         "task": "multilabel",
         "target_col": "target",
         "split_type": "homology",
+    },
+    "mrl-hl-lbkwk-hl": {
+        "dataset": "mrl-hl-lbkwk",
+        "task": "reg_ridge",
+        "target_col": "target_in_cell_half_life",
+        "split_type": "default",
+    },
+    "mrl-hl-lbkwk-mrl": {
+        "dataset": "mrl-hl-lbkwk",
+        "task": "reg_ridge",
+        "target_col": "target_ribosome_load",
+        "split_type": "default",
     },
     "mrl-sugimoto": {
         "dataset": "mrl-sugimoto",
@@ -147,6 +175,12 @@ DATASET_INFO = {
     "rnahl-mouse": {
         "dataset": "rnahl-mouse",
         "task": "reg_ridge",
+        "target_col": "target",
+        "split_type": "homology",
+    },
+    "rna-loc-fazal": {
+        "dataset": "rna-loc-fazal",
+        "task": "multilabel",
         "target_col": "target",
         "split_type": "homology",
     },

@@ -23,7 +23,10 @@ dependencies = [
     "scikit-learn",
     "numpy<2",
     "pandas<=2.2.2",
-    "requests"
+    "requests",
+    "pyarrow",
+    "fastparquet"
+    "openpxyl"
 ]
 
 [project.urls]
