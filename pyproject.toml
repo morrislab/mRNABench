@@ -25,7 +25,7 @@ dependencies = [
     "pandas<=2.2.2",
     "requests",
     "pyarrow",
-    "fastparquet"
+    "fastparquet",
     "openpxyl"
 ]
 
