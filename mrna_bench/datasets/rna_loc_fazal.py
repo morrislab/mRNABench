@@ -1,8 +1,3 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from genome_kit import Genome
-
 import numpy as np
 import pandas as pd
 
@@ -18,6 +13,7 @@ RNA_LOC_FAZAL_URL = (
     "https://ars.els-cdn.com/content/image/"
     "1-s2.0-S0092867419305550-mmc3.xlsx"
 )
+
 
 class RNALocalizationFazal(BenchmarkDataset):
     """RNA Subcellular Localization Dataset.
@@ -59,7 +55,10 @@ class RNALocalizationFazal(BenchmarkDataset):
             raise
 
         print("Downloading raw data...")
-        self.raw_data_path = download_file(RNA_LOC_FAZAL_URL, self.raw_data_dir)
+        self.raw_data_path = download_file(
+            RNA_LOC_FAZAL_URL,
+            self.raw_data_dir
+        )
 
         data = pd.read_excel(
             self.raw_data_path,
@@ -84,7 +83,6 @@ class RNALocalizationFazal(BenchmarkDataset):
         data.drop(columns=data_cols, inplace=True)
 
         id_to_gene = {g.id.split('.')[0]: g for g in genome.genes}
-        transcript_dict = {t.id :t for t in genome.transcripts}
 
         df_data = []
 
@@ -100,7 +98,6 @@ class RNALocalizationFazal(BenchmarkDataset):
                 principal = max(transcripts, key=lambda t: len(t))
             else:
                 principal = appris_transcripts[0]
-
 
             cds = create_cds_track(principal)
             splice = create_splice_track(principal)
