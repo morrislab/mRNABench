@@ -72,7 +72,7 @@ class LNCRNAEssHAP1(LNCRNAEssentiality):
             "lncrna-ess-hap1",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "lncrna-ess/resolve/main/lncrna-ess-hap1.parquet"
             )
         )
@@ -91,7 +91,7 @@ class LNCRNAEssHEK293FT(LNCRNAEssentiality):
             "lncrna-ess-hek293ft",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "lncrna-ess/resolve/main/lncrna-ess-hek293ft.parquet"
             )
         )
@@ -110,7 +110,7 @@ class LNCRNAEssK562(LNCRNAEssentiality):
             "lncrna-ess-k562",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "lncrna-ess/resolve/main/lncrna-ess-k562.parquet"
             )
         )
@@ -129,7 +129,7 @@ class LNCRNAEssMDA_MB_231(LNCRNAEssentiality):
             "lncrna-ess-mda-mb-231",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "lncrna-ess/resolve/main/lncrna-ess-mda-mb-231.parquet"
             )
         )
@@ -148,7 +148,7 @@ class LNCRNAEssTHP1(LNCRNAEssentiality):
             "lncrna-ess-thp1",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "lncrna-ess/resolve/main/lncrna-ess-thp1.parquet"
             )
         )
@@ -167,7 +167,7 @@ class LNCRNAEssShared(LNCRNAEssentiality):
             "lncrna-ess-shared",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "lncrna-ess/resolve/main/lncrna-ess-shared.parquet"
             )
         )

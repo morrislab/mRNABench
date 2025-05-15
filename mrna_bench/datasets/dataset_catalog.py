@@ -4,22 +4,6 @@ from .benchmark_dataset import BenchmarkDataset
 from .go_bio_proc import GOBiologicalProcess
 from .go_cell_comp import GOCellularComponent
 from .go_mol_func import GOMolecularFunction
-from .pcg_essentiality import (
-    PCGEssHAP1,
-    PCGEssHEK293FT,
-    PCGEssK562,
-    PCGEssMDA_MB_231,
-    PCGEssTHP1,
-    PCGEssShared
-)
-from .lncrna_essentiality import (
-    LNCRNAEssHAP1,
-    LNCRNAEssHEK293FT,
-    LNCRNAEssK562,
-    LNCRNAEssMDA_MB_231,
-    LNCRNAEssTHP1,
-    LNCRNAEssShared
-)
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
 from .rna_loc_fazal import RNALocalizationFazal
@@ -48,18 +32,6 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "go-bp": GOBiologicalProcess,
     "go-cc": GOCellularComponent,
     "go-mf": GOMolecularFunction,
-    "pcg-ess-hap1": PCGEssHAP1,
-    "pcg-ess-hek293ft": PCGEssHEK293FT,
-    "pcg-ess-k562": PCGEssK562,
-    "pcg-ess-mda-mb-231": PCGEssMDA_MB_231,
-    "pcg-ess-thp1": PCGEssTHP1,
-    "pcg-ess-shared": PCGEssShared,
-    "lncrna-ess-hap1": LNCRNAEssHAP1,
-    "lncrna-ess-hek293ft": LNCRNAEssHEK293FT,
-    "lncrna-ess-k562": LNCRNAEssK562,
-    "lncrna-ess-mda-mb-231": LNCRNAEssMDA_MB_231,
-    "lncrna-ess-thp1": LNCRNAEssTHP1,
-    "lncrna-ess-shared": LNCRNAEssShared,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
@@ -203,24 +175,3 @@ DATASET_INFO = {
         "split_type": "homology",
     },
 }
-
-for ttype in ["pcg", "lncrna"]:
-    split_type = "homology" if ttype == "pcg" else "default"
-    for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
-
-        cell_upper = cell.upper()
-
-        DATASET_INFO[f"{ttype}-ess-{cell}"] = {
-            "dataset": f"{ttype}-ess-{cell}",
-            "task": "classification",
-            "target_col": f"target_essential_{cell_upper}",
-            "split_type": split_type,
-        }
-
-        if cell != "shared":
-            DATASET_INFO[f"{ttype}-ess-{cell}-day14-log2fc"] = {
-                "dataset": f"{ttype}-ess-{cell}",
-                "task": "reg_ridge",
-                "target_col": f"target_day14_log2fc_{cell_upper}",
-                "split_type": split_type,
-            }

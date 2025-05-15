@@ -23,7 +23,7 @@ class ProteinLocalization(BenchmarkDataset):
             species="human",
             force_redownload=force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "protein-localization/resolve/main/prot-loc.parquet"
             )
         )
