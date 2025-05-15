@@ -15,94 +15,66 @@ from mrna_bench.models.embedding_model import EmbeddingModel
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 
 
-def create_block(
-    d_model,
-    ssm_cfg=None,
-    norm_epsilon=1e-5,
-    residual_in_fp32=False,
-    fused_add_norm=False,
-    layer_idx=None,
-    device=None,
-    dtype=None,
-):
-    if ssm_cfg is None:
-        ssm_cfg = {}
-    factory_kwargs = {"device": device, "dtype": dtype}
-    mix_cls = partial(Mamba, layer_idx=layer_idx, **ssm_cfg, **factory_kwargs)
-    norm_cls = partial(nn.LayerNorm, eps=norm_epsilon, **factory_kwargs)
-    block = Block(
-        d_model,
-        mix_cls,
-        norm_cls=norm_cls,
-        fused_add_norm=fused_add_norm,
-        residual_in_fp32=residual_in_fp32,
-    )
+def create_block(d_model: int, layer_idx: int) -> Block:
+    """Create Mamba block.
+
+    Condensed implementation from Mamba github repo.
+
+    Args:
+        d_model: Dimension of model.
+        layer_idx: Layer index.
+
+    Returns:
+        Mamba block.
+    """
+    mix_cls = partial(Mamba, layer_idx=layer_idx)
+    block = Block(d_model, mix_cls)
     block.layer_idx = layer_idx
     return block
 
 
 class MixerModel(nn.Module):
+    """Implementation of Mamber Mixer condensed from Mamba repo."""
 
-    def __init__(
-        self,
-        d_model: int,
-        n_layer: int,
-        input_dim: int,
-        ssm_cfg=None,
-        norm_epsilon: float = 1e-5,
-        rms_norm: bool = False,
-        initializer_cfg=None,
-        fused_add_norm=False,
-        residual_in_fp32=False,
-        device=None,
-        dtype=None,
-    ) -> None:
-        factory_kwargs = {"device": device, "dtype": dtype}
+    def __init__(self, d_model: int, n_layer: int, input_dim: int):
+        """Initialize Mixer model.
+
+        Args:
+            d_model: Dimension of model.
+            n_layer: Number of layers.
+            input_dim: Input dimension.
+        """
         super().__init__()
-        self.residual_in_fp32 = residual_in_fp32
 
-        self.embedding = nn.Linear(input_dim, d_model, **factory_kwargs)
+        self.embedding = nn.Linear(input_dim, d_model)
 
-        self.layers = nn.ModuleList(
-            [
-                create_block(
-                    d_model,
-                    ssm_cfg=ssm_cfg,
-                    norm_epsilon=norm_epsilon,
-                    residual_in_fp32=residual_in_fp32,
-                    fused_add_norm=fused_add_norm,
-                    layer_idx=i,
-                    **factory_kwargs,
-                )
-                for i in range(n_layer)
-            ]
-        )
+        blocks = [create_block(d_model, layer_idx=i) for i in range(n_layer)]
+        self.layers = nn.ModuleList(blocks)
 
-        self.norm_f = nn.LayerNorm(d_model, eps=norm_epsilon, **factory_kwargs)
+        self.norm_f = nn.LayerNorm(d_model)
 
-        self.apply(
-            partial(
-                self._init_weights,
-                n_layer=n_layer,
-                **(initializer_cfg if initializer_cfg is not None else {}),
-            )
-        )
+        self.apply(partial(self._init_weights, n_layer=n_layer))
 
-    def forward(self, x, inference_params=None, channel_last=False):
+    def forward(self, x: torch.Tensor, channel_last=False) -> torch.Tensor:
+        """Mamba mixer forward pass.
+
+        Args:
+            x: Input tensor.
+            channel_last: Whether the input tensor is in channel last format.
+
+        Returns:
+            Output tensor.
+        """
         if not channel_last:
             x = x.transpose(1, 2)
 
         hidden_states = self.embedding(x)
-        residual = None
+        res = None
         for layer in self.layers:
-            hidden_states, residual = layer(
-                hidden_states, residual, inference_params=inference_params
-            )
+            hidden_states, res = layer(hidden_states, res)
 
-        residual = (hidden_states + residual) if residual is not None else hidden_states
-        hidden_states = self.norm_f(
-            residual.to(dtype=self.norm_f.weight.dtype)
-        )
+        res = (hidden_states + res) if res is not None else hidden_states
+        hidden_states = self.norm_f(res.to(dtype=self.norm_f.weight.dtype))
 
         hidden_states = hidden_states
 
@@ -112,10 +84,11 @@ class MixerModel(nn.Module):
     def _init_weights(
         module,
         n_layer,
-        initializer_range=0.02,  # Now only used for embedding layer.
+        initializer_range=0.02,
         rescale_prenorm_residual=True,
-        n_residuals_per_layer=1,  # Change to 2 if we have MLP
+        n_residuals_per_layer=1,
     ):
+        """Initialize weights of Mamba model."""
         if isinstance(module, nn.Linear):
             if module.bias is not None:
                 if not getattr(module.bias, "_no_reinit", False):
@@ -132,7 +105,7 @@ class MixerModel(nn.Module):
 
 
 class NaiveMamba(EmbeddingModel):
-    """Naive Mamba model which uses default initialization."""
+    """Naive Mamba which uses Mamba random initialization without training."""
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -140,7 +113,7 @@ class NaiveMamba(EmbeddingModel):
         return model_version
 
     def __init__(self, model_version: str, device: torch.device):
-        """Initialize Orthrus model.
+        """Initialize NaiveMamba model.
 
         Args:
             model_version: Unused.
@@ -164,14 +137,14 @@ class NaiveMamba(EmbeddingModel):
         sequence: str,
         agg_fn: Callable | None = None
     ) -> torch.Tensor:
-        """Embed sequence using four track Orthrus.
+        """Embed sequence using four track Naive Mamba.
 
         Args:
             sequence: Sequence to embed.
             agg_fn: Currently unused.
 
         Returns:
-            Orthrus representation of sequence.
+            Naive Mamba representation of sequence.
         """
         _, _ = sequence, agg_fn
         raise NotImplementedError("Four track not yet supported.")
@@ -183,10 +156,7 @@ class NaiveMamba(EmbeddingModel):
         splice: np.ndarray,
         agg_fn: Callable | None = None,
     ) -> torch.Tensor:
-        """Embed sequence using six track Orthrus.
-
-        Expects binary encoded tracks denoting the beginning of each codon
-        in the CDS and the 5' ends of each splice site.
+        """Embed sequence using six track Naive Mamba.
 
         Args:
             sequence: Sequence to embed.
@@ -195,7 +165,7 @@ class NaiveMamba(EmbeddingModel):
             agg_fn: Currently unused.
 
         Returns:
-            Orthrus representation of sequence.
+            Naive Mamba representation of sequence.
         """
         if agg_fn is not None:
             raise NotImplementedError(
