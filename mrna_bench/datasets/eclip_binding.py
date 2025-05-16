@@ -104,7 +104,7 @@ class eCLIPBindingK562(eCLIPBinding):
             "eclip-binding-k562",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "eclip/resolve/main/eclip-k562.parquet"
             )
         )
@@ -125,7 +125,7 @@ class eCLIPBindingHepG2(eCLIPBinding):
             "eclip-binding-hepg2",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "eclip/resolve/main/eclip-hepg2.parquet"
             )
         )
