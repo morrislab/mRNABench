@@ -1,26 +1,14 @@
 from collections.abc import Callable
 
 from .benchmark_dataset import BenchmarkDataset
+from .go_bio_proc import GOBiologicalProcess
+from .go_cell_comp import GOCellularComponent
 from .go_mol_func import GOMolecularFunction
-from .pcg_essentiality import (
-    PCGEssHAP1,
-    PCGEssHEK293FT,
-    PCGEssK562,
-    PCGEssMDA_MB_231,
-    PCGEssTHP1,
-    PCGEssShared
-)
-from .lncrna_essentiality import (
-    LNCRNAEssHAP1,
-    LNCRNAEssHEK293FT,
-    LNCRNAEssK562,
-    LNCRNAEssMDA_MB_231,
-    LNCRNAEssTHP1,
-    LNCRNAEssShared
-)
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
+from .rna_loc_fazal import RNALocalizationFazal
 from .rna_loc_ietswaart import RNALocalizationIetswaart
+from .mrl_hl_lbkwk import MRLHLLBKWK
 from .prot_loc import ProteinLocalization
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
@@ -41,23 +29,15 @@ from .eclip_binding import (
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "eclip-binding-k562": eCLIPBindingK562,
     "eclip-binding-hepg2": eCLIPBindingHepG2,
+    "go-bp": GOBiologicalProcess,
+    "go-cc": GOCellularComponent,
     "go-mf": GOMolecularFunction,
-    "pcg-ess-hap1": PCGEssHAP1,
-    "pcg-ess-hek293ft": PCGEssHEK293FT,
-    "pcg-ess-k562": PCGEssK562,
-    "pcg-ess-mda-mb-231": PCGEssMDA_MB_231,
-    "pcg-ess-thp1": PCGEssTHP1,
-    "pcg-ess-shared": PCGEssShared,
-    "lncrna-ess-hap1": LNCRNAEssHAP1,
-    "lncrna-ess-hek293ft": LNCRNAEssHEK293FT,
-    "lncrna-ess-k562": LNCRNAEssK562,
-    "lncrna-ess-mda-mb-231": LNCRNAEssMDA_MB_231,
-    "lncrna-ess-thp1": LNCRNAEssTHP1,
-    "lncrna-ess-shared": LNCRNAEssShared,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
+    "rna-loc-fazal": RNALocalizationFazal,
     "rna-loc-ietswaart": RNALocalizationIetswaart,
     "prot-loc": ProteinLocalization,
+    "mrl-hl-lbkwk": MRLHLLBKWK,
     "mrl-sugimoto": MRLSugimoto,
     "mrl-sample-egfp": MRLSampleEGFP,
     "mrl-sample-mcherry": MRLSampleMCherry,
@@ -80,11 +60,35 @@ DATASET_INFO = {
         "target_col": eCLIP_HepG2_TOP_RBPS_LIST,
         "split_type": "homology",
     },
+    "go-bp": {
+        "dataset": "go-bp",
+        "task": "multilabel",
+        "target_col": "target",
+        "split_type": "homology",
+    },
+    "go-cc": {
+        "dataset": "go-cc",
+        "task": "multilabel",
+        "target_col": "target",
+        "split_type": "homology",
+    },
     "go-mf": {
         "dataset": "go-mf",
         "task": "multilabel",
         "target_col": "target",
         "split_type": "homology",
+    },
+    "mrl-hl-lbkwk-hl": {
+        "dataset": "mrl-hl-lbkwk",
+        "task": "reg_ridge",
+        "target_col": "target_in_cell_half_life",
+        "split_type": "default",
+    },
+    "mrl-hl-lbkwk-mrl": {
+        "dataset": "mrl-hl-lbkwk",
+        "task": "reg_ridge",
+        "target_col": "target_ribosome_load",
+        "split_type": "default",
     },
     "mrl-sugimoto": {
         "dataset": "mrl-sugimoto",
@@ -146,6 +150,12 @@ DATASET_INFO = {
         "target_col": "target",
         "split_type": "homology",
     },
+    "rna-loc-fazal": {
+        "dataset": "rna-loc-fazal",
+        "task": "multilabel",
+        "target_col": "target",
+        "split_type": "homology",
+    },
     "rna-loc-ietswaart": {
         "dataset": "rna-loc-ietswaart",
         "task": "multilabel",
@@ -165,24 +175,3 @@ DATASET_INFO = {
         "split_type": "homology",
     },
 }
-
-for ttype in ["pcg", "lncrna"]:
-    split_type = "homology" if ttype == "pcg" else "default"
-    for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
-
-        cell_upper = cell.upper()
-
-        DATASET_INFO[f"{ttype}-ess-{cell}"] = {
-            "dataset": f"{ttype}-ess-{cell}",
-            "task": "classification",
-            "target_col": f"target_essential_{cell_upper}",
-            "split_type": split_type,
-        }
-
-        if cell != "shared":
-            DATASET_INFO[f"{ttype}-ess-{cell}-day14-log2fc"] = {
-                "dataset": f"{ttype}-ess-{cell}",
-                "task": "reg_ridge",
-                "target_col": f"target_day14_log2fc_{cell_upper}",
-                "split_type": split_type,
-            }
