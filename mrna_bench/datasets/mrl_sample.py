@@ -66,9 +66,8 @@ MCHERRY_CDS = (
 
 KOZAK_RULES = {
     "strong": [['A', 'G'], ['C', 'A'], ['C', 'G', 'A']],
-    "weak": [['T'], ['G'], ['T', 'C']],
+    "weak":  [['T'], ['G'], ['T', 'C']],
 }
-
 
 class MRLSample(BenchmarkDataset):
     """Mean Ribosome Load Dataset from Sample et al. 2019.
@@ -265,27 +264,22 @@ class MRLSampleEGFP(MRLSample):
             "mrl-sample-egfp",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "mrl-sample/resolve/main/mrl-sample-egfp.parquet"
             )
         )
-
+    
     def _process_raw_data(self) -> pd.DataFrame:
-        """Add post-processing for extra feature columns.
-
-        Add post-processing to add following columns to the dataframe:
-            - u_start: upstream start codon presence
-            - u_oof_start: out-of-frame upstream start codon presence
+        """Add post-processing to add following columns to the dataframe:
+            - u_start: Whether there is an upstream start codon
+            - u_oof_start: Whether there is an out-of-frame upstream start codon
             - kozak_quality: One of "strong", "weak", "mixed"
         """
         # Call super class processing first
         df = super()._process_raw_data()
 
         # Extract utr sequence
-        df['utr'] = df.apply(
-            lambda x: x['sequence'][len(PRIMER_SEQ):-len(EGFP_CDS)],
-            axis=1
-        )
+        df['utr'] = df.apply(lambda x: x['sequence'][len(PRIMER_SEQ):-len(EGFP_CDS)], axis=1)
 
         # Classify each utr as having an upstream start codon, and whether
         # that start codon is out-of-frame
@@ -299,24 +293,23 @@ class MRLSampleEGFP(MRLSample):
         df.drop(columns=["utr"], inplace=True)
 
         return df
-
+    
     @staticmethod
     def _has_upstream_start(utr: str) -> tuple:
-        """Look for upstream start codons, and whether they are out-of-frame.
+        """Look for any upstream start codons, and whether they are out-of-frame
+            Args:
+                utr: utr sequence.
 
-        Args:
-            utr: utr sequence.
-
-        Returns:
-            Tuple of (bool, bool), indicating whether an upstream start codon
-            exists, and whether it is also out-of-frame
+            Returns:
+                Tuple of (bool, bool), indicating whether an upstream start codon exists,
+                and whether it is also out-of-frame
         """
         # Find all start codon positions
         atg_positions = []
-        for i in range(len(utr) - 2):
-            if utr[i:i + 3].upper() == START_CODON:
+        for i in range(len(utr)-2):
+            if utr[i:i+3].upper() == START_CODON:
                 atg_positions.append(i)
-
+        
         has_upstream_start = len(atg_positions) > 0
         has_oof_start = False
         # Check if any ATG is out of frame relative to CDS
@@ -337,28 +330,22 @@ class MRLSampleEGFP(MRLSample):
             utr: utr sequence
 
         Returns:
-            "strong", "weak", or "mixed" based on positional base preferences.
+            One of "strong", "weak", or "mixed" based on positional base preferences.
         """
-        # Since CDS is constant in this data
-        # only the last 3-mer of the UTR matters
+        # Since CDS is constant in this data, only the last 3-mer of the UTR matters
         kozak_prefix = utr[-3:]
 
         def matches(rule):
-            return all(
-                base in matching_bases
-                for base, matching_bases in
-                zip(kozak_prefix, KOZAK_RULES[rule])
-            )
+            return all(base in matching_bases for base, matching_bases in zip(kozak_prefix, KOZAK_RULES[rule]))
 
         strong = matches("strong")
         weak = matches("weak")
 
-        # If it falls into both buckets, or neither -
+        # If it falls into both buckets, or neither - 
         # this is a "mixed" or "in between" sequence
         if strong == weak:
             return "mixed"
         return "strong" if strong else "weak"
-
 
 class MRLSampleMCherry(MRLSample):
     """Concrete class for MRL Sample for mCherry experiments."""
@@ -373,7 +360,7 @@ class MRLSampleMCherry(MRLSample):
             "mrl-sample-mcherry",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "mrl-sample/resolve/main/mrl-sample-mcherry.parquet"
             )
         )
@@ -392,7 +379,7 @@ class MRLSampleDesigned(MRLSample):
             "mrl-sample-designed",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "mrl-sample/resolve/main/mrl-sample-designed.parquet"
             )
         )
@@ -411,7 +398,7 @@ class MRLSampleVarying(MRLSample):
             "mrl-sample-varying",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "mrl-sample/resolve/main/mrl-sample-varying.parquet"
             )
         )

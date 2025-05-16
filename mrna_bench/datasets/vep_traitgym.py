@@ -278,7 +278,7 @@ class VEPTraitGymMendelian(VEPTraitGym):
             "vep-traitgym-mendelian",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "vep-traitgym-mrna/resolve/main/vep-traitgym-mendelian.parquet"
             )
         )
@@ -297,7 +297,7 @@ class VEPTraitGymComplex(VEPTraitGym):
             "vep-traitgym-complex",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "vep-traitgym-mrna/resolve/main/vep-traitgym-complex.parquet"
             )
         )

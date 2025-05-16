@@ -23,7 +23,7 @@ class RNAHalfLifeHuman(BenchmarkDataset):
             species="human",
             force_redownload=force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "rnahl-saluki-human/resolve/main/rnahl-saluki-human.parquet"
             )
         )

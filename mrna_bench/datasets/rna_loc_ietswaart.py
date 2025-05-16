@@ -17,7 +17,7 @@ class RNALocalizationIetswaart(BenchmarkDataset):
             species="human",
             force_redownload=force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "rna-loc-ietswaart/resolve/main/rna-loc-ietswaart.parquet"
             )
         )

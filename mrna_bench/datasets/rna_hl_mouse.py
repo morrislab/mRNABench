@@ -23,7 +23,7 @@ class RNAHalfLifeMouse(BenchmarkDataset):
             species="mouse",
             force_redownload=force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
+                "https://huggingface.co/datasets/quietflamingo/"
                 "rnahl-saluki-mouse/resolve/main/rnahl-saluki-mouse.parquet"
             )
         )

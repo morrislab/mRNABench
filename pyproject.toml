@@ -1,20 +1,20 @@
 [project]
 name = "mrna-bench"
-version = "1.2.1"
+version = "1.2.0"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
     { name = "Ruian (Ian) Shi", email = "ian.shi@mail.utoronto.ca" },
-    { name = "Taykhoom Dalal", email = "tid4007@med.cornell.edu" },
-    { name = "Phil Fradkin", email = "phil.fradkin@gmail.com" },
-    { name = "Divya Koyyalagunta", email = "dko4001@med.cornell.edu" }
+    { name = "Taykhoom Dalal" },
+    { name = "Phil Fradkin" },
+    { name = "Divya Koyyalagunta" }
 ]
 requires-python = ">= 3.10"
 license = { file = "LICENSE" }  # Include a LICENSE file in your repo
 keywords = ["mrna", "genomic foundation model", "benchmark"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: Unix"
 ]
 dependencies = [
@@ -23,10 +23,7 @@ dependencies = [
     "scikit-learn",
     "numpy<2",
     "pandas<=2.2.2",
-    "requests",
-    "pyarrow",
-    "fastparquet",
-    "openpyxl"
+    "requests"
 ]
 
 [project.urls]
@@ -40,6 +37,7 @@ base_models = [
     "rna-fm==0.2.2",
     "accelerate",
     "multimolecule",
+    "modelgenerator==0.1.1-4",
     "evo-model"
 ]
 dev = [
