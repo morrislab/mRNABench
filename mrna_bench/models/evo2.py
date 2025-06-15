@@ -65,7 +65,8 @@ class Evo2(EmbeddingModel):
         ]
 
         if model_version in ["evo2_40b", "evo2_7b"]:
-            self.max_length = 1_000_000
+            # self.max_length = 1_000_000
+            self.max_length = 100_000
 
         revert_model_cache_var(old_hf_cache)
 
