@@ -63,6 +63,20 @@ class HyenaDNA(EmbeddingModel):
 
         self.tokenizer = tokenizer
         self.model = model
+        self.max_length = self._get_max_length()
+
+    def _get_max_length(self) -> int:
+        """Get maximum sequence length for model."""
+        context = self.model_version.split("-")[2]
+        if context[-1] == "k":
+            return int(context[:-1]) * 1000
+        elif context[-1] == "m":
+            return int(context[:-1]) * 1000000
+        else:
+            raise ValueError(
+                "Invalid context length in model version. "
+                "Expected 'k' or 'm' suffix."
+            )
 
     def embed_sequence(
         self,
@@ -78,10 +92,19 @@ class HyenaDNA(EmbeddingModel):
         Returns:
             HyenaDNA representation of sequence.
         """
+        chunks = self.chunk_sequence(sequence, self.max_length)
+
+        embedding_chunks = []
+
         with torch.inference_mode():
-            inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
-            inputs = inputs.to(self.device)
-            hidden_states = self.model(inputs)[0]
+            for c in chunks:
+                inputs = self.tokenizer(c, return_tensors="pt")["input_ids"]
+                inputs = inputs.to(self.device)
+
+                hidden_states = self.model(inputs)[0]
+                embedding_chunks.append(hidden_states)
+
+            hidden_states = torch.cat(embedding_chunks, dim=1)
 
         embedding_mean = agg_fn(hidden_states, dim=1)
         return embedding_mean

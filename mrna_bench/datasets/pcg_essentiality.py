@@ -72,7 +72,7 @@ class PCGEssHAP1(PCGEssentiality):
             "pcg-ess-hap1",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "pcg-ess/resolve/main/pcg-ess-hap1.parquet"
             )
         )
@@ -91,7 +91,7 @@ class PCGEssHEK293FT(PCGEssentiality):
             "pcg-ess-hek293ft",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "pcg-ess/resolve/main/pcg-ess-hek293ft.parquet"
             )
         )
@@ -110,7 +110,7 @@ class PCGEssK562(PCGEssentiality):
             "pcg-ess-k562",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "pcg-ess/resolve/main/pcg-ess-k562.parquet"
             )
         )
@@ -129,7 +129,7 @@ class PCGEssMDA_MB_231(PCGEssentiality):
             "pcg-ess-mda-mb-231",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "pcg-ess/resolve/main/pcg-ess-mda-mb-231.parquet"
             )
         )
@@ -148,7 +148,7 @@ class PCGEssTHP1(PCGEssentiality):
             "pcg-ess-thp1",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "pcg-ess/resolve/main/pcg-ess-thp1.parquet"
             )
         )
@@ -167,7 +167,7 @@ class PCGEssShared(PCGEssentiality):
             "pcg-ess-shared",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "pcg-ess/resolve/main/pcg-ess-shared.parquet"
             )
         )

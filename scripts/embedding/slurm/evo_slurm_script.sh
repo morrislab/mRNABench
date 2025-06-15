@@ -1,14 +1,15 @@
 #!/bin/bash
 
-#SBATCH --job-name=embed
+#SBATCH --job-name=evo_embed
 #SBATCH --partition=morrisq,gpu,gpushort
 #SBATCH --gres=gpu:1
+#SBATCH --constraint=h100
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=8GB
-#SBATCH --time=01:00:00
-#SBATCH --output=./logs/embed.%A.out
-#SBATCH --error=./logs/embed.%A.err
+#SBATCH --time=02:00:00
+#SBATCH --output=./logs/evo_embed.%A.out
+#SBATCH --error=./logs/evo_embed.%A.err
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -23,13 +24,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 source /home/dalalt1/compute/miniforge3/etc/profile.d/conda.sh
-
-# if the model class is Evo2, activate the Evo2 conda environment
-if [[ "$model_class" == "Evo2" ]]; then
-    conda activate /home/dalalt1/compute/miniforge3/envs/evo_bench
-else
-    conda activate /home/dalalt1/compute/miniforge3/envs/mrna_bench
-fi
+conda activate /home/dalalt1/compute/miniforge3/envs/evo_bench
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 python ../embed_dataset.py \

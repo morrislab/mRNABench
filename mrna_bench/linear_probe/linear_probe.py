@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 
 from sklearn.base import BaseEstimator
-from sklearn.linear_model import RidgeCV, LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.multioutput import MultiOutputClassifier
 
 from mrna_bench.data_splitter.data_splitter import DataSplitter
@@ -151,7 +152,15 @@ class LinearProbe:
         splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
-        model.fit(splits["train_X"], splits["train_y"])
+
+        try:
+            model.fit(splits["train_X"], splits["train_y"])
+        except ValueError:
+            if self.task in ["regression", "reg_ridge"]:
+                model = Ridge(solver="sag", alpha=1e-3)
+                model.fit(splits["train_X"], splits["train_y"])
+            else:
+                raise
 
         self.models[random_seed] = model
 
