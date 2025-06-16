@@ -265,7 +265,7 @@ class MRLSampleEGFP(MRLSample):
             "mrl-sample-egfp",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-egfp.parquet"
             )
         )
@@ -373,7 +373,7 @@ class MRLSampleMCherry(MRLSample):
             "mrl-sample-mcherry",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-mcherry.parquet"
             )
         )
@@ -392,7 +392,7 @@ class MRLSampleDesigned(MRLSample):
             "mrl-sample-designed",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-designed.parquet"
             )
         )
@@ -411,7 +411,7 @@ class MRLSampleVarying(MRLSample):
             "mrl-sample-varying",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-varying.parquet"
             )
         )
