@@ -12,7 +12,7 @@ def load_model(
     model_version: str,
     device: "torch.device",
     checkpoint: str = None,
-    model_repository: str = "/data1/morrisq/ian/rna_contrast/runs/"
+    model_repository: str = "/data1/morrisq/dalalt1/Orthrus/runs/"
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
