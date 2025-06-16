@@ -9,6 +9,7 @@ from .rna_hl_mouse import RNAHalfLifeMouse
 from .rna_loc_fazal import RNALocalizationFazal
 from .rna_loc_ietswaart import RNALocalizationIetswaart
 from .mrl_hl_lbkwk import MRLHLLBKWK
+from .pal_tail_length_xiang import PALTailLengthHuman
 from .prot_loc import ProteinLocalization
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
@@ -36,6 +37,7 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
     "rna-loc-ietswaart": RNALocalizationIetswaart,
+    "pal-tail-length-xiang": PALTailLengthHuman,
     "prot-loc": ProteinLocalization,
     "mrl-hl-lbkwk": MRLHLLBKWK,
     "mrl-sugimoto": MRLSugimoto,
@@ -117,6 +119,12 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
         "task": ["reg_ridge"],
         "target_col": ["target_mrl_varying_length"],
         "split_type": "default",
+    },
+    "pal-tail-length-xiang": {
+        "dataset": "pal-tail-length-xiang",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
+        "split_type": "homology",
     },
     "prot-loc": {
         "dataset": "prot-loc",
