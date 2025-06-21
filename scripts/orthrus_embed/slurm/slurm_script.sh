@@ -25,8 +25,12 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-source /home/dalalt1/compute/miniforge3/etc/profile.d/conda.sh
-conda activate /home/dalalt1/compute/miniforge3/envs/cerberus
+echo date: Job $SLURM_JOB_ID is allocated resource
+echo "Starting task $SLURM_ARRAY_TASK_ID"
+
+# virtual env
+eval "$(conda shell.bash hook)"
+conda activate mrna_bench
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 

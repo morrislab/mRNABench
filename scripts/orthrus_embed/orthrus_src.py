@@ -8,7 +8,7 @@ import numpy as np
 
 from torch.utils.checkpoint import checkpoint
 
-from importlib.metadata import version
+from importlib.metadata import version, PackageNotFoundError
 
 # extract version of mamba_ssm
 try:

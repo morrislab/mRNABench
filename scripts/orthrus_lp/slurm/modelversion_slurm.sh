@@ -25,8 +25,12 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-source /home/dalalt1/compute/miniforge3/etc/profile.d/conda.sh
-conda activate /home/dalalt1/compute/miniforge3/envs/mrna_bench
+echo date: Job $SLURM_JOB_ID is allocated resource
+echo "Starting task $SLURM_ARRAY_TASK_ID"
+
+# virtual env
+eval "$(conda shell.bash hook)"
+conda activate mrna_bench
 
 # if force_recompute is set to True
 if [ "$force_recompute" == "True" ]; then

@@ -221,3 +221,15 @@ for ttype in ["pcg", "lncrna"]:
                 ],
                 "split_type": split_type,
             }
+
+# This list defines the canonical order of target columns for aggregation scripts.
+# It is programmatically generated to include all targets from DATASET_INFO
+# in the order they appear.
+TASK_ORDER = []  # Now a list of unique "dataset:target" strings
+_seen_strings = set()
+for info in DATASET_INFO.values():
+    for target in info.get("target_col", []):
+        unique_target_id = f"{info['dataset']}:{target}"
+        if unique_target_id not in _seen_strings:
+            TASK_ORDER.append(unique_target_id)
+            _seen_strings.add(unique_target_id)
