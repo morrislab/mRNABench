@@ -19,10 +19,14 @@ most models (except Evo2 and Helix mRNA) can be installed as shown below. Note t
 2.2.2 with CUDA 12.1.
 
 ```bash
-conda create --name mrna_bench python=3.10
+conda create --name mrna_bench python=3.10 gxx=12.2.0 -y
 conda activate mrna_bench
+conda install conda-forge::genomekit=6.5.3
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+# optionals: pip install jupyter
+
+cd path/to/mRNA/bench
 pip install -e .[base_models,dev]
 ```
 Inference with other models will require the installation of the model's
@@ -38,6 +42,7 @@ I had to manually move the checkpoint into its corresponding snapshot directory.
 ```bash
 conda create --name evo_bench -c conda-forge python=3.11 gxx=12.2.0 -y
 conda activate evo_bench
+conda install conda-forge::genomekit=6.5.3
 
 pip install torch==2.6.0+cu124 --index-url https://download.pytorch.org/whl/cu124
 pip install vtx==1.0.4
