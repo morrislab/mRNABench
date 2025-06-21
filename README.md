@@ -41,10 +41,14 @@ pip install mrna-bench
 The inference-capable version of mRNABench that can generate embeddings using most models (except Evo2 and Helix mRNA) can be installed as shown below.
 
 ```bash
-conda create --name mrna_bench python=3.10
+conda create --name mrna_bench python=3.10 gxx=12.2.0 -y
 conda activate mrna_bench
+conda install conda-forge::genomekit=6.5.3
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+# optionals: pip install jupyter
+
+cd path/to/mRNA/bench
 pip install -e .[base_models,dev]
 ```
 Inference with other models will require the installation of the model's
