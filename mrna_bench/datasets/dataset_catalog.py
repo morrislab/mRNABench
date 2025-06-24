@@ -9,7 +9,10 @@ from .rna_hl_mouse import RNAHalfLifeMouse
 from .rna_loc_fazal import RNALocalizationFazal
 from .rna_loc_ietswaart import RNALocalizationIetswaart
 from .mrl_hl_lbkwk import MRLHLLBKWK
-from .pal_tail_length_xiang import PALTailLengthHuman
+from .pal_tail_length_xiang import (
+    PALTailLengthGV,
+    PALTailLengthGVTomii
+)
 from .prot_loc import ProteinLocalization
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
@@ -17,6 +20,10 @@ from .mrl_sample import (
     MRLSampleMCherry,
     MRLSampleDesigned,
     MRLSampleVarying
+)
+from .utr_variants_bohn import (
+    UTRVariantsBohnUTR5,
+    UTRVariantsBohnUTR3
 )
 from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
@@ -37,7 +44,8 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
     "rna-loc-ietswaart": RNALocalizationIetswaart,
-    "pal-tail-length-xiang": PALTailLengthHuman,
+    "pal-tail-length-xiang-gv": PALTailLengthGV,
+    "pal-tail-length-xiang-gvtomii": PALTailLengthGVTomii,
     "prot-loc": ProteinLocalization,
     "mrl-hl-lbkwk": MRLHLLBKWK,
     "mrl-sugimoto": MRLSugimoto,
@@ -45,6 +53,8 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "mrl-sample-mcherry": MRLSampleMCherry,
     "mrl-sample-designed": MRLSampleDesigned,
     "mrl-sample-varying": MRLSampleVarying,
+    "utr-variants-bohn-utr5": UTRVariantsBohnUTR5,
+    "utr-variants-bohn-utr3": UTRVariantsBohnUTR3,
     "vep-traitgym-complex": VEPTraitGymComplex,
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
@@ -120,8 +130,14 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
         "target_col": ["target_mrl_varying_length"],
         "split_type": "default",
     },
-    "pal-tail-length-xiang": {
-        "dataset": "pal-tail-length-xiang",
+    "pal-tail-length-xiang-gv": {
+        "dataset": "pal-tail-length-xiang-gv",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "pal-tail-length-xiang-gvtomii": {
+        "dataset": "pal-tail-length-xiang-gvtomii",
         "task": ["reg_ridge"],
         "target_col": ["target"],
         "split_type": "homology",
@@ -155,6 +171,18 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
         "task": ["multilabel"],
         "target_col": ["target"],
         "split_type": "homology",
+    },
+    "utr-variants-bohn-utr5": {
+        "dataset": "utr-variants-bohn-utr5",
+        "task": ["classification"],
+        "target_col": ["target"],
+        "split_type": "default",
+    },
+    "utr-variants-bohn-utr3": {
+        "dataset": "utr-variants-bohn-utr3",
+        "task": ["classification"],
+        "target_col": ["target"],
+        "split_type": "default",
     },
     "vep-traitgym-complex": {
         "dataset": "vep-traitgym-complex",

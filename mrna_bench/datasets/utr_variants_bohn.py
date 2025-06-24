@@ -5,8 +5,8 @@ from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 from mrna_bench.datasets.dataset_utils import ohe_to_str
 from mrna_bench.utils import download_file
 
-class PALTailLengthHuman(BenchmarkDataset):
-    """PAL Tail Length Human Dataset."""
+class UTRVariantsBohn(BenchmarkDataset):
+    """UTR Variants dataset from Bohn et al."""
 
     def __init__(
         self,
@@ -17,19 +17,19 @@ class PALTailLengthHuman(BenchmarkDataset):
         """Initialize PALTailLengthHuman dataset.
 
         Args:
-            dataset_name: Dataset name formatted pal-tail-length-xiang-{cell_type}
-                where cell_type is in: {
-                    "gv",
-                    "gvtomii"
+            dataset_name: Dataset name formatted utr-variants-bohn-{utr_type}
+                where utr_type is in: {
+                    "utr5",
+                    "utr3",
                 }.
             force_redownload: Force raw data download even if pre-existing.
             hf_url: URL to download the dataset from Hugging Face.
         """
-        if type(self) is PALTailLengthHuman:
-            raise TypeError("PALTailLengthHuman is an abstract class.")
+        if type(self) is UTRVariantsBohn:
+            raise TypeError("UTRVariantsBohn is an abstract class.")
 
         self.cell_type = dataset_name.split("-")[-1]
-        assert self.cell_type in ["gv", "gvtomii"]
+        assert self.cell_type in ["utr5", "utr3"]
 
         super().__init__(dataset_name, "human", force_redownload, hf_url)
 
@@ -38,41 +38,40 @@ class PALTailLengthHuman(BenchmarkDataset):
             "Code documenting PAL tail length data is still in progress."
         )
 
-class PALTailLengthGV(PALTailLengthHuman):
-    """Concrete class for PAL Tail Length dataset (GV cell type)."""
+class UTRVariantsBohnUTR5(UTRVariantsBohn):
+    """Concrete class for UTR Variants dataset (5' UTR)."""
 
     def __init__(self, force_redownload=False):
-        """Initialize PALTailLengthGV dataset.
+        """Initialize UTRVariantsBohnUTR5 dataset.
 
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
         super().__init__(
-            "pal-tail-length-xiang-gv",
+            "utr-variants-bohn-utr5",
             force_redownload,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
-                "pal-tail-length-xiang/resolve/main/"
-                "pal-tail-length-xiang-gv.parquet"
+                "utr-variants-bohn/resolve/main/"
+                "utr-variants-bohn-utr5.parquet"
             )
         )
 
-
-class PALTailLengthGVTomii(PALTailLengthHuman):
-    """Concrete class for PAL Tail Length dataset (GVTomii cell type)."""
+class UTRVariantsBohnUTR3(UTRVariantsBohn):
+    """Concrete class for UTR Variants dataset (3' UTR)."""
 
     def __init__(self, force_redownload=False):
-        """Initialize PALTailLengthGVTomii dataset.
+        """Initialize UTRVariantsBohnUTR3 dataset.
 
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
         super().__init__(
-            "pal-tail-length-xiang-gvtomii",
+            "utr-variants-bohn-utr3",
             force_redownload,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
-                "pal-tail-length-xiang/resolve/main/"
-                "pal-tail-length-xiang-gvtomii.parquet"
+                "utr-variants-bohn/resolve/main/"
+                "utr-variants-bohn-utr3.parquet"
             )
         )
