@@ -200,6 +200,13 @@ class Saluki(EmbeddingModel):
                 "Inference currently does not support alternative aggregation."
             )
 
+        MIN_LEN = 320
+        if len(sequence) < MIN_LEN:
+            pad_len = MIN_LEN - len(sequence)
+            sequence += "N" * pad_len
+            cds = np.pad(cds, (0, pad_len))
+            splice = np.pad(splice, (0, pad_len))
+
         ohe_sequence = str_to_ohe(sequence)
 
         model_input = np.hstack((

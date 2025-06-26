@@ -29,7 +29,7 @@ def str_to_ohe(
     sequence: str,
     nucs: list[str] = ["A", "C", "G", "T"]
 ) -> np.ndarray:
-    """Convert sequence to OHE. Represents "N" as all zeros.
+    """Convert sequence to OHE. Represents "N" and other unknown characters as all zeros.
 
     Args:
         sequence: Sequence to convert.
@@ -41,18 +41,17 @@ def str_to_ohe(
     mapping = {nuc: i for i, nuc in enumerate(nucs)}
     num_classes = len(mapping)
 
-    mapping["N"] = -1
-
-    # Convert sequence to indices
-    indices = np.array([mapping[base] for base in sequence])
+    # Convert sequence to indices, with -1 for 'N' or other characters
+    indices = np.array([mapping.get(base, -1) for base in sequence.upper()])
 
     # Create one-hot encoding
     one_hot = np.zeros((len(sequence), num_classes), dtype=int)
 
-    for i in range(len(sequence)):
-        if indices[i] == -1:
-            continue
-        one_hot[i, indices[i]] = 1
+    # Create a mask for valid indices (non-'N' or other unknown characters)
+    valid_indices_mask = indices != -1
+
+    # Use advanced indexing to set the '1's in one_hot
+    one_hot[valid_indices_mask, indices[valid_indices_mask]] = 1
 
     return one_hot
 
