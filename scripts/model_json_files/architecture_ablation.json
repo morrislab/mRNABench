@@ -1,0 +1,14 @@
+{
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_mamba_small_batch_1_ablation_mamba_small_batch": [
+        "best-epoch=2-step=13728.ckpt",
+        "epoch=4-step=20000.ckpt"
+    ],
+    "resnet_dilated_medium_6t_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_dilated_resnet_medium_1_ablation_dilated_resnet_medium": [
+        "best-epoch=2-step=13728.ckpt",
+        "epoch=4-step=20000.ckpt"
+    ],
+    "saluki_saluki_medium_6t_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_saluki_medium_1_ablation_saluki_medium": [
+        "best-epoch=2-step=13728.ckpt",
+        "epoch=4-step=20000.ckpt"
+    ]
+}

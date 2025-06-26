@@ -4,7 +4,7 @@ from pathlib import Path
 import torch
 
 from mrna_bench import load_dataset
-from orthrus_bench_model import Orthrus
+from orthrus_bench_model import Orthrus, Saluki, DilatedResnetBench
 from mrna_bench.embedder import DatasetEmbedder, get_embedding_filepath
 
 parser = argparse.ArgumentParser()
@@ -22,7 +22,14 @@ if __name__ == "__main__":
     print("Embedding model:", args.model_version, args.checkpoint)
     print("Dataset:", args.dataset_name)
 
-    model = Orthrus(
+    if "saluki" in args.model_version:
+        model_class = Saluki
+    elif "dilated" in args.model_version:
+        model_class = DilatedResnetBench
+    else:
+        model_class = Orthrus
+
+    model = model_class(
         model_version = args.model_version,
         checkpoint = args.checkpoint,
         device = device,

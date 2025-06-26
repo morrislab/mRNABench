@@ -176,7 +176,7 @@ if __name__ == "__main__":
 
         for model_version, ckpt in version_ckpt_iter:
 
-            print("\tModel version:", model_version)
+            # print("\tModel version:", model_version)
 
             model_short_name = (
                 model_version + "_" + ckpt.replace(".ckpt", "")
