@@ -40,9 +40,24 @@ class LinearProbePersister:
         Returns:
             File name used for storing linear probing results.
         """
+        model_name = self.model_short_name
+
+        # Shorten common long substrings in the model name to prevent filesystem errors
+        replacements = {
+            'dilated': 'd',
+            'medium': 'med',
+            'ablation': 'abl',
+            'combined': 'cmb',
+            'splice': 'spl',
+            'epoch=': 'e',
+            'step=': 's'
+        }
+        for old, new in replacements.items():
+            model_name = model_name.replace(old, new)
+
         out_fn = "result_lp_{}_{}_{}_tcol-{}_split-{}".format(
             self.dataset.dataset_name,
-            self.model_short_name,
+            model_name,
             self.task,
             self.target_col,
             self.split_type

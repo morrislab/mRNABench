@@ -32,8 +32,25 @@ from mrna_bench.utils import get_data_path
 from scipy.stats import ttest_ind
 
 # -----------------------------------------------------------------------------
-# Helper for filename parsing
+# Helper for filename parsing and name standardization
 # -----------------------------------------------------------------------------
+
+def _shorten_model_name(model_name: str) -> str:
+    """Consistently shorten verbose model names to prevent filesystem errors."""
+    # This logic must be identical to the one in `mrna_bench.linear_probe.persister`
+    replacements = {
+        'dilated': 'd',
+        'medium': 'med',
+        'ablation': 'abl',
+        'combined': 'cmb',
+        'splice': 'spl',
+        'epoch=': 'e',
+        'step=': 's'
+    }
+    for old, new in replacements.items():
+        model_name = model_name.replace(old, new)
+    return model_name
+
 
 def _parse_filename(fname: str) -> Dict[str, Any] | None:
     """
@@ -171,6 +188,10 @@ def _load_model_ckpt_config(cfg_path: str | Path) -> Set[str]:
             ckpts = [ckpts]
         for ck in ckpts:
             sn = (mv + "_" + ck.replace(".ckpt", "")).replace("_", "-").replace("-track", "").replace("best-", "")
+            
+            # Apply the same shortening logic used for filenames to ensure names match
+            sn = _shorten_model_name(sn)
+                
             short_names.add(sn)
     return short_names
 
@@ -262,8 +283,10 @@ def _get_model_set(config_path: str, model_name: str, model_type: str) -> Set[st
     """Loads a set of models from a config file or a single name."""
     model_set = set()
     if model_name:
-        model_set = {model_name}
-        print(f"Using single model '{model_name}' as {model_type}.")
+        # Ensure single model names are also shortened to match canonical forms
+        short_name = _shorten_model_name(model_name)
+        model_set = {short_name}
+        print(f"Using single model '{model_name}' (shortened to '{short_name}') as {model_type}.")
     elif config_path:
         model_set = _load_model_ckpt_config(config_path)
         print(f"Using {len(model_set)} models from {config_path} as {model_type}.")
@@ -412,6 +435,8 @@ def _get_parser() -> argparse.ArgumentParser:
                         help="Comma-separated list of seed integers to include in the aggregation. Example: 2541,413,421")
     parser.add_argument("--wide_format", action="store_true",
                         help="When set, pivot the output to have one row per model (wide format).")
+    parser.add_argument("--raw_per_seed", action="store_true",
+                        help="When set, output the raw, per-seed results instead of aggregating. Overrides --wide_format.")
     parser.add_argument("--no_aggregate_eclip", action="store_true", help="Show metrics for each eCLIP RBP individually instead of aggregating.")
     # --- Arguments for Z-score and significance testing ---
     parser.add_argument("--zscore_ref_config_file", type=str, default="",
@@ -432,6 +457,19 @@ def _get_parser() -> argparse.ArgumentParser:
 def _run_zscore_and_significance_analysis(df: pd.DataFrame, args: argparse.Namespace):
     """Orchestrates the Z-score and significance testing analysis."""
     print("--- Running Z-Score and Significance Analysis ---")
+
+    # --- Apply Fisher Z-transformation to a copy of the data ---
+    # This stabilizes the variance of r/rho values for better averaging and Z-scoring,
+    # without affecting the raw data used for standard aggregation.
+    df_transformed = df.copy()
+    correlation_cols = ['test_r', 'train_r', 'val_r', 'test_p', 'train_p', 'val_p']
+    print("Applying Fisher Z-transformation for Z-score/significance analysis...")
+    for col in correlation_cols:
+        if col in df_transformed.columns:
+            # Clip to avoid infinity at -1 and 1, a common practice for this transformation
+            df_transformed[col] = df_transformed[col].clip(-1 + 1e-9, 1 - 1e-9)
+            df_transformed[col] = np.arctanh(df_transformed[col])
+
     try:
         # 1. Determine reference and test sets
         zscore_ref_models = _get_model_set(args.zscore_ref_config_file, args.zscore_ref_model_name, "reference for Z-Scores")
@@ -443,12 +481,11 @@ def _run_zscore_and_significance_analysis(df: pd.DataFrame, args: argparse.Names
             return
 
         # 2. Loop through tasks to perform task-aware analysis
-        tasks = df['task'].unique()
+        tasks = df_transformed['task'].unique()
         all_pivoted_z_scores = []
         all_sig_results = []
-
         for task in tasks:
-            task_df = df[df['task'] == task].copy()
+            task_df = df_transformed[df_transformed['task'] == task].copy()
 
             # Dynamically find metric columns for this task
             meta_cols = ["dataset", "model", "task", "target", "split", "seed"]
@@ -466,6 +503,11 @@ def _run_zscore_and_significance_analysis(df: pd.DataFrame, args: argparse.Names
             # Generate Z-score report for the task
             if args.z_score_output:
                 avg_z_scores = z_score_df_task.groupby(meta_cols[:-1])[task_zscore_cols].mean().reset_index()
+
+                # Filter to only include test_models in the Z-score report, if they are specified
+                if test_models:
+                    avg_z_scores = avg_z_scores[avg_z_scores['model'].isin(test_models)]
+
                 pivoted_z_score_task = _pivot_summary_wide(avg_z_scores)
                 if not pivoted_z_score_task.empty:
                     all_pivoted_z_scores.append(pivoted_z_score_task)
@@ -502,59 +544,69 @@ def _run_zscore_and_significance_analysis(df: pd.DataFrame, args: argparse.Names
 
 def _run_standard_aggregation(df: pd.DataFrame, args: argparse.Namespace):
     """Orchestrates the standard metric aggregation and summarization."""
-    # ------------------------------------------------------------------
-    # Process each task type independently to handle different metrics
-    # ------------------------------------------------------------------
-    tasks = df['task'].unique()
-    all_summaries = []
-    for task in tasks:
-        task_df = df[df['task'] == task].copy()
-        summary = _process_task_group(task_df)
-        if not summary.empty:
-            all_summaries.append(summary)
-
-    if not all_summaries:
-        print("No data left after processing task groups.")
-        return
-
-    if args.wide_format:
-        # ------------------------------------------------------------------
-        # Pivot each task's summary and merge into a single wide dataframe
-        # ------------------------------------------------------------------
-        all_pivoted_dfs = [_pivot_summary_wide(s) for s in all_summaries]
-
-        # Merge all pivoted dataframes on the 'model' column
-        final_df = reduce(
-            lambda left, right: pd.merge(left, right, on='model', how='outer'),
-            all_pivoted_dfs
+    if args.raw_per_seed:
+        # --- Raw Per-Seed Output ---
+        # The dataframe is already filtered, just sort it for consistent output.
+        final_df = df.sort_values(
+            ['dataset', 'target', 'model', 'split', 'seed'],
+            ignore_index=True
         )
-        # Sort by model name and columns for consistency
-        final_df = final_df.sort_values("model", ignore_index=True)
-        
-        # Make 'model' the first column, then sort the rest alphabetically
-        if 'model' in final_df.columns:
-            cols = final_df.columns.tolist()
-            cols.remove('model')
-            final_df = final_df[['model'] + sorted(cols)]
 
     else:
+        # --- Aggregated Output ---
         # ------------------------------------------------------------------
-        # Combine long-format summaries and apply canonical sorting
+        # Process each task type independently to handle different metrics
         # ------------------------------------------------------------------
-        final_df = pd.concat(all_summaries, ignore_index=True)
+        tasks = df['task'].unique()
+        all_summaries = []
+        for task in tasks:
+            task_df = df[df['task'] == task].copy()
+            summary = _process_task_group(task_df)
+            if not summary.empty:
+                all_summaries.append(summary)
 
-        # Stable row ordering: dataset and task order follows the catalog
-        final_df['canonical_target'] = final_df['dataset'] + ":" + final_df['target']
-        final_df['canonical_target'] = pd.Categorical(
-            final_df['canonical_target'],
-            categories=TASK_ORDER,
-            ordered=True
-        )
-        # Sort and drop the temporary column
-        final_df = final_df.sort_values(
-            ['canonical_target', 'model', 'split'],
-            ignore_index=True
-        ).drop(columns='canonical_target')
+        if not all_summaries:
+            print("No data left after processing task groups.")
+            return
+
+        if args.wide_format:
+            # ------------------------------------------------------------------
+            # Pivot each task's summary and merge into a single wide dataframe
+            # ------------------------------------------------------------------
+            all_pivoted_dfs = [_pivot_summary_wide(s) for s in all_summaries]
+
+            # Merge all pivoted dataframes on the 'model' column
+            final_df = reduce(
+                lambda left, right: pd.merge(left, right, on='model', how='outer'),
+                all_pivoted_dfs
+            )
+            # Sort by model name and columns for consistency
+            final_df = final_df.sort_values("model", ignore_index=True)
+            
+            # Make 'model' the first column, then sort the rest alphabetically
+            if 'model' in final_df.columns:
+                cols = final_df.columns.tolist()
+                cols.remove('model')
+                final_df = final_df[['model'] + sorted(cols)]
+
+        else:
+            # ------------------------------------------------------------------
+            # Combine long-format summaries and apply canonical sorting
+            # ------------------------------------------------------------------
+            final_df = pd.concat(all_summaries, ignore_index=True)
+
+            # Stable row ordering: dataset and task order follows the catalog
+            final_df['canonical_target'] = final_df['dataset'] + ":" + final_df['target']
+            final_df['canonical_target'] = pd.Categorical(
+                final_df['canonical_target'],
+                categories=TASK_ORDER,
+                ordered=True
+            )
+            # Sort and drop the temporary column
+            final_df = final_df.sort_values(
+                ['canonical_target', 'model', 'split'],
+                ignore_index=True
+            ).drop(columns='canonical_target')
 
     # --- Output ---
     if args.output_filename:
@@ -569,6 +621,10 @@ def main():
     parser = _get_parser()
     args = parser.parse_args()
 
+    if args.raw_per_seed and args.wide_format:
+        print("[WARN] --raw_per_seed is specified, so --wide_format will be ignored.")
+        args.wide_format = False
+
     if args.zscore_ref_config_file and args.zscore_ref_model_name:
         parser.error("argument --zscore_ref_config_file: not allowed with argument --zscore_ref_model_name")
     if args.sig_ref_config_file and args.sig_ref_model_name:
@@ -580,13 +636,9 @@ def main():
     # Optional filtering by models / seeds
     # ------------------------------------------------------------------
 
-    if args.config_file:
-        keep_models = _load_model_ckpt_config(args.config_file)
-        rows = [r for r in rows if r["model"] in keep_models]
-
     if args.seeds:
         try:
-            seed_set = {int(s) for s in args.seeds.split(",") if s.strip()}
+            seed_set = {int(s) for s in args.seeds.split(",")}
         except ValueError:
             raise ValueError("--seeds must be a comma-separated list of integers")
         rows = [r for r in rows if r["seed"] in seed_set]
@@ -597,16 +649,22 @@ def main():
 
     df = pd.DataFrame(rows)
 
-    # --- Apply Fisher Z-transformation to correlation coefficients ---
-    # This stabilizes the variance of r/rho values for better averaging and Z-scoring.
-    # Apply Fisher Z-transformation to correlation coefficient columns
-    correlation_cols = ['test_r', 'train_r', 'val_r', 'test_p', 'train_p', 'val_p']
-    for col in correlation_cols:
-        if col in df.columns:
-            # Clip to avoid infinity at -1 and 1, a common practice for this transformation
-            df[col] = df[col].clip(-1 + 1e-9, 1 - 1e-9)
-            df[col] = np.arctanh(df[col])
-            print(f"Applied Fisher Z-transformation to '{col}' column.")
+    # --- Merge results from old (long) and new (shortened) model names ---
+    # This handles cases where results exist for the same model under both naming schemes.
+    # It prioritizes the results from the shortened name, ensuring consistency.
+    if not df.empty and 'model' in df.columns:
+        df['model_canonical'] = df['model'].apply(_shorten_model_name)
+        # Prioritize rows where the model name was already the short canonical form
+        df['is_short_form'] = (df['model'] == df['model_canonical'])
+        df = df.sort_values(by=['is_short_form'], ascending=False)
+        
+        # Identify duplicates based on the canonical name and experiment identifiers
+        deduplication_cols = ['model_canonical', 'dataset', 'task', 'target', 'split', 'seed']
+        df = df.drop_duplicates(subset=deduplication_cols, keep='first')
+        
+        # Clean up by renaming the canonical model name back to 'model'
+        df = df.drop(columns=['model', 'is_short_form']).rename(columns={'model_canonical': 'model'})
+
     # --- Aggregate eCLIP sub-tasks by default ---
     if not args.no_aggregate_eclip:
         # This now applies to both eCLIP and lncRNA essentiality datasets
@@ -626,8 +684,19 @@ def main():
     # Standard Aggregation
     # ------------------------------------------------------------------
     # This runs if any standard output is requested (wide format or file output)
-    if args.wide_format or args.output_filename:
-        _run_standard_aggregation(df, args)
+    
+    # Filter for standard aggregation based on the main config file
+    df_for_agg = df
+    if args.config_file:
+        keep_models = _load_model_ckpt_config(args.config_file)
+        df_for_agg = df[df["model"].isin(keep_models)]
+
+    if args.wide_format or args.output_filename or args.raw_per_seed:
+        # Only run aggregation if there's data, and warn if filtering removed everything
+        if not df_for_agg.empty:
+            _run_standard_aggregation(df_for_agg, args)
+        elif args.config_file:
+            print("No data left for standard aggregation after filtering by --config_file.")
     elif not (args.zscore_ref_config_file or args.zscore_ref_model_name):
         print("No analysis requested. Use --wide_format, --output_filename, or Z-score/significance flags.")
 
