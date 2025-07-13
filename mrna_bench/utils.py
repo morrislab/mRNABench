@@ -57,7 +57,7 @@ class DataManager:
             data_dir_path: New path to data storage directory.
         """
         data_dir_path = os.path.normpath(data_dir_path)
-        data_dir_path = str(Path(data_dir_path).expanduser())
+        data_dir_path = str(Path(data_dir_path).expanduser().resolve())
 
         config = {"data_path": data_dir_path}
 
@@ -101,7 +101,7 @@ class DataManager:
             model_weights_path: New path to model weights storage directory.
         """
         model_weights_path = os.path.normpath(model_weights_path)
-        model_weights_path = str(Path(model_weights_path).expanduser())
+        model_weights_path = str(Path(model_weights_path).expanduser().resolve())
 
         config = {"model_weights_path": model_weights_path}
 
@@ -131,7 +131,12 @@ class DataManager:
             Path to model weights storage directory.
         """
         c_init = os.path.exists(self.config_path)
-        p_init = "model_weights_path" in yaml.safe_load(open(self.config_path))
+        if c_init:
+            with open(self.config_path) as f:
+                config_data = yaml.safe_load(f)
+                p_init = "model_weights_path" in (config_data or {})
+        else:
+            p_init = False
 
         if not c_init or not p_init:
             warn("Model weights storage path is not set. Using default path.")

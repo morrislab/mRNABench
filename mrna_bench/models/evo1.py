@@ -99,6 +99,6 @@ class Evo1(EmbeddingModel):
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not possible with Evo1.")

@@ -35,12 +35,13 @@ Repository = "https://github.com/morrislab/mRNABench"
 [project.optional-dependencies]
 base_models = [
     "torch==2.2.2",
-    "transformers",
+    "transformers==4.38.0",
+    "flash-attn==2.7.4.post1",
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
-    "accelerate",
-    "multimolecule",
-    "evo-model"
+    "accelerate==1.8.1",
+    "multimolecule==0.0.7",
+    "evo-model==0.4"
 ]
 dev = [
     "mypy",

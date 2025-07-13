@@ -8,29 +8,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from mamba_ssm.modules.mamba_simple import Mamba, Block
-
-
 from mrna_bench.models.embedding_model import EmbeddingModel
 from mrna_bench.datasets.dataset_utils import str_to_ohe
-
-
-def create_block(d_model: int, layer_idx: int) -> Block:
-    """Create Mamba block.
-
-    Condensed implementation from Mamba github repo.
-
-    Args:
-        d_model: Dimension of model.
-        layer_idx: Layer index.
-
-    Returns:
-        Mamba block.
-    """
-    mix_cls = partial(Mamba, layer_idx=layer_idx)
-    block = Block(d_model, mix_cls)
-    block.layer_idx = layer_idx
-    return block
 
 
 class MixerModel(nn.Module):
@@ -46,9 +25,19 @@ class MixerModel(nn.Module):
         """
         super().__init__()
 
+        try:
+            from mamba_ssm.modules.mamba_simple import Mamba, Block
+        except ImportError:
+            raise ImportError("Install base_models optional dependency to use NaiveMamba.")
+
         self.embedding = nn.Linear(input_dim, d_model)
 
-        blocks = [create_block(d_model, layer_idx=i) for i in range(n_layer)]
+        blocks = []
+        for i in range(n_layer):
+            mix_cls = partial(Mamba, layer_idx=i)
+            block = Block(d_model, mix_cls)
+            block.layer_idx = i
+            blocks.append(block)
         self.layers = nn.ModuleList(blocks)
 
         self.norm_f = nn.LayerNorm(d_model)
