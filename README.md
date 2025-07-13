@@ -7,7 +7,12 @@
 
 This repository contains a workflow to benchmark the embedding quality of genomic foundation models on mRNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
 
-**Jump to:** [Model Catalog](#model-catalog) [Dataset Catalog](#dataset-catalog)
+## Table of Contents
+- [Setup](#setup)
+- [Usage](#usage)
+- [Model Catalog](#model-catalog)
+- [Dataset Catalog](#dataset-catalog)
+- [Citation](#citation)
 
 ## Setup
 Several configurations of the mRNABench are available.
@@ -108,8 +113,8 @@ The models supported by the `base_models` installation are catalogued below.
 | **RNAErnie** | `rnaernie` | Transformer-based RNA foundation model trained using MLM with motif-level masking strategy on 23M ncRNA sequences. Uses contiguous token masking to learn RNA motifs. | [[Github]](https://github.com/CatIIIIIIII/RNAErnie) |
 | **ERNIE-RNA** | `ernierna`<br>`ernierna-ss` | Transformer-based RNA foundation model with structural attention bias. Trained on 20M ncRNA sequences with custom attention incorporating RNA base pairing rules. SS version fine-tuned on structural tasks. | [[Github]](https://github.com/Bruce-ywj/ERNIE-RNA) |
 | **RNABERT** | `rnabert` | Transformer-based RNA foundation model with dual training objectives combining MLM and structural alignment learning. Trained on 80k ncRNA sequences. | [[Github]](https://github.com/mana438/RNABERT) |
-| **CodonBERT** | `codonbert` | Transformer-based RNA foundation model trained on 10M+ mRNA sequences from mammals, bacteria, and viruses. Specialized for coding regions and mRNA properties. | [[Github]](https://github.com/dulucas/CodonBERT) |
-| **Helix-mRNA** | `helix-mrna` | Hybrid Mamba2/Transformer model trained on 26M diverse eukaryotic and viral mRNAs. Features CDS-aware tokenization with special tokens at codon boundaries. | [[Github]](https://github.com/ilbioinf/helix-mrna) |
+| **CodonBERT** | `codonbert` | Transformer-based RNA foundation model trained on 10M+ mRNA sequences from mammals, bacteria, and viruses. Specialized for coding regions and mRNA properties. | [[Github]](https://github.com/Sanofi-Public/CodonBERT) |
+| **Helix-mRNA** | `helix-mrna` | Hybrid Mamba2/Transformer model trained on 26M diverse eukaryotic and viral mRNAs. Features CDS-aware tokenization with special tokens at codon boundaries. | [[Github]](https://github.com/helicalAI/helical) |
 
 ### DNA Foundation Models
 
@@ -120,7 +125,8 @@ The models supported by the `base_models` installation are catalogued below.
 | **Nucleotide Transformer** | `2.5b-multi-species`<br>`2.5b-1000g`<br>`500m-human-ref`<br>`500m-1000g`<br>`v2-50m-multi-species`<br>`v2-100m-multi-species`<br>`v2-250m-multi-species`<br>`v2-500m-multi-species` | Transformer-based DNA foundation model family with 6-mer tokenization. Available in multiple sizes (50M-2.5B parameters) trained on various genomic datasets from human reference to multi-species collections. | [[Github]](https://github.com/instadeepai/nucleotide-transformer) |
 | **HyenaDNA** | `hyenadna-large-1m-seqlen-hf`<br>`hyenadna-medium-450k-seqlen-hf`<br>`hyenadna-medium-160k-seqlen-hf`<br>`hyenadna-small-32k-seqlen-hf`<br>`hyenadna-tiny-16k-seqlen-d128-hf` | Hyena-based DNA foundation model with near-linear scaling and ultra-long context capability. Pre-trained using next token prediction on human reference genome with various model sizes and sequence lengths. | [[Github]](https://github.com/HazyResearch/hyena-dna) |
 | **Evo1** | `evo-1.5-8k-base`<br>`evo-1-8k-base`<br>`evo-1-131k-base` | StripedHyena-based DNA foundation model trained autoregressively on OpenGenome dataset at single nucleotide, byte-level resolution. Offers near-linear scaling with ultra-long context variants up to 131k nucleotides. | [[Github]](https://github.com/evo-design/evo) |
-| **Evo2** | Multiple sizes (1B-40B params) | Next-generation StripedHyena2-based DNA foundation model trained on OpenGenome2 dataset. Provides multi-layer embeddings with ultra-long context capability up to 1M nucleotides for large model variants. | [[Github]](https://github.com/evo-design/evo) |
+| **Evo2** | `evo2_40b`<br>`evo2_40b_base`<br>`evo2_7b`<br>`evo2_7b_base`<br>`evo2_1b_base` | Next-generation StripedHyena2-based DNA foundation model trained on OpenGenome2 dataset. Provides multi-layer embeddings with ultra-long context capability up to 1M nucleotides for large model variants. | [[Github]](https://github.com/evo-design/evo2) |
+
 
 ### Baseline Models
 
@@ -150,7 +156,7 @@ The current datasets catalogued are:
 |---|---|---|---|---|
 | Mean Ribosome Load (Sugimoto) | <code>mrl&#8209;sugimoto</code> | Mean ribosome load (MRL) per transcript isoform as measured in human cells using isoform-resolved ribosome profiling. | `regression` | [paper](https://www.nature.com/articles/s41594-022-00819-2) |
 | Mean Ribosome Load (Sample) | <code>mrl&#8209;sample&#8209;egfp</code> <br><code>mrl&#8209;sample&#8209;mcherry</code><br><code>mrl&#8209;sample&#8209;designed</code><br><code>mrl&#8209;sample&#8209;varying</code> | Mean ribosome load (MRL) measured in an MPRA of randomized and designed 5'UTR regions attached to eGFP or mCherry reporters. Includes various RNA modifications and UTR lengths. | `regression` | [paper](https://pubmed.ncbi.nlm.nih.gov/31267113/)|
-| Mean Ribosome Load & Half-life | <code>mrl&#8209;hl&#8209;lbkwk</code> | Joint prediction of ribosome load and RNA half-life from synthetic mRNA sequences in the Leppek et al. dataset. | `regression` | [paper](https://www.nature.com/articles/s41586-022-04884-x) |
+| Mean Ribosome Load & Half-life | <code>mrl&#8209;hl&#8209;lbkwk</code> | Joint prediction of ribosome load and RNA half-life from synthetic mRNA sequences in the Leppek et al. dataset. | `regression` | [paper](https://pubmed.ncbi.nlm.nih.gov/33821271/) |
 
 ### RNA Stability
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
@@ -169,13 +175,13 @@ The current datasets catalogued are:
 |---|---|---|---|---|
 | Protein Subcellular Localization | <code>prot&#8209;loc</code> | Subcellular localization of transcript protein products based on experimental evidence from the Human Protein Atlas. | `multilabel` | [website](https://www.proteinatlas.org/) |
 | RNA Subcellular Localization (Fazal) | <code>rna&#8209;loc&#8209;fazal</code> | Subcellular localization of mRNA molecules measured using APEX-seq (proximity labeling + RNA-seq) in human cells. | `multilabel` | [paper](https://doi.org/10.1016/j.cell.2019.05.027) |
-| RNA Subcellular Localization (Ietswaart) | <code>rna&#8209;loc&#8209;ietswaart</code> | Subcellular localization of mRNA molecules in human cells using compartment-specific RNA-seq approaches. | `multilabel` | [paper](https://doi.org/10.1186/s13059-017-1356-2) |
+| RNA Subcellular Localization (Ietswaart) | <code>rna&#8209;loc&#8209;ietswaart</code> | Subcellular localization of mRNA molecules in human cells using compartment-specific RNA-seq approaches. | `multilabel` | [paper](https://pubmed.ncbi.nlm.nih.gov/38964322/) |
 
 ### Variant Effect Prediction
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
 |---|---|---|---|---|
-| VEP TraitGym (Mendelian) | <code>vep&#8209;traitgym&#8209;mendelian</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with Mendelian diseases. | `classification` | [paper](https://www.nature.com/articles/s41588-023-01550-y) |
-| VEP TraitGym (Complex) | <code>vep&#8209;traitgym&#8209;complex</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with complex traits. | `classification` | [paper](https://www.nature.com/articles/s41588-023-01550-y) |
+| VEP TraitGym (Mendelian) | <code>vep&#8209;traitgym&#8209;mendelian</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with Mendelian diseases. | `classification` | [paper](https://www.biorxiv.org/content/10.1101/2025.02.11.637758v1) |
+| VEP TraitGym (Complex) | <code>vep&#8209;traitgym&#8209;complex</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with complex traits. | `classification` | [paper](https://www.biorxiv.org/content/10.1101/2025.02.11.637758v1) |
 
 ### Adding a new dataset
 New datasets should inherit from `BenchmarkDataset`. Dataset names cannot contain underscores. Each new dataset should download raw data and process it into a dataframe by overriding `process_raw_data`. This dataframe should store transcript as rows, using string encoding in the `sequence` column. If homology splitting is required, a column `gene` containing gene names is required. Six track embedding also requires columns `cds` and `splice`. The target column can have any name, as it is specified at time of probing. New datasets should be added to `DATASET_CATALOG`.
