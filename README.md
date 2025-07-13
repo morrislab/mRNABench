@@ -217,6 +217,9 @@ If you use mRNABench in your research, please cite:
 }
 ```
 
+The original sources for each dataset and model should be cited if used, and can be found above. A substantial number of model implementations use the the `multimolecule` package: https://huggingface.co/multimolecule; citation information can be found on their HuggingFace.
+
+
 ## Evo2 Setup
 Inference using Evo2 requires installing the following in its own environment. Note: There may be an issue where the evo_40b models, when downloaded, have their merged checkpoints stored one directory above the HuggingFace hub cache. You may need to manually move the checkpoint into its corresponding snapshot directory: `/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/`
 
