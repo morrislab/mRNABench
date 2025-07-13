@@ -43,6 +43,9 @@ dependencies first, which are usually listed on the model's GitHub page (see bel
 ### Evo2
 Evo2 requires more complicated installation instructions, and can only be run on H100s. See [Evo2 Setup](#evo2-setup).
 
+### Dev Mode
+Dev mode allows generation of datasets from scratch and includes access to the RNA-Fazal localization dataset. See [Dev Mode Setup](#dev-mode-setup).
+
 ### Post-install
 > [!IMPORTANT]
 > After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
@@ -219,4 +222,20 @@ pip install flash-attn==2.7.4.post1
 
 cd path/to/mRNA/bench
 pip install -e .
+
+## Dev Mode Setup
+Dev mode requires additional dependencies for generating datasets from scratch and accessing the RNA-Fazal localization dataset. 
+
+```bash
+conda create --name mrna_bench_dev python=3.10
+conda activate mrna_bench_dev
+
+# Install genome-kit first
+conda install -c conda-forge genome_kit=7.1.0
+conda install -c conda-forge gcc_linux-64 gxx_linux-64
+# Note: You might need to add gcc compilers to LD_LIBRARY_PATH if you encounter linking issues
+
+pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+pip install mrna-bench[base_models]
+```
 ```
