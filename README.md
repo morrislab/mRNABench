@@ -13,8 +13,9 @@
 
 This repository contains the code for mRNABench, which benchmarks the embedding quality of genomic foundation models on mRNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
 
-**BioRxiv:** https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1  
-**Notebook:** https://colab.research.google.com/drive/1VZF5NPwJYowAR3e6wuaiAuQyw2v7TSwx?usp=sharing
+**Paper:** [BioRxiv Link](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)  
+**Notebook Example:** [Colab Notebook](https://colab.research.google.com/drive/1VZF5NPwJYowAR3e6wuaiAuQyw2v7TSwx?usp=sharing)  
+**Dataset Repository:** [HuggingFace Collection](https://huggingface.co/collections/morrislab/mrnabench-6825747c0b9253c3226078d9)
 
 ## Table of Contents
 - [Setup](#setup)
