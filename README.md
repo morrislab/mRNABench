@@ -46,12 +46,6 @@ pip install mrna-bench[base_models]
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
 
-### Evo2
-Evo2 requires more complicated installation instructions, and can only be run on H100s. See [Evo2 Setup](#evo2-setup).
-
-### Dev Mode
-Dev mode allows generation of datasets from scratch and includes access to the RNA-Fazal localization dataset. See [Dev Mode Setup](#dev-mode-setup).
-
 ### Post-install
 > [!IMPORTANT]
 > After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
@@ -64,6 +58,13 @@ mb.update_data_path(path_to_dir_to_store_data)
 path_to_dir_to_store_weights = "DESIRED_PATH_FOR_MODEL_WEIGHTS"
 mb.update_model_weights_path(path_to_dir_to_store_weights)
 ```
+
+### Evo2
+Evo2 requires more complicated installation instructions, and can only be run on H100s. See [Evo2 Setup](#evo2-setup).
+
+### Dev Mode
+Dev mode allows generation of datasets from scratch and includes access to the RNA-Fazal localization dataset. See [Dev Mode Setup](#dev-mode-setup).
+
 
 ## Usage
 Datasets can be retrieved using:
@@ -228,6 +229,7 @@ pip install flash-attn==2.7.4.post1
 
 cd path/to/mRNA/bench
 pip install -e .
+```
 
 ## Dev Mode Setup
 Dev mode requires additional dependencies for generating datasets from scratch and accessing the RNA-Fazal localization dataset. 
@@ -243,5 +245,4 @@ conda install -c conda-forge gcc_linux-64 gxx_linux-64
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
 pip install mrna-bench[base_models]
-```
 ```
