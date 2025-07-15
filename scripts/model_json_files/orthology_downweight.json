@@ -1,0 +1,41 @@
+{
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.15_new_splice_to_toga_combined_15_mask_mlm_1_ablation_u08_cl_mlm_1_ablation_u08_cl_mlm": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_mamba_cl_underweight_0.8_1_ablation_mamba_cl_underweight_0.8": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.15_new_splice_to_toga_combined_15_mask_mlm_only_1_ablation_mlm_only_1_ablation_mlm_only": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.3_new_splice_basic_only_1_ablation_no_ortho": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_4t_6_512_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_u08_4t_1_ablation_u08_4t": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.0_new_splice_to_toga_combined_no_mask_1_ablation_u08_no_msk_1_ablation_u08_no_msk": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_no_splice_1_ablation_u08_no_spl_1_ablation_u08_no_spl": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_no_splice_no_ortho_1_ablation_no_splice_no_ortho": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_4t_6_512_lr0.001_wd5e-05_mask0.0_new_splice_to_toga_combined_no_splice_no_ortho_no_mask_1_ablation_no_splice_no_ortho_no_mask_4t": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_6_512_lr0.001_wd5e-05_mask0.0_new_splice_to_toga_combined_no_splice_no_ortho_no_mask_1_ablation_no_splice_no_ortho_no_mask": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "ssm_6t_3_256_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_u08_mamba_base_1_ablation_u08_mamba_base": [
+        "epoch=6-step=20000.ckpt"
+    ],
+    "resnet_dilated_medium_6t_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_u08_dilated_cnn_1_ablation_u08_dilated_cnn": [
+        "epoch=4-step=20000.ckpt"
+    ],
+    "saluki_saluki_medium_6t_lr0.001_wd5e-05_mask0.3_new_splice_to_toga_combined_30_mask_1_ablation_u08_saluki_med_1_ablation_u08_saluki_med": [
+        "epoch=4-step=20000.ckpt"
+    ]
+}

@@ -29,23 +29,24 @@ import pandas as pd
 import mrna_bench as mb
 from mrna_bench.datasets.dataset_catalog import DATASET_INFO, TASK_ORDER
 from mrna_bench.utils import get_data_path
-from scipy.stats import ttest_ind
+from scipy.stats import ttest_ind, ttest_rel
 
 # -----------------------------------------------------------------------------
 # Helper for filename parsing and name standardization
 # -----------------------------------------------------------------------------
 
+
 def _shorten_model_name(model_name: str) -> str:
     """Consistently shorten verbose model names to prevent filesystem errors."""
     # This logic must be identical to the one in `mrna_bench.linear_probe.persister`
     replacements = {
-        'dilated': 'd',
-        'medium': 'med',
-        'ablation': 'abl',
-        'combined': 'cmb',
-        'splice': 'spl',
-        'epoch=': 'e',
-        'step=': 's'
+        "dilated": "d",
+        "medium": "med",
+        "ablation": "abl",
+        "combined": "cmb",
+        "splice": "spl",
+        "epoch=": "e",
+        "step=": "s",
     }
     for old, new in replacements.items():
         model_name = model_name.replace(old, new)
@@ -79,20 +80,22 @@ def _parse_filename(fname: str) -> Dict[str, Any] | None:
     try:
         # Find the last `_rs-` to safely locate the seed.
         rs_idx = remainder.rfind("_rs-")
-        if rs_idx == -1: return None
-        seed = int(remainder[rs_idx + len("_rs-"):])
+        if rs_idx == -1:
+            return None
+        seed = int(remainder[rs_idx + len("_rs-") :])
 
         # Everything before the seed part.
         before_seed = remainder[:rs_idx]
 
         # Find the last `_split-` to separate target and split.
         split_idx = before_seed.rfind("_split-")
-        if split_idx == -1: return None
+        if split_idx == -1:
+            return None
         target = before_seed[:split_idx]  # Allows underscores in target name.
-        split = before_seed[split_idx + len("_split-"):]
+        split = before_seed[split_idx + len("_split-") :]
 
     except (ValueError, IndexError):
-        return None # Handles errors from rfind, slicing, or int conversion.
+        return None  # Handles errors from rfind, slicing, or int conversion.
 
     # --- 4. Parse Left-Hand Side (dataset, model, task) ---
     # Find the task by checking for a known suffix.
@@ -103,12 +106,19 @@ def _parse_filename(fname: str) -> Dict[str, Any] | None:
 
     # Find the dataset by checking for a known prefix.
     # Sorting by length ensures we match longer names first (e.g., 'pcg-ess-k562' before 'pcg-ess').
-    dataset = next((d for d in sorted(known_datasets, key=len, reverse=True) if prefix_without_task.startswith(f"{d}_")), None)
+    dataset = next(
+        (
+            d
+            for d in sorted(known_datasets, key=len, reverse=True)
+            if prefix_without_task.startswith(f"{d}_")
+        ),
+        None,
+    )
     if dataset is None:
         return None
 
     # The remainder in the middle is the model name.
-    model = prefix_without_task[len(f"{dataset}_"):]
+    model = prefix_without_task[len(f"{dataset}_") :]
     if not model:
         return None  # Model name should not be empty.
 
@@ -122,9 +132,11 @@ def _parse_filename(fname: str) -> Dict[str, Any] | None:
         "seed": seed,
     }
 
+
 # -----------------------------------------------------------------------------
 # Helpers
 # -----------------------------------------------------------------------------
+
 
 def _collect_rows() -> List[Dict[str, Any]]:
     rows: List[Dict[str, Any]] = []
@@ -161,6 +173,7 @@ def _collect_rows() -> List[Dict[str, Any]]:
 # Config loading utility (same format used elsewhere)
 # -----------------------------------------------------------------------------
 
+
 def _load_model_ckpt_config(cfg_path: str | Path) -> Set[str]:
     """Return a set of *model_short_name* strings derived from the mapping.
 
@@ -187,11 +200,16 @@ def _load_model_ckpt_config(cfg_path: str | Path) -> Set[str]:
         if isinstance(ckpts, str):
             ckpts = [ckpts]
         for ck in ckpts:
-            sn = (mv + "_" + ck.replace(".ckpt", "")).replace("_", "-").replace("-track", "").replace("best-", "")
-            
+            sn = (
+                (mv + "_" + ck.replace(".ckpt", ""))
+                .replace("_", "-")
+                .replace("-track", "")
+                .replace("best-", "")
+            )
+
             # Apply the same shortening logic used for filenames to ensure names match
             sn = _shorten_model_name(sn)
-                
+
             short_names.add(sn)
     return short_names
 
@@ -199,6 +217,7 @@ def _load_model_ckpt_config(cfg_path: str | Path) -> Set[str]:
 # -----------------------------------------------------------------------------
 # Aggregation and Pivoting Helpers
 # -----------------------------------------------------------------------------
+
 
 def _process_task_group(task_df: pd.DataFrame) -> pd.DataFrame:
     """Processes a dataframe for a single task type.
@@ -217,9 +236,9 @@ def _process_task_group(task_df: pd.DataFrame) -> pd.DataFrame:
 
     # Dynamically find metric columns and drop any that are all NaN for this group
     all_cols = task_df.columns.tolist()
-    task_df = task_df.dropna(axis=1, how='all')
+    task_df = task_df.dropna(axis=1, how="all")
     surviving_cols = task_df.columns.tolist()
-    
+
     metric_cols = [c for c in surviving_cols if c not in meta_cols]
 
     if not metric_cols:
@@ -245,8 +264,8 @@ def _pivot_summary_wide(summary_df: pd.DataFrame) -> pd.DataFrame:
     if summary_df.empty:
         return pd.DataFrame()
 
-    pivot_cols = ['dataset', 'task', 'target', 'split']
-    id_cols = ['model'] + pivot_cols
+    pivot_cols = ["dataset", "task", "target", "split"]
+    id_cols = ["model"] + pivot_cols
     metric_cols = [c for c in summary_df.columns if c not in id_cols]
 
     # Ensure columns have a consistent, sorted order
@@ -255,29 +274,29 @@ def _pivot_summary_wide(summary_df: pd.DataFrame) -> pd.DataFrame:
     # Use pivot_table to handle the restructuring
     pivoted = pd.pivot_table(
         summary_df,
-        index='model',
+        index="model",
         columns=pivot_cols,
         values=metric_cols,
-        aggfunc='first'  # No aggregation needed, just restructuring
+        aggfunc="first",  # No aggregation needed, just restructuring
     )
 
     # Flatten the column MultiIndex and sort for deterministic output
     pivoted.columns = pivoted.columns.reorder_levels(
-        [1, 2, 3, 4, 0] # dataset, task, target, split, metric
+        [1, 2, 3, 4, 0]  # dataset, task, target, split, metric
     )
     pivoted = pivoted.sort_index(axis=1)
 
     pivoted.columns = [
-        f"{ds}_{tk}_{tgt}_{splt}_{met}"
-        for ds, tk, tgt, splt, met in pivoted.columns
+        f"{ds}_{tk}_{tgt}_{splt}_{met}" for ds, tk, tgt, splt, met in pivoted.columns
     ]
-    
+
     return pivoted.reset_index()
 
 
 # -----------------------------------------------------------------------------
 # Z-Score and Significance Helpers
 # -----------------------------------------------------------------------------
+
 
 def _get_model_set(config_path: str, model_name: str, model_type: str) -> Set[str]:
     """Loads a set of models from a config file or a single name."""
@@ -286,7 +305,9 @@ def _get_model_set(config_path: str, model_name: str, model_type: str) -> Set[st
         # Ensure single model names are also shortened to match canonical forms
         short_name = _shorten_model_name(model_name)
         model_set = {short_name}
-        print(f"Using single model '{model_name}' (shortened to '{short_name}') as {model_type}.")
+        print(
+            f"Using single model '{model_name}' (shortened to '{short_name}') as {model_type}."
+        )
     elif config_path:
         model_set = _load_model_ckpt_config(config_path)
         print(f"Using {len(model_set)} models from {config_path} as {model_type}.")
@@ -294,11 +315,10 @@ def _get_model_set(config_path: str, model_name: str, model_type: str) -> Set[st
 
 
 def _calculate_reference_stats(
-    df: pd.DataFrame,
-    reference_models: Set[str]
+    df: pd.DataFrame, reference_models: Set[str]
 ) -> pd.DataFrame:
     """Calculate mean and std for a reference set of models."""
-    ref_df = df[df['model'].isin(reference_models)]
+    ref_df = df[df["model"].isin(reference_models)]
     if ref_df.empty:
         raise ValueError("No data found for any of the reference models specified.")
 
@@ -307,21 +327,20 @@ def _calculate_reference_stats(
     group_cols = ["dataset", "task", "target", "split"]
 
     # Calculate mean and std over all seeds and all models in the reference set
-    ref_stats = ref_df.groupby(group_cols)[metric_cols].agg(['mean', 'std']).reset_index()
+    ref_stats = (
+        ref_df.groupby(group_cols)[metric_cols].agg(["mean", "std"]).reset_index()
+    )
 
     # Flatten the multi-level column index
-    ref_stats.columns = ['_'.join(col).strip('_') for col in ref_stats.columns.values]
+    ref_stats.columns = ["_".join(col).strip("_") for col in ref_stats.columns.values]
     return ref_stats
 
 
-def _calculate_z_scores(
-    df: pd.DataFrame,
-    ref_stats: pd.DataFrame
-) -> pd.DataFrame:
+def _calculate_z_scores(df: pd.DataFrame, ref_stats: pd.DataFrame) -> pd.DataFrame:
     """Calculate Z-scores for all models relative to reference stats."""
     group_cols = ["dataset", "task", "target", "split"]
     # Merge the reference stats back into the main dataframe
-    df_with_stats = pd.merge(df, ref_stats, on=group_cols, how='left')
+    df_with_stats = pd.merge(df, ref_stats, on=group_cols, how="left")
 
     meta_cols = ["dataset", "model", "task", "target", "split", "seed"]
     metric_cols = sorted([c for c in df.columns if c not in meta_cols])
@@ -329,19 +348,18 @@ def _calculate_z_scores(
     z_score_df = df_with_stats[meta_cols].copy()
 
     for metric in metric_cols:
-        mean_col = f'{metric}_mean'
-        std_col = f'{metric}_std'
+        mean_col = f"{metric}_mean"
+        std_col = f"{metric}_std"
 
         # Z-score = (value - mean) / std
         # Use np.divide to handle division by zero (std=0) gracefully -> results in inf
-        with np.errstate(divide='ignore', invalid='ignore'):
+        with np.errstate(divide="ignore", invalid="ignore"):
             z_scores = np.divide(
-                df_with_stats[metric] - df_with_stats[mean_col],
-                df_with_stats[std_col]
+                df_with_stats[metric] - df_with_stats[mean_col], df_with_stats[std_col]
             )
         # Replace NaNs (from 0/0) and infs (from x/0) with 0, as it implies no deviation
         z_scores = np.nan_to_num(z_scores, nan=0.0, posinf=0.0, neginf=0.0)
-        z_score_df[f'{metric}_zscore'] = z_scores
+        z_score_df[f"{metric}_zscore"] = z_scores
 
     return z_score_df
 
@@ -350,70 +368,149 @@ def _run_significance_tests(
     z_score_df: pd.DataFrame,
     reference_models: Set[str],
     test_models: Set[str],
-    zscore_cols: List[str]
+    zscore_cols: List[str],
+    group_by_dataset: bool = True,
 ) -> pd.DataFrame:
     """Performs t-test for each test model against a reference group of models."""
 
     if not test_models:
-        print("[WARN] No test models specified via --config_file. Skipping significance tests.")
+        print(
+            "[WARN] No test models specified via --config_file. Skipping significance tests."
+        )
         return pd.DataFrame()
 
-    ref_z = z_score_df[z_score_df['model'].isin(reference_models)]
+    ref_z = z_score_df[z_score_df["model"].isin(reference_models)]
     if ref_z.empty:
-        print("[WARN] Not enough data for reference models for significance tests after filtering.")
+        print(
+            "[WARN] Not enough data for reference models for significance tests after filtering."
+        )
         return pd.DataFrame()
 
     all_results = []
-    # zscore_cols are now passed in directly
-    group_cols = ["dataset", "task", "target", "split"]
-    
-    # Pre-group the reference dataframe for efficient lookup
-    ref_z_grouped = ref_z.groupby(group_cols)
 
-    # Iterate over each individual model in the "test" set
-    for test_model_name in sorted(list(test_models)):
-        test_z = z_score_df[z_score_df['model'] == test_model_name]
-        
-        if test_z.empty:
-            continue
+    if group_by_dataset:
+        # --- Per-Dataset Analysis: Test each metric individually ---
+        group_cols = ["dataset", "task", "target", "split"]
+        ref_z_grouped = ref_z.groupby(group_cols)
 
-        # Group the current test model's data
-        test_z_grouped = test_z.groupby(group_cols)
+        for test_model_name in sorted(list(test_models)):
+            test_z = z_score_df[z_score_df["model"] == test_model_name]
+            if test_z.empty:
+                continue
 
-        # Iterate through the groups (tasks) for the current test model
-        for group_key, test_group_df in test_z_grouped:
-            try:
-                # Find the matching group from the reference models
-                ref_group_df = ref_z_grouped.get_group(group_key)
-            except KeyError:
-                continue # No reference data for this specific group
+            for group_key, test_group_df in test_z.groupby(group_cols):
+                try:
+                    ref_group_df = ref_z_grouped.get_group(group_key)
+                except KeyError:
+                    continue  # No reference data for this specific group
 
-            for col in zscore_cols:
-                # Ensure column exists in both dataframes for the group
-                if col not in ref_group_df.columns or col not in test_group_df.columns:
+                for col in zscore_cols:
+                    if col not in ref_group_df.columns or col not in test_group_df.columns:
+                        continue
+
+                    ref_data = ref_group_df[ref_group_df[col].notna()].sort_values(["dataset", "task", "target", "split", "seed"])
+                    test_data = test_group_df[test_group_df[col].notna()].sort_values(["dataset", "task", "target", "split", "seed"])
+                    
+                    ref_scores = ref_data[col]
+                    test_scores = test_data[col]
+                    ref_seeds = ref_data['seed']
+                    test_seeds = test_data['seed']
+                    assert len(ref_seeds) == len(test_seeds)
+
+
+                    if len(ref_scores) < 2 or len(test_scores) < 2:
+                        continue  # Not enough data for a t-test
+
+                    stat, pvalue = ttest_rel(test_scores, ref_scores)
+
+                    result_row = dict(zip(group_cols, group_key))
+                    result_row["model"] = test_model_name
+                    result_row["metric"] = col.replace('_zscore', '')
+                    result_row["t_statistic"] = stat
+                    result_row["p_value"] = pvalue
+                    all_results.append(result_row)
+    else:
+        # --- Global Analysis: Consolidate metrics into performance categories ---
+        metric_groups = {
+            'test_performance': ('test_auprc_zscore', 'test_r_zscore'),
+            'val_performance': ('val_auprc_zscore', 'val_r_zscore'),
+            'train_performance': ('train_auprc_zscore', 'train_r_zscore'),
+        }
+        performance_cols = list(metric_groups.keys())
+
+        # Create temporary dataframes with the chosen metric for each group
+        ref_z_pooled = ref_z.copy()
+        z_score_df_pooled = z_score_df.copy()
+
+        for perf_name, (prio_col, fallback_col) in metric_groups.items():
+            if prio_col in ref_z_pooled.columns and fallback_col in ref_z_pooled.columns:
+                ref_z_pooled[perf_name] = np.where(
+                    ref_z_pooled[prio_col].notna(), ref_z_pooled[prio_col], ref_z_pooled[fallback_col]
+                )
+            if prio_col in z_score_df_pooled.columns and fallback_col in z_score_df_pooled.columns:
+                z_score_df_pooled[perf_name] = np.where(
+                    z_score_df_pooled[prio_col].notna(), z_score_df_pooled[prio_col], z_score_df_pooled[fallback_col]
+                )
+
+        for test_model_name in sorted(list(test_models)):
+            test_z = z_score_df_pooled[z_score_df_pooled["model"] == test_model_name]
+            if test_z.empty:
+                continue
+
+            for col in performance_cols:
+                if col not in ref_z_pooled.columns or col not in test_z.columns:
                     continue
-
-                ref_scores = ref_group_df[col].dropna()
-                test_scores = test_group_df[col].dropna()
+                
+                select_datasets = [
+                    "eclip-binding-k562",
+                    "eclip-binding-hepg2",
+                    "go-mf",
+                    "mrl-sugimoto",
+                    "prot-loc",
+                    "rna-loc-fazal",
+                    "rna-loc-ietswaart",
+                    "rnahl-human",
+                    "rnahl-mouse",
+                ]
+                ref_data = ref_z_pooled[
+                    (ref_z_pooled[col].notna()) & 
+                    (ref_z_pooled["dataset"].isin(select_datasets))
+                ].sort_values(["dataset", "task", "target", "split", "seed"])
+                test_data = test_z[
+                    (test_z[col].notna()) & 
+                    (test_z["dataset"].isin(select_datasets))
+                ].sort_values(["dataset", "task", "target", "split", "seed"])
+                
+                ref_scores = ref_data[col]
+                test_scores = test_data[col]
+                ref_seeds = ref_data['seed']
+                test_seeds = test_data['seed']
+                assert len(ref_seeds) == len(test_seeds)
 
                 if len(ref_scores) < 2 or len(test_scores) < 2:
-                    continue # Not enough data for a t-test
+                    continue
 
-                stat, pvalue = ttest_ind(test_scores, ref_scores, equal_var=False) # Welch's t-test
+                stat, pvalue = ttest_rel(test_scores, ref_scores)
                 
-                result_row = dict(zip(group_cols, group_key))
-                result_row['model'] = test_model_name # Identify which model is being tested
-                result_row['metric'] = col.replace('_zscore', '')
-                result_row['t_statistic'] = stat
-                result_row['p_value'] = pvalue
+                result_row = {
+                    'dataset': 'all_datasets',
+                    'task': 'all_tasks',
+                    'target': 'all_targets',
+                    'split': 'all_splits',
+                    'model': test_model_name,
+                    'metric': col,
+                    't_statistic': stat,
+                    'p_value': pvalue,
+                }
                 all_results.append(result_row)
-    
+
     return pd.DataFrame(all_results)
 
 
 # -----------------------------------------------------------------------------
 # Main
 # -----------------------------------------------------------------------------
+
 
 def _save_df_to_results(df: pd.DataFrame, output_filename: str):
     """Saves a dataframe to a file in the aggregated_results directory."""
@@ -426,31 +523,79 @@ def _save_df_to_results(df: pd.DataFrame, output_filename: str):
 
 def _get_parser() -> argparse.ArgumentParser:
     """Configures and returns the argument parser for the script."""
-    parser = argparse.ArgumentParser(description="Aggregate Orthrus linear-probe results across datasets.")
-    parser.add_argument("--output_filename", type=str, default="",
-                        help="Filename for the aggregated CSV summary, which will be saved in the mrna_bench data directory. If omitted, prints to STDOUT.")
-    parser.add_argument("--config_file", type=str, default="",
-                        help="Optional JSON/YAML file mapping model_version -> list[checkpoint] to limit aggregation (serves as the 'test set' for significance analysis).")
-    parser.add_argument("--seeds", type=str, default="2541,413,411,412,2547,321,421,311,2516,2515",
-                        help="Comma-separated list of seed integers to include in the aggregation. Example: 2541,413,421")
-    parser.add_argument("--wide_format", action="store_true",
-                        help="When set, pivot the output to have one row per model (wide format).")
-    parser.add_argument("--raw_per_seed", action="store_true",
-                        help="When set, output the raw, per-seed results instead of aggregating. Overrides --wide_format.")
-    parser.add_argument("--no_aggregate_eclip", action="store_true", help="Show metrics for each eCLIP RBP individually instead of aggregating.")
+    parser = argparse.ArgumentParser(
+        description="Aggregate Orthrus linear-probe results across datasets."
+    )
+    parser.add_argument(
+        "--output_filename",
+        type=str,
+        default="",
+        help="Filename for the aggregated CSV summary, which will be saved in the mrna_bench data directory. If omitted, prints to STDOUT.",
+    )
+    parser.add_argument(
+        "--config_file",
+        type=str,
+        default="",
+        help="Optional JSON/YAML file mapping model_version -> list[checkpoint] to limit aggregation (serves as the 'test set' for significance analysis).",
+    )
+    parser.add_argument(
+        "--seeds",
+        type=str,
+        default="2541,413,411,412,2547,321,421,311,2516,2515",
+        help="Comma-separated list of seed integers to include in the aggregation. Example: 2541,413,421",
+    )
+    parser.add_argument(
+        "--wide_format",
+        action="store_true",
+        help="When set, pivot the output to have one row per model (wide format).",
+    )
+    parser.add_argument(
+        "--raw_per_seed",
+        action="store_true",
+        help="When set, output the raw, per-seed results instead of aggregating. Overrides --wide_format.",
+    )
+    parser.add_argument(
+        "--no_aggregate_eclip",
+        action="store_true",
+        help="Show metrics for each eCLIP RBP individually instead of aggregating.",
+    )
     # --- Arguments for Z-score and significance testing ---
-    parser.add_argument("--zscore_ref_config_file", type=str, default="",
-                        help="JSON/YAML file for a *set of reference models* for Z-SCORE calculation. Mutually exclusive with --zscore_ref_model_name.")
-    parser.add_argument("--zscore_ref_model_name", type=str, default="",
-                        help="A single model_short_name to use as the reference for Z-SCORE calculation. Mutually exclusive with --zscore_ref_config_file.")
-    parser.add_argument("--sig_ref_config_file", type=str, default="",
-                        help="JSON/YAML file for the *reference model set* for SIGNIFICANCE testing. Mutually exclusive with --sig_ref_model_name.")
-    parser.add_argument("--sig_ref_model_name", type=str, default="",
-                        help="A single model_short_name to use as the reference for SIGNIFICANCE testing. Mutually exclusive with --sig_ref_config_file.")
-    parser.add_argument("--z_score_output", type=str, default="",
-                        help="Output filename for the Z-score report. Activates Z-score calculation.")
-    parser.add_argument("--significance_output", type=str, default="",
-                        help="Output filename for significance test results. Activates t-test calculation.")
+    parser.add_argument(
+        "--zscore_ref_config_file",
+        type=str,
+        default="",
+        help="JSON/YAML file for a *set of reference models* for Z-SCORE calculation. Mutually exclusive with --zscore_ref_model_name.",
+    )
+    parser.add_argument(
+        "--zscore_ref_model_name",
+        type=str,
+        default="",
+        help="A single model_short_name to use as the reference for Z-SCORE calculation. Mutually exclusive with --zscore_ref_config_file.",
+    )
+    parser.add_argument(
+        "--sig_ref_config_file",
+        type=str,
+        default="",
+        help="JSON/YAML file for the *reference model set* for SIGNIFICANCE testing. Mutually exclusive with --sig_ref_model_name.",
+    )
+    parser.add_argument(
+        "--sig_ref_model_name",
+        type=str,
+        default="",
+        help="A single model_short_name to use as the reference for SIGNIFICANCE testing. Mutually exclusive with --sig_ref_config_file.",
+    )
+    parser.add_argument(
+        "--z_score_output",
+        type=str,
+        default="",
+        help="Output filename for the Z-score report. Activates Z-score calculation.",
+    )
+    parser.add_argument(
+        "--significance_output",
+        type=str,
+        default="",
+        help="Output filename for significance test results. Activates t-test calculation.",
+    )
     return parser
 
 
@@ -462,7 +607,7 @@ def _run_zscore_and_significance_analysis(df: pd.DataFrame, args: argparse.Names
     # This stabilizes the variance of r/rho values for better averaging and Z-scoring,
     # without affecting the raw data used for standard aggregation.
     df_transformed = df.copy()
-    correlation_cols = ['test_r', 'train_r', 'val_r', 'test_p', 'train_p', 'val_p']
+    correlation_cols = ["test_r", "train_r", "val_r", "test_p", "train_p", "val_p"]
     print("Applying Fisher Z-transformation for Z-score/significance analysis...")
     for col in correlation_cols:
         if col in df_transformed.columns:
@@ -472,70 +617,105 @@ def _run_zscore_and_significance_analysis(df: pd.DataFrame, args: argparse.Names
 
     try:
         # 1. Determine reference and test sets
-        zscore_ref_models = _get_model_set(args.zscore_ref_config_file, args.zscore_ref_model_name, "reference for Z-Scores")
-        sig_ref_models = _get_model_set(args.sig_ref_config_file, args.sig_ref_model_name, "reference for Significance Test")
+        zscore_ref_models = _get_model_set(
+            args.zscore_ref_config_file,
+            args.zscore_ref_model_name,
+            "reference for Z-Scores",
+        )
+        sig_ref_models = _get_model_set(
+            args.sig_ref_config_file,
+            args.sig_ref_model_name,
+            "reference for Significance Test",
+        )
         test_models = _get_model_set(args.config_file, "", "test models")
 
         if not zscore_ref_models:
-            print("[ERROR] No reference models provided for Z-score calculation (--zscore_ref_*). Halting analysis.")
+            print(
+                "[ERROR] No reference models provided for Z-score calculation (--zscore_ref_*). Halting analysis."
+            )
             return
 
-        # 2. Loop through tasks to perform task-aware analysis
-        tasks = df_transformed['task'].unique()
-        all_pivoted_z_scores = []
-        all_sig_results = []
+        # 2. Calculate Z-Scores (per task) and prepare for analysis
+        all_zscore_dfs = []
+        tasks = df_transformed["task"].unique()
         for task in tasks:
-            task_df = df_transformed[df_transformed['task'] == task].copy()
-
-            # Dynamically find metric columns for this task
+            task_df = df_transformed[df_transformed["task"] == task].copy()
             meta_cols = ["dataset", "model", "task", "target", "split", "seed"]
-            task_df = task_df.dropna(axis=1, how='all')
-            metric_cols = [c for c in task_df.columns if c not in meta_cols]
+            metric_cols = [c for c in task_df.columns if c not in meta_cols and 'mean' not in c and 'std' not in c]
             if not metric_cols:
                 continue
-            
-            # Calculate Z-scores for this task's metrics
             ref_stats = _calculate_reference_stats(task_df, zscore_ref_models)
             z_score_df_task = _calculate_z_scores(task_df, ref_stats)
+            all_zscore_dfs.append(z_score_df_task)
+        
+        if not all_zscore_dfs:
+            print("[WARN] No data available for Z-score analysis.")
+            return
 
-            task_zscore_cols = [f"{m}_zscore" for m in metric_cols]
+        final_zscore_df = pd.concat(all_zscore_dfs, ignore_index=True)
+        all_sig_results = []
 
-            # Generate Z-score report for the task
-            if args.z_score_output:
-                avg_z_scores = z_score_df_task.groupby(meta_cols[:-1])[task_zscore_cols].mean().reset_index()
+        # 3. Run Significance Tests
+        if args.significance_output and sig_ref_models:
+            all_zscore_cols = [col for col in final_zscore_df.columns if 'zscore' in col]
 
-                # Filter to only include test_models in the Z-score report, if they are specified
+            # --- Per-Dataset Significance ---
+            print("--- Running Per-Dataset Significance Tests ---")
+            sig_results_per_dataset = _run_significance_tests(
+                final_zscore_df, sig_ref_models, test_models, all_zscore_cols, group_by_dataset=True
+            )
+            if not sig_results_per_dataset.empty:
+                all_sig_results.append(sig_results_per_dataset)
+
+            # --- Fully Pooled, Cross-Dataset/Cross-Task Significance ---
+            print("--- Running Global Significance Tests ---")
+            sig_results_global = _run_significance_tests(
+                final_zscore_df, sig_ref_models, test_models, all_zscore_cols, group_by_dataset=False
+            )
+            if not sig_results_global.empty:
+                all_sig_results.append(sig_results_global)
+
+        # 4. Generate Z-Score Report (per-task view)
+        if args.z_score_output:
+            pivoted_z_scores = []
+            for task in tasks:
+                task_zscore_df = final_zscore_df[final_zscore_df['task'] == task]
+                meta_cols = ["dataset", "model", "task", "target", "split", "seed"]
+                task_zscore_cols = [col for col in task_zscore_df.columns if 'zscore' in col]
+                
+                avg_z_scores = (
+                    task_zscore_df.groupby(meta_cols[:-1])[task_zscore_cols]
+                    .mean()
+                    .reset_index()
+                )
                 if test_models:
-                    avg_z_scores = avg_z_scores[avg_z_scores['model'].isin(test_models)]
+                    avg_z_scores = avg_z_scores[avg_z_scores["model"].isin(test_models)]
 
-                pivoted_z_score_task = _pivot_summary_wide(avg_z_scores)
-                if not pivoted_z_score_task.empty:
-                    all_pivoted_z_scores.append(pivoted_z_score_task)
-
-            # Run significance tests for the task
-            if args.significance_output and sig_ref_models:
-                sig_results_task = _run_significance_tests(z_score_df_task, sig_ref_models, test_models, task_zscore_cols)
-                if not sig_results_task.empty:
-                    all_sig_results.append(sig_results_task)
-
-        # 3. Combine and save final reports
-        if args.z_score_output and all_pivoted_z_scores:
-            final_z_score_df = reduce(lambda left, right: pd.merge(left, right, on='model', how='outer'), all_pivoted_z_scores)
-            # Sort by model name and columns for consistency
-            final_z_score_df = final_z_score_df.sort_values("model", ignore_index=True)
-            if 'model' in final_z_score_df.columns:
-                cols = final_z_score_df.columns.tolist()
-                cols.remove('model')
-                final_z_score_df = final_z_score_df[['model'] + sorted(cols)]
+                pivoted_task = _pivot_summary_wide(avg_z_scores)
+                if not pivoted_task.empty:
+                    pivoted_z_scores.append(pivoted_task)
             
-            _save_df_to_results(final_z_score_df, args.z_score_output)
+            if pivoted_z_scores:
+                final_z_report = reduce(lambda left, right: pd.merge(left, right, on="model", how="outer"), pivoted_z_scores)
+                final_z_report = final_z_report.sort_values("model", ignore_index=True)
+                if "model" in final_z_report.columns:
+                    cols = final_z_report.columns.tolist()
+                    cols.remove("model")
+                    final_z_report = final_z_report[["model"] + sorted(cols)]
+                _save_df_to_results(final_z_report, args.z_score_output)
 
+        # 5. Combine and save all significance results
         if args.significance_output and all_sig_results:
             final_sig_df = pd.concat(all_sig_results, ignore_index=True)
-            # Sort for consistent output
-            sort_cols = ['model', 'dataset', 'target', 'metric']
-            final_sig_df = final_sig_df.sort_values(by=[c for c in sort_cols if c in final_sig_df.columns], ignore_index=True)
 
+            # Drop rows with missing p-values before saving
+            final_sig_df = final_sig_df.dropna(subset=['p_value'])
+
+            sort_cols = ["model", "dataset", "target", "metric"]
+            final_sig_df = final_sig_df.sort_values(
+                by=[c for c in sort_cols if c in final_sig_df.columns],
+                ignore_index=True,
+            )
             _save_df_to_results(final_sig_df, args.significance_output)
 
     except (ValueError, FileNotFoundError) as e:
@@ -548,8 +728,7 @@ def _run_standard_aggregation(df: pd.DataFrame, args: argparse.Namespace):
         # --- Raw Per-Seed Output ---
         # The dataframe is already filtered, just sort it for consistent output.
         final_df = df.sort_values(
-            ['dataset', 'target', 'model', 'split', 'seed'],
-            ignore_index=True
+            ["dataset", "target", "model", "split", "seed"], ignore_index=True
         )
 
     else:
@@ -557,10 +736,10 @@ def _run_standard_aggregation(df: pd.DataFrame, args: argparse.Namespace):
         # ------------------------------------------------------------------
         # Process each task type independently to handle different metrics
         # ------------------------------------------------------------------
-        tasks = df['task'].unique()
+        tasks = df["task"].unique()
         all_summaries = []
         for task in tasks:
-            task_df = df[df['task'] == task].copy()
+            task_df = df[df["task"] == task].copy()
             summary = _process_task_group(task_df)
             if not summary.empty:
                 all_summaries.append(summary)
@@ -577,17 +756,17 @@ def _run_standard_aggregation(df: pd.DataFrame, args: argparse.Namespace):
 
             # Merge all pivoted dataframes on the 'model' column
             final_df = reduce(
-                lambda left, right: pd.merge(left, right, on='model', how='outer'),
-                all_pivoted_dfs
+                lambda left, right: pd.merge(left, right, on="model", how="outer"),
+                all_pivoted_dfs,
             )
             # Sort by model name and columns for consistency
             final_df = final_df.sort_values("model", ignore_index=True)
-            
+
             # Make 'model' the first column, then sort the rest alphabetically
-            if 'model' in final_df.columns:
+            if "model" in final_df.columns:
                 cols = final_df.columns.tolist()
-                cols.remove('model')
-                final_df = final_df[['model'] + sorted(cols)]
+                cols.remove("model")
+                final_df = final_df[["model"] + sorted(cols)]
 
         else:
             # ------------------------------------------------------------------
@@ -596,17 +775,16 @@ def _run_standard_aggregation(df: pd.DataFrame, args: argparse.Namespace):
             final_df = pd.concat(all_summaries, ignore_index=True)
 
             # Stable row ordering: dataset and task order follows the catalog
-            final_df['canonical_target'] = final_df['dataset'] + ":" + final_df['target']
-            final_df['canonical_target'] = pd.Categorical(
-                final_df['canonical_target'],
-                categories=TASK_ORDER,
-                ordered=True
+            final_df["canonical_target"] = (
+                final_df["dataset"] + ":" + final_df["target"]
+            )
+            final_df["canonical_target"] = pd.Categorical(
+                final_df["canonical_target"], categories=TASK_ORDER, ordered=True
             )
             # Sort and drop the temporary column
             final_df = final_df.sort_values(
-                ['canonical_target', 'model', 'split'],
-                ignore_index=True
-            ).drop(columns='canonical_target')
+                ["canonical_target", "model", "split"], ignore_index=True
+            ).drop(columns="canonical_target")
 
     # --- Output ---
     if args.output_filename:
@@ -626,9 +804,13 @@ def main():
         args.wide_format = False
 
     if args.zscore_ref_config_file and args.zscore_ref_model_name:
-        parser.error("argument --zscore_ref_config_file: not allowed with argument --zscore_ref_model_name")
+        parser.error(
+            "argument --zscore_ref_config_file: not allowed with argument --zscore_ref_model_name"
+        )
     if args.sig_ref_config_file and args.sig_ref_model_name:
-        parser.error("argument --sig_ref_config_file: not allowed with argument --sig_ref_model_name")
+        parser.error(
+            "argument --sig_ref_config_file: not allowed with argument --sig_ref_model_name"
+        )
 
     rows = _collect_rows()
 
@@ -652,39 +834,49 @@ def main():
     # --- Merge results from old (long) and new (shortened) model names ---
     # This handles cases where results exist for the same model under both naming schemes.
     # It prioritizes the results from the shortened name, ensuring consistency.
-    if not df.empty and 'model' in df.columns:
-        df['model_canonical'] = df['model'].apply(_shorten_model_name)
+    if not df.empty and "model" in df.columns:
+        df["model_canonical"] = df["model"].apply(_shorten_model_name)
         # Prioritize rows where the model name was already the short canonical form
-        df['is_short_form'] = (df['model'] == df['model_canonical'])
-        df = df.sort_values(by=['is_short_form'], ascending=False)
-        
+        df["is_short_form"] = df["model"] == df["model_canonical"]
+        df = df.sort_values(by=["is_short_form"], ascending=False)
+
         # Identify duplicates based on the canonical name and experiment identifiers
-        deduplication_cols = ['model_canonical', 'dataset', 'task', 'target', 'split', 'seed']
-        df = df.drop_duplicates(subset=deduplication_cols, keep='first')
-        
+        deduplication_cols = [
+            "model_canonical",
+            "dataset",
+            "task",
+            "target",
+            "split",
+            "seed",
+        ]
+        df = df.drop_duplicates(subset=deduplication_cols, keep="first")
+
         # Clean up by renaming the canonical model name back to 'model'
-        df = df.drop(columns=['model', 'is_short_form']).rename(columns={'model_canonical': 'model'})
+        df = df.drop(columns=["model", "is_short_form"]).rename(
+            columns={"model_canonical": "model"}
+        )
 
     # --- Aggregate eCLIP sub-tasks by default ---
     if not args.no_aggregate_eclip:
         # This now applies to both eCLIP and lncRNA essentiality datasets
-        should_aggregate = df['dataset'].str.startswith('eclip-binding') | \
-                           df['dataset'].str.startswith('lncrna-ess')
+        should_aggregate = df["dataset"].str.startswith("eclip-binding") | df[
+            "dataset"
+        ].str.startswith("lncrna-ess")
 
         if should_aggregate.any():
-            df.loc[should_aggregate, 'target'] = 'aggregated'
+            df.loc[should_aggregate, "target"] = "aggregated"
 
     # ------------------------------------------------------------------
     # Z-Score and Significance Analysis (if activated)
     # ------------------------------------------------------------------
-    if (args.zscore_ref_config_file or args.zscore_ref_model_name):
+    if args.zscore_ref_config_file or args.zscore_ref_model_name:
         _run_zscore_and_significance_analysis(df, args)
 
     # ------------------------------------------------------------------
     # Standard Aggregation
     # ------------------------------------------------------------------
     # This runs if any standard output is requested (wide format or file output)
-    
+
     # Filter for standard aggregation based on the main config file
     df_for_agg = df
     if args.config_file:
@@ -696,11 +888,14 @@ def main():
         if not df_for_agg.empty:
             _run_standard_aggregation(df_for_agg, args)
         elif args.config_file:
-            print("No data left for standard aggregation after filtering by --config_file.")
+            print(
+                "No data left for standard aggregation after filtering by --config_file."
+            )
     elif not (args.zscore_ref_config_file or args.zscore_ref_model_name):
-        print("No analysis requested. Use --wide_format, --output_filename, or Z-score/significance flags.")
+        print(
+            "No analysis requested. Use --wide_format, --output_filename, or Z-score/significance flags."
+        )
 
 
 if __name__ == "__main__":
     main()
-
