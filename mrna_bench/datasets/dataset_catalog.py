@@ -7,7 +7,7 @@ from .go_mol_func import GOMolecularFunction
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
 from .rna_loc_fazal import RNALocalizationFazal
-from .rna_loc_ietswaart import RNALocalizationIetswaart
+from .rna_lifecycle_ietswaart import RNALifecycleIetswaart
 from .mrl_hl_lbkwk import MRLHLLBKWK
 from .prot_loc import ProteinLocalization
 from .mrl_sugimoto import MRLSugimoto
@@ -18,6 +18,9 @@ from .mrl_sample import (
     MRLSampleVarying
 )
 from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
+from .mirna_target import MiRNATarget, MIRNA_TARGETS_WITH_PREFIX
+from .translation_efficiency_human import TranslationEfficiencyHuman
+from .translation_efficiency_mouse import TranslationEfficiencyMouse
 
 from .eclip_binding import (
     eCLIPBindingK562,
@@ -35,7 +38,7 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
-    "rna-loc-ietswaart": RNALocalizationIetswaart,
+    "rna-lifecycle-ietswaart": RNALifecycleIetswaart,
     "prot-loc": ProteinLocalization,
     "mrl-hl-lbkwk": MRLHLLBKWK,
     "mrl-sugimoto": MRLSugimoto,
@@ -45,6 +48,9 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "mrl-sample-varying": MRLSampleVarying,
     "vep-traitgym-complex": VEPTraitGymComplex,
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
+    "mirna-target": MiRNATarget,
+    "translation-efficiency-human": TranslationEfficiencyHuman,
+    "translation-efficiency-mouse": TranslationEfficiencyMouse,
 }
 
 DATASET_INFO = {
@@ -156,8 +162,8 @@ DATASET_INFO = {
         "target_col": "target",
         "split_type": "homology",
     },
-    "rna-loc-ietswaart": {
-        "dataset": "rna-loc-ietswaart",
+    "rna-lifecycle-ietswaart": {
+        "dataset": "rna-lifecycle-ietswaart",
         "task": "multilabel",
         "target_col": "target",
         "split_type": "homology",
@@ -171,6 +177,24 @@ DATASET_INFO = {
     "vep-traitgym-mendelian": {
         "dataset": "vep-traitgym-mendelian",
         "task": "classification",
+        "target_col": "target",
+        "split_type": "homology",
+    },
+    "mirna-target": {
+        "dataset": "mirna-target",
+        "task": "multilabel",
+        "target_col": MIRNA_TARGETS_WITH_PREFIX,
+        "split_type": "homology",
+    },
+    "translation-efficiency-human": {
+        "dataset": "translation-efficiency-human",
+        "task": "reg_ridge",
+        "target_col": "target",
+        "split_type": "homology",
+    },
+    "translation-efficiency-mouse": {
+        "dataset": "translation-efficiency-mouse",
+        "task": "reg_ridge",
         "target_col": "target",
         "split_type": "homology",
     },
