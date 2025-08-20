@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=orthrus_lp
-#SBATCH --partition=morrisq,cpu
+#SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=8
@@ -25,8 +25,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-source /home/dalalt1/compute/miniforge3/etc/profile.d/conda.sh
-conda activate /home/dalalt1/compute/miniforge3/envs/mrna_bench
+source [path/to/conda.sh]
+conda activate [path/to/env]
 
 # if force_recompute is set to True
 if [ "$force_recompute" == "True" ]; then

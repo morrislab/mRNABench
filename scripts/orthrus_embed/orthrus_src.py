@@ -131,14 +131,24 @@ def create_block(
 
     norm_cls = partial(nn.LayerNorm if not rms_norm else RMSNorm, eps=norm_epsilon, **factory_kwargs)
 
-    block = Block(
-        d_model,
-        mix_cls,
-        mlp_cls=nn.Identity, # comment out for earlier mamba version
-        norm_cls=norm_cls,
-        fused_add_norm=fused_add_norm,
-        residual_in_fp32=residual_in_fp32,
-    )
+    if mamba_major_version == 2:
+        block = Block(
+            d_model,
+            mix_cls,
+            mlp_cls=nn.Identity, # comment out for earlier mamba version
+            norm_cls=norm_cls,
+            fused_add_norm=fused_add_norm,
+            residual_in_fp32=residual_in_fp32,
+        )
+    else:
+        block = Block(
+            d_model,
+            mix_cls,
+            norm_cls=norm_cls,
+            fused_add_norm=fused_add_norm,
+            residual_in_fp32=residual_in_fp32,
+        )
+
     block.layer_idx = layer_idx
     return block
 
