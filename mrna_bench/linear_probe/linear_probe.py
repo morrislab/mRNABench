@@ -29,11 +29,11 @@ class LinearProbe:
     """
 
     linear_models = {
-        "regression": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-        "reg_lin": LinearRegression(n_jobs=-1),
-        "reg_ridge": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-        "classification": LogisticRegression(max_iter=5000, n_jobs=-1),
-        "multilabel": MultiOutputClassifier(
+        "regression": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+        "reg_lin": lambda: LinearRegression(n_jobs=-1),
+        "reg_ridge": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+        "classification": lambda: LogisticRegression(max_iter=5000, n_jobs=-1),
+        "multilabel": lambda: MultiOutputClassifier(
             LogisticRegression(max_iter=5000, n_jobs=-1),
             n_jobs=-1
         )
@@ -148,7 +148,7 @@ class LinearProbe:
         Returns:
             Dictionary of linear probing metrics per split.
         """
-        model = self.linear_models[self.task]
+        model = self.linear_models[self.task]()
         splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
