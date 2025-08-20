@@ -5,6 +5,7 @@ from mrna_bench.models import EmbeddingModel
 from collections.abc import Callable
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 from orthrus_src import load_model
+from orthrus_src import mean_unpadded
 
 class Orthrus(EmbeddingModel):
 
@@ -78,6 +79,8 @@ class Orthrus(EmbeddingModel):
         splice: np.ndarray,
         overlap: int = 0,
         agg_fn: Callable | None = None,
+        subset_start: int | None = None,
+        subset_end: int | None = None,
     ) -> torch.Tensor:
         """Embed sequence using six track Orthrus.
 
@@ -115,10 +118,18 @@ class Orthrus(EmbeddingModel):
 
         lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
 
-        embedding = self.model.representation(
-            model_input_tt,
-            lengths,
-            channel_last=True
-        )
+        if subset_start is not None:
+            pre_mean = self.model.forward(model_input_tt, channel_last=True)
+
+            pre_mean = pre_mean[:, subset_start:subset_end, :]
+
+            embedding = mean_unpadded(pre_mean, lengths)
+
+        else:
+            embedding = self.model.representation(
+                model_input_tt,
+                lengths,
+                channel_last=True
+            )
 
         return embedding

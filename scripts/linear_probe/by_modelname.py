@@ -17,12 +17,20 @@ parser.add_argument("--task", type=str)
 parser.add_argument("--target", type=str, default="target")
 parser.add_argument("--split_type", type=str, default="default")
 parser.add_argument("--seeds", type=str, default=default_seeds)
+parser.add_argument("--force_recompute", action="store_true")
 args = parser.parse_args()
 
 
 if __name__ == "__main__":
     model_class = MODEL_CATALOG[args.model_name]
     model_short_name = model_class.get_model_short_name(args.model_version)
+
+    print("Running linear probe for model:", model_short_name)
+    print("Dataset:", args.dataset_name)
+    print("Task:", args.task)
+    print("Target:", args.target)
+    print("Split type:", args.split_type)
+    print("Seeds:", args.seeds)
 
     dataset = mb.load_dataset(args.dataset_name)
 
@@ -42,7 +50,9 @@ if __name__ == "__main__":
 
     for seed in seeds:
         out_fn = prober.persister.get_output_filename(seed)
-        if os.path.exists(lp_res_path) and out_fn in os.listdir(lp_res_path):
-            print("Results already computed.")
+        if os.path.exists(lp_res_path) and out_fn in os.listdir(lp_res_path) and not args.force_recompute:
+            print("Results already computed for seed:", seed)
             continue
+
+        print("Running linear probe for seed:", seed)
         metrics = prober.run_linear_probe(seed, persist=True)

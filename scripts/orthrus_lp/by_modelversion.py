@@ -51,5 +51,4 @@ if __name__ == "__main__":
             continue
 
         print("Running linear probe for seed:", seed)
-
         metrics = prober.run_linear_probe(seed, persist=True)

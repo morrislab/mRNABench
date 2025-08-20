@@ -1,12 +1,12 @@
 #!/bin/bash
 
-model_name=Evo2 #RiNALMo
+model_name=Evo2
 model_versions=(
     # "evo2_40b"
-    "evo2_7b"
+    # "evo2_7b"
     # "evo2_40b_base"
     # "evo2_7b_base"
-    # "evo2_1b_base"
+    "evo2_1b_base"
 )
 
 dataset_names=(
@@ -18,30 +18,30 @@ dataset_names=(
     # "rnahl-human"
     # "rnahl-mouse"
     # "rna-loc-fazal"
-    # "rna-loc-ietswaart"
+    # "rna-lifecycle-ietswaart"
     # "prot-loc"
     # "mrl-hl-lbkwk" # needs only 1 chunk
     # "mrl-sugimoto"
+    # "vep-mapsy"
     # "vep-traitgym-complex"
     # "vep-traitgym-mendelian"
-    # "mrl-sample-egfp" # needs like 25
-    # "mrl-sample-mcherry" # needs like 25
-    # "mrl-sample-designed" # needs like 25
-    # "mrl-sample-varying" # needs like 25
-    "pcg-ess-hap1"
-    "pcg-ess-hek293ft"
-    "pcg-ess-k562"
-    "pcg-ess-mda-mb-231"
-    "pcg-ess-thp1"
-    "pcg-ess-shared"
-    "lncrna-ess-hap1"
-    "lncrna-ess-hek293ft"
-    "lncrna-ess-k562"
-    "lncrna-ess-mda-mb-231"
-    "lncrna-ess-thp1"
+    # "mirna-target"
+    # "mrl-sample-egfp" # needs like 25 chunks
+    # "mrl-sample-mcherry" # needs like 25 chunks
+    # "mrl-sample-designed" # needs like 25 chunks
+    # "mrl-sample-varying" # needs like 25 chunks
+    # "pal-tail-length-xiang-gv"
+    # "pal-tail-length-xiang-gvtomii"
+    # "pal-tail-length-xiang-p4initial"
+    # "pal-tail-length-xiang-p4diff"
+    # "utr-variants-bohn-utr5"
+    # "utr-variants-bohn-utr3"
+    # "translation-efficiency-mouse"
+    # "translation-efficiency-human"
 )
 
 max_chunks=3
+force_recompute="False"
 
 for version in "${model_versions[@]}"; do
 
@@ -53,23 +53,24 @@ for version in "${model_versions[@]}"; do
 
         if [[ $max_chunks -eq 1 ]]; then
             sbatch evo_slurm_script.sh \
-                --model_class $model_name \
+                --model_name $model_name \
                 --model_version $version \
                 --dataset_name $dataset_name \
                 --d_chunk_ind 0 \
-                --d_num_chunks 0
+                --d_num_chunks 0 \
+                --force_recompute $force_recompute
         else
             for ((chunk_ind=0; chunk_ind<max_chunks; chunk_ind++)); do
 
-                # echo "sbatch evo_slurm_script.sh --model_class $model_name --model_version $version --dataset_name $dataset_name --d_chunk_ind $chunk_ind --d_num_chunks $max_chunks"
                 echo "${chunk_ind} / $max_chunks"
 
                 sbatch evo_slurm_script.sh \
-                    --model_class $model_name \
+                    --model_name $model_name \
                     --model_version $version \
                     --dataset_name $dataset_name \
                     --d_chunk_ind $chunk_ind \
-                    --d_num_chunks $max_chunks
+                    --d_num_chunks $max_chunks \
+                    --force_recompute $force_recompute
             done
         fi
     done
