@@ -1,12 +1,12 @@
 #!/bin/bash
 #SBATCH --job-name=orthrus_embed
-#SBATCH --partition=morrisq,gpu
+#SBATCH --partition=gpu
 #SBATCH --gres=gpu:1
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=16GB
-#SBATCH --time=3:00:00
+#SBATCH --time=1:00:00
 #SBATCH --output=./logs/orthrus_embed.%A.out
 #SBATCH --error=./logs/orthrus_embed.%A.err
 
@@ -25,8 +25,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-source /home/dalalt1/compute/miniforge3/etc/profile.d/conda.sh
-conda activate /home/dalalt1/compute/miniforge3/envs/cerberus
+source [path/to/conda.sh]
+conda activate [path/to/env]
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 
