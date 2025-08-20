@@ -44,12 +44,16 @@ class EmbeddingModel(ABC):
         self,
         sequence: str,
         agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence.
 
         Args:
             sequence: String of nucleotides to embed (uses DNA bases).
             agg_fn: Method used to aggregate across sequence dimension.
+            subset_start: Start index for sequence subset.
+            subset_end: End index for sequence subset.
 
         Returns:
             Embedded sequence with shape (1 x H).
@@ -63,6 +67,8 @@ class EmbeddingModel(ABC):
         cds: np.ndarray,
         splice: np.ndarray,
         agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence incorporating splice and cds information.
 
@@ -71,11 +77,37 @@ class EmbeddingModel(ABC):
             cds: Binary encoding of first nucleotide of each codon in CDS.
             splice: Binary encoding of splice site locations.
             agg_fn: Method used to aggregate across sequence dimension.
+            subset_start: Start index for sequence subset.
+            subset_end: End index for sequence subset.
 
         Returns:
             Embedded sequence with shape (1 x H).
         """
         pass
+
+
+    def subset_sequence_emb(
+        self,
+        sequence_embedding: torch.Tensor,
+        start: int | None,
+        end: int | None,
+        channels_last: bool = False
+    ) -> torch.Tensor:
+        """Extract a subset of the sequence embedding.
+        Args:
+            sequence_embedding: The input sequence embedding as a matrix.
+            start: The starting index of the subset.
+            end: The ending index of the subset.
+            channels_last: If True, the input is in channels-last format (B, L, C).
+                           If False, the input is in channels-first format (B, C, L).
+
+        Returns:
+            Extracted subset of the sequence embedding.
+        """
+        if channels_last:
+            return sequence_embedding[:, start:end, :]
+        else:
+            return sequence_embedding[:, :, start:end]
 
     def chunk_sequence(self, sequence: str, chunk_length: int) -> list[str]:
         """Split sequence into chunks of specified length with given overlap.

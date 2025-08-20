@@ -6,7 +6,6 @@ import torch
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
-
 class Orthrus(EmbeddingModel):
     """Inference wrapper for Orthrus.
 
@@ -55,7 +54,9 @@ class Orthrus(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable | None = None
+        agg_fn: Callable | None = None,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using four track Orthrus.
 
@@ -82,11 +83,12 @@ class Orthrus(EmbeddingModel):
 
         lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
 
-        embedding = self.model.representation(
-            model_input_tt,
-            lengths,
-            channel_last=True
+        pre_mean = self.model.forward(model_input_tt, channel_last=True)
+        pre_mean = self.subset_sequence_emb(
+            pre_mean, subset_start, subset_end, channels_last=True
         )
+
+        embedding = self.model.mean_unpadded(pre_mean, lengths)
 
         return embedding
 
@@ -96,6 +98,8 @@ class Orthrus(EmbeddingModel):
         cds: np.ndarray,
         splice: np.ndarray,
         agg_fn: Callable | None = None,
+        subset_start: int | None = None,
+        subset_end: int | None = None,
     ) -> torch.Tensor:
         """Embed sequence using six track Orthrus.
 
@@ -129,10 +133,11 @@ class Orthrus(EmbeddingModel):
 
         lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
 
-        embedding = self.model.representation(
-            model_input_tt,
-            lengths,
-            channel_last=True
+        pre_mean = self.model.forward(model_input_tt, channel_last=True)
+        pre_mean = self.subset_sequence_emb(
+            pre_mean, subset_start, subset_end, channels_last=True
         )
+
+        embedding = self.model.mean_unpadded(pre_mean, lengths)
 
         return embedding

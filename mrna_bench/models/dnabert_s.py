@@ -58,7 +58,9 @@ class DNABERTS(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using DNABERT-S.
 
@@ -72,6 +74,10 @@ class DNABERTS(EmbeddingModel):
         inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
         inputs = inputs.to(self.device)
         hidden_states = self.model(inputs)[0]
+
+        hidden_states = self.subset_sequence_emb(
+            hidden_states, subset_start, subset_end
+        )
 
         embedding_mean = agg_fn(hidden_states, dim=1)
         return embedding_mean

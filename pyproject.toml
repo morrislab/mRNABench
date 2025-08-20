@@ -42,7 +42,10 @@ base_models = [
     "multimolecule",
     "modelgenerator==0.1.1-4",
     "evo-model",
-    "flash_attn==2.7.4post1"
+    "borzoi-pytorch==0.4.2",
+    "enformer-pytorch==0.8.10",
+    "flash_attn==2.7.4post1",
+    "ViennaRNA==2.7.0"
 ]
 dev = [
     "mypy",

@@ -46,7 +46,9 @@ class HelixmRNAWrapper(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None,
     ) -> torch.Tensor:
         """Embed sequence using Helix-mRNA.
 
@@ -62,6 +64,10 @@ class HelixmRNAWrapper(EmbeddingModel):
         dataset = self.model.process_data(sequence)
         rna_embeddings = torch.Tensor(self.model.get_embeddings(dataset))
 
+        rna_embeddings = self.subset_sequence_emb(
+            rna_embeddings, subset_start, subset_end
+        )
+
         return agg_fn(rna_embeddings, dim=1)
 
     def embed_sequence_sixtrack(
@@ -70,6 +76,8 @@ class HelixmRNAWrapper(EmbeddingModel):
         cds: np.ndarray,
         splice: np.ndarray,
         agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None,
     ) -> torch.Tensor:
         """Embed sequence using Helix-mRNA.
 
@@ -91,7 +99,12 @@ class HelixmRNAWrapper(EmbeddingModel):
         _ = splice  # Unused
 
         modified_sequence = self.tokenize_cds(sequence, cds)
-        embedding = self.embed_sequence(modified_sequence, agg_fn=agg_fn)
+        embedding = self.embed_sequence(
+            sequence=modified_sequence,
+            agg_fn=agg_fn,
+            subset_start=subset_start,
+            subset_end=subset_end
+        )
 
         return embedding
 

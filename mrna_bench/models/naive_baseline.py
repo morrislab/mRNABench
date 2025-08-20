@@ -72,7 +72,9 @@ class NaiveBaseline(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable | None = None
+        agg_fn: Callable | None = None,
+        subset_start: int | None = None,
+        subset_end: int | None = None,
     ) -> torch.Tensor:
         """Embed sequence using four track NaiveBaseline.
 
@@ -118,6 +120,8 @@ class NaiveBaseline(EmbeddingModel):
         cds: np.ndarray,
         splice: np.ndarray,
         agg_fn: Callable | None = None,
+        subset_start: int | None = None,
+        subset_end: int | None = None,
     ) -> torch.Tensor:
         """Embed sequence using six track NaiveBaseline.
 

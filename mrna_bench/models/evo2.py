@@ -65,15 +65,17 @@ class Evo2(EmbeddingModel):
         ]
 
         if model_version in ["evo2_40b", "evo2_7b"]:
-            # self.max_length = 1_000_000
-            self.max_length = 100_000
+            self.max_length = 1_000_000
+
 
         revert_model_cache_var(old_hf_cache)
 
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using Evo2.
 
@@ -114,7 +116,14 @@ class Evo2(EmbeddingModel):
             layer_chunks = [
                 embedding_chunks[i][layer_name] for i in range(n_chunks)
             ]
-            agg_chunks = agg_fn(torch.cat(layer_chunks, dim=1), dim=1)
+
+            embedding = torch.cat(layer_chunks, dim=1)
+
+            embedding = self.subset_sequence_emb(
+                embedding, subset_start, subset_end
+            )
+
+            agg_chunks = agg_fn(embedding, dim=1)
             aggregate_embeddings.append(agg_chunks.float().cpu())
 
         # concatenate the embeddings across the layers

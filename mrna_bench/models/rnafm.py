@@ -64,7 +64,9 @@ class RNAFM(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using RNA-FM.
 
@@ -102,6 +104,10 @@ class RNAFM(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
+        embedding = self.subset_sequence_emb(
+            embedding, subset_start, subset_end
+        )
+
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
@@ -111,6 +117,8 @@ class RNAFM(EmbeddingModel):
         cds: np.ndarray,
         splice: np.ndarray,
         agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using mRNA-FM.
 
@@ -131,7 +139,18 @@ class RNAFM(EmbeddingModel):
 
         sequence = sequence.replace("T", "U")
 
-        cds_seq = self.get_cds(sequence, cds)
+        cds_seq, cds_start = self.get_cds(sequence, cds)
+
+        # Adjust subset indices to CDS coordinates
+        if subset_start is not None:
+            subset_start = subset_start - cds_start
+            if subset_start < 0 or subset_start >= len(cds_seq):
+                subset_start = None
+
+        if subset_end is not None:
+            subset_end = subset_end - cds_start
+            if subset_end <= 0 or subset_end > len(cds_seq):
+                subset_end = None
 
         chunks = self.chunk_sequence(cds_seq, (self.max_length - 2) * 3)
 
@@ -154,6 +173,12 @@ class RNAFM(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
+        # print('wefgwegqegqergqergfqerg:', embedding.shape)
+
+        embedding = self.subset_sequence_emb(
+            embedding, subset_start, subset_end
+        )
+
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
@@ -172,15 +197,16 @@ class RNAFM(EmbeddingModel):
         """
         if sum(cds) == 0:
             warnings.warn("No CDS found. Returning truncated sequence.")
-            return sequence[:len(sequence) - (len(sequence) % 3)]
+            return sequence[:len(sequence) - (len(sequence) % 3)], 0
 
-        first_one_index = np.argmax(cds == 1)
-        last_one_index = (len(cds) - 1 - np.argmax(np.flip(cds) == 1)) + 2
+        cds_indices = np.where(cds == 1)[0]
+        start = cds_indices[0]
+        end = cds_indices[-1] + 3  # include full codon
 
-        proposed_cds = sequence[first_one_index:last_one_index + 1]
+        proposed_cds = sequence[start:end]
 
         if len(proposed_cds) % 3 != 0:
             warnings.warn("Irregular CDS. Returning truncated sequence.")
-            return proposed_cds[:-(len(proposed_cds) % 3)]
+            proposed_cds = proposed_cds[:-(len(proposed_cds) % 3)]
 
-        return proposed_cds
+        return proposed_cds, start

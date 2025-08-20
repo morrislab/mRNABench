@@ -1,25 +1,20 @@
-from typing import Callable
+from collections.abc import Callable
 
 import torch
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
-from mrna_bench.utils import get_model_weights_path
 
 
-class RNABERT(EmbeddingModel):
-    """Inference Wrapper for RNABERT.
+class PlantRNAFM(EmbeddingModel):
+    """Inference wrapper for PlantRNAFM.
 
-    RNABERT is a transformer based RNA foundation model pre-trained using
-    both a MLM and structural alignment learning objective. RNABERT is
-    pre-trained on 80K ncRNA sequences.
+    PlantRNAFM is a transformer-based RNA foundation model trained on...
 
-    Link: https://github.com/mana438/RNABERT
-
-    This wrapper uses the RNABERT implementation from the multimolecule:
-    https://huggingface.co/multimolecule/rnabert
+    Link: https://github.com/yangheng95/PlantRNA-FM
     """
 
-    max_length = 440
+    max_length = 1026
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -27,32 +22,32 @@ class RNABERT(EmbeddingModel):
         return model_version
 
     def __init__(self, model_version: str, device: torch.device):
-        """Initialize RNABERT inference wrapper.
+        """Initialize PlantRNAFM inference wrapper.
 
         Args:
-            model_version: Must be "rnabert".
+            model_version: Version of model to load. Only "plant_rnafm" is supported.
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
 
         try:
-            from multimolecule import RnaTokenizer, RnaBertModel
+            from transformers import AutoModel, AutoTokenizer
         except ImportError:
             raise ImportError(
-                "Install base_models optional dependency to use RNABERT."
+                "Install base_models optional dependency to use PlantRNAFM."
             )
 
-        self.tokenizer = RnaTokenizer.from_pretrained(
-            "multimolecule/{}".format(model_version),
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            "yangheng/PlantRNA-FM",
+            trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
 
-        self.model = RnaBertModel.from_pretrained(
-            "multimolecule/{}".format(model_version),
+        self.model = AutoModel.from_pretrained(
+            "yangheng/PlantRNA-FM",
+            trust_remote_code=True,
             cache_dir=get_model_weights_path()
-        ).to(device)
-
-        self.is_sixtrack = False
+        ).to(device).eval()
 
     def embed_sequence(
         self,
@@ -61,14 +56,14 @@ class RNABERT(EmbeddingModel):
         subset_start: int | None = None,
         subset_end: int | None = None
     ) -> torch.Tensor:
-        """Embed RNA sequence using RNABERT.
+        """Embed sequence using PlantRNAFM.
 
         Args:
             sequence: Sequence to be embedded.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            RNABERT embedding of sequence with shape (1 x 120).
+            PlantRNAFM embedding of sequence with shape (1 x 480).
         """
         sequence = sequence.replace("T", "U")
         chunks = self.chunk_sequence(sequence, self.max_length - 2)
@@ -91,5 +86,5 @@ class RNABERT(EmbeddingModel):
         return aggregate_embedding
 
     def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not implemented for RNABERT."""
-        raise NotImplementedError("RNABERT does not support sixtrack mode.")
+        """Not supported."""
+        raise NotImplementedError("Six track not available for PlantRNAFM.")

@@ -1,17 +1,22 @@
 from typing import Type
 
 from .aido import AIDORNA
+from .borzoi import Borzoi
 from .codonbert import CodonBERT
 from .dnabert import DNABERT2
 from .dnabert_s import DNABERTS
+from .enformer import Enformer
 from .ernierna import ERNIERNA
 from .evo1 import Evo1
 from .evo2 import Evo2
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
 from .naive_baseline import NaiveBaseline
+from .naive_mamba import NaiveMamba
 from .nucleotide_transformer import NucleotideTransformer
+from .omnigenome import OmniGenome
 from .orthrus import Orthrus
+from .plant_rnafm import PlantRNAFM
 from .rinalmo import RiNALMo
 from .rnabert import RNABERT
 from .rnaernie import RNAErnie
@@ -26,18 +31,23 @@ from .embedding_model import EmbeddingModel
 
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "AIDO.RNA": AIDORNA,
+    "Borzoi": Borzoi,
     "CodonBERT": CodonBERT,
     "DNABERT-S": DNABERTS,
     "DNABERT2": DNABERT2,
+    "Enformer": Enformer,
     "ERNIE-RNA": ERNIERNA,
     "Evo1": Evo1,
     "Evo2": Evo2,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
     "NaiveBaseline": NaiveBaseline,
+    "NaiveMamba": NaiveMamba,
     "NucleotideTransformer": NucleotideTransformer,
     "RiNALMo": RiNALMo,
+    "OmniGenome": OmniGenome,
     "Orthrus": Orthrus,
+    "Plant-RNAFM": PlantRNAFM,
     "RNABERT": RNABERT,
     "RNAErnie": RNAErnie,
     "RNA-FM": RNAFM,
@@ -49,15 +59,28 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
 
 
 MODEL_VERSION_MAP: dict[str, list[str]] = {
-    "CodonBERT": ["codonbert"],
     "AIDO.RNA": [
         "aido_rna_650m",
         "aido_rna_650m_cds",
         "aido_rna_1b600m",
         "aido_rna_1b600m_cds"
     ],
+    "Borzoi": [
+        "borzoi-replicate-0",
+        "borzoi-replicate-1",
+        "borzoi-replicate-2",
+        "borzoi-replicate-3",
+        "flashzoi-replicate-0",
+        "flashzoi-replicate-1",
+        "flashzoi-replicate-2",
+        "flashzoi-replicate-3",
+        "borzoi",
+        "flashzoi"
+    ],
+    "CodonBERT": ["codonbert"],
     "DNABERT-S": ["dnabert-s"],
     "DNABERT2": ["dnabert2"],
+    "Enformer": ["enformer-official-rough"],
     "ERNIE-RNA": ["ernierna", "ernierna-ss"],
     "Evo1": [
         "evo-1.5-8k-base",
@@ -83,6 +106,9 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "naive-4-track",
         "naive-6-track"
     ],
+    "NaiveMamba": [
+        "naive-mamba"
+    ],
     "NucleotideTransformer": [
         "2.5b-multi-species",
         "2.5b-1000g",
@@ -93,10 +119,15 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "v2-250m-multi-species",
         "v2-500m-multi-species"
     ],
+    "OmniGenome": [
+        "omnigenome-52m",
+        "omnigenome-186m"
+    ],
     "Orthrus": [
         "orthrus-large-6-track",
         "orthrus-base-4-track"
     ],
+    "Plant-RNAFM": ["plant_rnafm"],
     "RiNALMo": ["rinalmo"],
     "RNABERT": ["rnabert"],
     "RNAErnie": ["rnaernie"],

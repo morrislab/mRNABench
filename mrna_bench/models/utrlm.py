@@ -72,7 +72,9 @@ class UTRLM(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using UTR-LM.
 
@@ -97,6 +99,10 @@ class UTRLM(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
+        embedding = self.subset_sequence_emb(
+            embedding, subset_start, subset_end
+        )
+
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
@@ -106,6 +112,8 @@ class UTRLM(EmbeddingModel):
         cds: np.ndarray,
         splice: np.ndarray,
         agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed ONLY the 5'UTR of a sequence using UTR-LM.
 

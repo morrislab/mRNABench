@@ -55,7 +55,9 @@ class RiNALMo(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using RiNALMo.
 
@@ -79,9 +81,13 @@ class RiNALMo(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
+        embedding = self.subset_sequence_emb(
+            embedding, subset_start, subset_end
+        )
+
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 
     def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
-        raise NotImplementedError("Six track not available for NT.")
+        raise NotImplementedError("Six track not available for RiNALMo.")

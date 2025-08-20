@@ -94,7 +94,7 @@ def test_rnafm_forward_chunking(rnamodel):
             assert len(tokens[0]) == spillover + 5
             assert tokens[0][0] != 0
             assert tokens[0][-1] == 2
-        return {"representations": [torch.zeros(1, 640)] * 13}
+        return {"representations": [torch.zeros(1, 10, 640)] * 13}
 
     with patch.object(rnamodel, "model") as mock_model:
         mock_model.side_effect = side_effect
@@ -109,7 +109,7 @@ def test_mrna_forward_cds_slice(mrnamodel):
 
     def side_effect(tokens, repr_layers=[12]):
         assert torch.all(tokens[0][1:-1] == 23)
-        return {"representations": [torch.zeros(1, 1280)] * 13}
+        return {"representations": [torch.zeros(1, 10, 1280)] * 13}
 
     with patch.object(mrnamodel, "model") as mock_model:
         mock_model.side_effect = side_effect
@@ -133,7 +133,7 @@ def test_mrnafm_forward_chunking(mrnamodel):
             assert tokens[0][0] != 0
             assert tokens[0][-1] == 2
 
-        return {"representations": [torch.zeros(1, 1280)] * 13}
+        return {"representations": [torch.zeros(1, 10, 1280)] * 13}
 
     with patch.object(mrnamodel, "model") as mock_model:
         mock_model.side_effect = side_effect
@@ -145,8 +145,9 @@ def test_get_cds_full(mrnamodel):
     sequence = "CCGATGCCG"
     cds = np.array([0, 0, 0, 1, 0, 0, 0, 0, 0])
 
-    cds_seq = mrnamodel.get_cds(sequence, cds)
+    cds_seq, cds_start = mrnamodel.get_cds(sequence, cds)
     assert cds_seq == "ATG"
+    assert cds_start == 3
 
 
 def test_get_cds_missing(mrnamodel):
@@ -157,11 +158,13 @@ def test_get_cds_missing(mrnamodel):
     sequence_2 = "CCGATGCC"
     cds_2 = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 
-    cds_seq_1 = mrnamodel.get_cds(sequence_1, cds_1)
+    cds_seq_1, cds_start_1 = mrnamodel.get_cds(sequence_1, cds_1)
     assert cds_seq_1 == "CCGATGCCG"
+    assert cds_start_1 == 0
 
-    cds_seq_2 = mrnamodel.get_cds(sequence_2, cds_2)
+    cds_seq_2, cds_start_2 = mrnamodel.get_cds(sequence_2, cds_2)
     assert cds_seq_2 == "CCGATG"
+    assert cds_start_2 == 0
 
 
 def test_get_cds_irregular(mrnamodel):
@@ -170,8 +173,10 @@ def test_get_cds_irregular(mrnamodel):
     cds_1 = np.array([0, 0, 0, 0, 1, 0, 0, 1, 0])
     cds_2 = np.array([0, 0, 0, 0, 0, 1, 0, 0, 1])
 
-    cds_1_seq = mrnamodel.get_cds(sequence, cds_1)
-    cds_2_seq = mrnamodel.get_cds(sequence, cds_2)
+    cds_1_seq, cds_start_1 = mrnamodel.get_cds(sequence, cds_1)
+    cds_2_seq, cds_start_2 = mrnamodel.get_cds(sequence, cds_2)
 
     assert cds_1_seq == "TGC"
+    assert cds_start_1 == 4
     assert cds_2_seq == "GCC"
+    assert cds_start_2 == 5

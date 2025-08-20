@@ -81,7 +81,9 @@ class HyenaDNA(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
+        subset_start: int | None = None,
+        subset_end: int | None = None,
     ) -> torch.Tensor:
         """Embed sequence using HyenaDNA.
 
@@ -105,6 +107,10 @@ class HyenaDNA(EmbeddingModel):
                 embedding_chunks.append(hidden_states)
 
             hidden_states = torch.cat(embedding_chunks, dim=1)
+
+        hidden_states = self.subset_sequence_emb(
+            hidden_states, subset_start, subset_end
+        )
 
         embedding_mean = agg_fn(hidden_states, dim=1)
         return embedding_mean

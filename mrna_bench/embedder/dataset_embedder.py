@@ -63,7 +63,7 @@ class DatasetEmbedder:
         chunk_df = self.data_df.iloc[s:e]
         return chunk_df
 
-    def embed_dataset(self) -> torch.Tensor:
+    def embed_dataset(self, subset_start = None, subset_end = None) -> torch.Tensor:
         """Compute embeddings for current dataset chunk.
 
         Returns:
@@ -77,10 +77,16 @@ class DatasetEmbedder:
                 embedding = self.model.embed_sequence_sixtrack(
                     row["sequence"],
                     row["cds"].astype(np.int32),
-                    row["splice"].astype(np.int32)
+                    row["splice"].astype(np.int32),
+                    subset_start=subset_start,
+                    subset_end=subset_end
                 )
             else:
-                embedding = self.model.embed_sequence(row["sequence"])
+                embedding = self.model.embed_sequence(
+                    row["sequence"],
+                    subset_start=subset_start,
+                    subset_end=subset_end
+                )
             dataset_embeddings.append(embedding)
 
         embeddings = torch.cat(dataset_embeddings, dim=0)
@@ -167,7 +173,6 @@ class DatasetEmbedder:
         model: EmbeddingModel,
         data_df: pd.DataFrame,
         s_chunk_overlap: int = 0,
-        transcript_avg: bool = False,
     ) -> "DatasetEmbedder":
         """Create a DatasetEmbedder instance from a custom dataframe.
 
@@ -177,12 +182,9 @@ class DatasetEmbedder:
                 - sequence: RNA sequence
                 - cds: CDS track information (as int32)
                 - splice: Splice track information (as int32)
-                - gene_id: (optional) Used when transcript_avg is True
             s_chunk_overlap: Number of overlapping tokens between chunks in
                 individual sequences when using chunking to handle input
                 exceeding maximum model length.
-            transcript_avg: Whether to average embeddings of all transcripts
-                for a given gene.
 
         Returns:
             Initialized DatasetEmbedder.
@@ -193,11 +195,9 @@ class DatasetEmbedder:
         # Check for required columns
         required_cols = ["sequence", "cds", "splice"]
         missing_cols = [col for col in required_cols if col not in data_df.columns]
+
         if missing_cols:
             raise ValueError(f"DataFrame is missing required columns: {missing_cols}")
-
-        if transcript_avg and "gene_id" not in data_df.columns:
-            raise ValueError("gene_id column is required when transcript_avg is True")
 
         # Create a minimal BenchmarkDataset instance
         class MinimalBenchmarkDataset:
@@ -213,8 +213,6 @@ class DatasetEmbedder:
         return cls(
             model=model,
             dataset=dataset,
-            s_chunk_overlap=s_chunk_overlap,
-            transcript_avg=transcript_avg,
         )
 
 
