@@ -23,6 +23,9 @@ if __name__ == "__main__":
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
+        if 'vep' in dataset_name or 'utr' in dataset_name or 'mapsy' in dataset_name:
+            continue
+
         target_cols = dataset_info["target_col"]
         lp_res_folder = mb.load_dataset(dataset_name).dataset_path + "/lp_results"
 
