@@ -7,13 +7,16 @@ from .go_mol_func import GOMolecularFunction
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
 from .rna_loc_fazal import RNALocalizationFazal
-from .rna_loc_ietswaart import RNALocalizationIetswaart
+from .rna_lifecycle_ietswaart import RNALifecycleIetswaart
 from .mrl_hl_lbkwk import MRLHLLBKWK
 from .pal_tail_length_xiang import (
     PALTailLengthGV,
-    PALTailLengthGVTomii
+    PALTailLengthGVTomii,
+    PALTailLengthP4Diff,
+    PALTailLengthP4Initial
 )
 from .prot_loc import ProteinLocalization
+from .mirna_target import MiRNATarget, MIRNA_TARGETS_WITH_PREFIX
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
     MRLSampleEGFP,
@@ -21,17 +24,20 @@ from .mrl_sample import (
     MRLSampleDesigned,
     MRLSampleVarying
 )
+from .translation_efficiency_human import TranslationEfficiencyHuman
+from .translation_efficiency_mouse import TranslationEfficiencyMouse
 from .utr_variants_bohn import (
     UTRVariantsBohnUTR5,
     UTRVariantsBohnUTR3
 )
+from .vep_mapsy import VEPMaPSy
 from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 from .eclip_binding import (
     eCLIPBindingK562,
-    eCLIP_K562_TOP_RBPS_LIST,
+    ECLIP_K562_TOP_RBPS_LIST,
     eCLIPBindingHepG2,
-    eCLIP_HepG2_TOP_RBPS_LIST
+    ECLIP_HEPG2_TOP_RBPS_LIST
 )
 
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
@@ -43,18 +49,24 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
-    "rna-loc-ietswaart": RNALocalizationIetswaart,
+    "rna-lifecycle-ietswaart": RNALifecycleIetswaart,
     "pal-tail-length-xiang-gv": PALTailLengthGV,
     "pal-tail-length-xiang-gvtomii": PALTailLengthGVTomii,
+    "pal-tail-length-xiang-p4diff": PALTailLengthP4Diff,
+    "pal-tail-length-xiang-p4initial": PALTailLengthP4Initial,
     "prot-loc": ProteinLocalization,
+    "mirna-target": MiRNATarget,
     "mrl-hl-lbkwk": MRLHLLBKWK,
     "mrl-sugimoto": MRLSugimoto,
     "mrl-sample-egfp": MRLSampleEGFP,
     "mrl-sample-mcherry": MRLSampleMCherry,
     "mrl-sample-designed": MRLSampleDesigned,
     "mrl-sample-varying": MRLSampleVarying,
+    "translation-efficiency-human": TranslationEfficiencyHuman,
+    "translation-efficiency-mouse": TranslationEfficiencyMouse,
     "utr-variants-bohn-utr5": UTRVariantsBohnUTR5,
     "utr-variants-bohn-utr3": UTRVariantsBohnUTR3,
+    "vep-mapsy": VEPMaPSy,
     "vep-traitgym-complex": VEPTraitGymComplex,
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
@@ -62,14 +74,14 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
 DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
     "eclip-binding-k562": {
         "dataset": "eclip-binding-k562",
-        "task": ["classification"] * len(eCLIP_K562_TOP_RBPS_LIST),
-        "target_col": eCLIP_K562_TOP_RBPS_LIST,
+        "task": ["classification"] * len(ECLIP_K562_TOP_RBPS_LIST),
+        "target_col": ECLIP_K562_TOP_RBPS_LIST,
         "split_type": "homology",
     },
     "eclip-binding-hepg2": {
         "dataset": "eclip-binding-hepg2",
-        "task": ["classification"] * len(eCLIP_HepG2_TOP_RBPS_LIST),
-        "target_col": eCLIP_HepG2_TOP_RBPS_LIST,
+        "task": ["classification"] * len(ECLIP_HEPG2_TOP_RBPS_LIST),
+        "target_col": ECLIP_HEPG2_TOP_RBPS_LIST,
         "split_type": "homology",
     },
     "go-bp": {
@@ -90,6 +102,12 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
         "target_col": ["target"],
         "split_type": "homology",
     },
+    "mirna-target": {
+        "dataset": "mirna-target",
+        "task": ["classification"] * len(MIRNA_TARGETS_WITH_PREFIX),
+        "target_col": MIRNA_TARGETS_WITH_PREFIX,
+        "split_type": "homology",
+    },
     "mrl-sugimoto": {
         "dataset": "mrl-sugimoto",
         "task": ["reg_ridge"],
@@ -99,7 +117,8 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
     "mrl-hl-lbkwk": {
         "dataset": "mrl-hl-lbkwk",
         "task": ["reg_ridge", "reg_ridge"],
-        "target_col": ["target_in_cell_half_life", "target_ribosome_load"],
+        "target_col": ["target_in_cell_half_life",
+                       "target_ribosome_load"],
         "split_type": "default",
     },
     "mrl-sample-egfp": {
@@ -142,6 +161,18 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
         "target_col": ["target"],
         "split_type": "homology",
     },
+    "pal-tail-length-xiang-p4diff": {
+        "dataset": "pal-tail-length-xiang-p4diff",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
+        "split_type": "default",
+    },
+    "pal-tail-length-xiang-p4initial": {
+        "dataset": "pal-tail-length-xiang-p4initial",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
+        "split_type": "default",
+    },
     "prot-loc": {
         "dataset": "prot-loc",
         "task": ["multilabel"],
@@ -166,9 +197,21 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
         "target_col": ["target"],
         "split_type": "homology",
     },
-    "rna-loc-ietswaart": {
-        "dataset": "rna-loc-ietswaart",
+    "rna-lifecycle-ietswaart": {
+        "dataset": "rna-lifecycle-ietswaart",
         "task": ["multilabel"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "translation-efficiency-human": {
+        "dataset": "translation-efficiency-human",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "translation-efficiency-mouse": {
+        "dataset": "translation-efficiency-mouse",
+        "task": ["reg_ridge"],
         "target_col": ["target"],
         "split_type": "homology",
     },
@@ -180,6 +223,12 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
     },
     "utr-variants-bohn-utr3": {
         "dataset": "utr-variants-bohn-utr3",
+        "task": ["classification"],
+        "target_col": ["target"],
+        "split_type": "default",
+    },
+    "vep-mapsy": {
+        "dataset": "vep-mapsy",
         "task": ["classification"],
         "target_col": ["target"],
         "split_type": "default",

@@ -92,19 +92,20 @@ class VEPTraitGym(BenchmarkDataset):
         r_df = r_df.rename(columns={"ref" + s: s[1:] for s in suffixes})
 
         # Set all reference sequences to non-pathogenic
-        r_df["label"] = False
+        r_df["label"] = 0
+        r_df["description"] = "wild-type"
+
 
         v_df = df.copy().drop(columns=["ref" + s for s in suffixes])
         v_df = v_df.rename(columns={"var" + s: s[1:] for s in suffixes})
 
-        df = pd.concat([r_df, v_df], axis=0)
-        df.rename(columns={"label": "target"}, inplace=True)
-
-        # Add description of variant
-        df["description"] = df.apply(
+        v_df["description"] = v_df.apply(
             lambda x: f"chr{x['chrom']}:{x['pos']} {x['ref']}:{x['alt']}",
             axis=1
         )
+
+        df = pd.concat([r_df, v_df], axis=0)
+        df.rename(columns={"label": "target"}, inplace=True)
 
         df = df[[
             "transcript_id",
@@ -124,7 +125,7 @@ class VEPTraitGym(BenchmarkDataset):
         df.rename(columns={"chrom": "chromosome"}, inplace=True)
 
         # Drop duplicate negative transcripts
-        df = df.drop_duplicates(subset=["transcript_id", "sequence", "target"])
+        df = df.drop_duplicates(subset=["transcript_id", "sequence", "target", "description"])
         df.reset_index(drop=True, inplace=True)
 
         return df

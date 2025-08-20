@@ -39,9 +39,14 @@ base_models = [
     "flash-attn==2.7.4.post1",
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
-    "accelerate==1.8.1",
-    "multimolecule==0.0.7",
-    "evo-model==0.4"
+    "accelerate",
+    "multimolecule",
+    "modelgenerator==0.1.1-4",
+    "evo-model",
+    "borzoi-pytorch==0.4.2",
+    "enformer-pytorch==0.8.10",
+    "flash_attn==2.7.4post1",
+    "ViennaRNA==2.7.0"
 ]
 dev = [
     "mypy",

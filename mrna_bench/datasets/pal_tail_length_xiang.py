@@ -11,14 +11,15 @@ class PALTailLengthHuman(BenchmarkDataset):
     def __init__(
         self,
         dataset_name: str,
+        species: str,
         force_redownload: bool = False,
         hf_url: str | None = None
     ):
         """Initialize PALTailLengthHuman dataset.
 
         Args:
-            dataset_name: Dataset name formatted pal-tail-length-xiang-{cell_type}
-                where cell_type is in: {
+            dataset_name: Dataset name formatted pal-tail-length-xiang-{subset}
+                where subset is in: {
                     "gv",
                     "gvtomii"
                 }.
@@ -28,10 +29,10 @@ class PALTailLengthHuman(BenchmarkDataset):
         if type(self) is PALTailLengthHuman:
             raise TypeError("PALTailLengthHuman is an abstract class.")
 
-        self.cell_type = dataset_name.split("-")[-1]
-        assert self.cell_type in ["gv", "gvtomii"]
+        self.subset = dataset_name.split("-")[-1]
+        assert self.subset in ["gv", "gvtomii", "p4diff", "p4initial"]
 
-        super().__init__(dataset_name, "human", force_redownload, hf_url)
+        super().__init__(dataset_name, species, force_redownload, hf_url)
 
     def _get_data_from_raw(self) -> pd.DataFrame:
         raise NotImplementedError(
@@ -74,5 +75,45 @@ class PALTailLengthGVTomii(PALTailLengthHuman):
                 "https://huggingface.co/datasets/morrislab/"
                 "pal-tail-length-xiang/resolve/main/"
                 "pal-tail-length-xiang-gvtomii.parquet"
+            )
+        )
+
+class PALTailLengthP4Diff(PALTailLengthHuman):
+    """Concrete class for PAL Tail Length dataset (0-7 hour progesterone treatment)."""
+
+    def __init__(self, force_redownload=False):
+        """Initialize PALTailLengthP4Diff dataset.
+
+        Args:
+            force_redownload: Force raw data download even if pre-existing.
+        """
+        super().__init__(
+            "pal-tail-length-xiang-p4diff",
+            "frog",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/morrislab/"
+                "pal-tail-length-xiang/resolve/main/"
+                "pal-tail-length-xiang-p4diff.parquet"
+            )
+        )
+
+class PALTailLengthP4Initial(PALTailLengthHuman):
+    """Concrete class for PAL Tail Length dataset (Pre-progesterone treatment)."""
+
+    def __init__(self, force_redownload=False):
+        """Initialize PALTailLengthP4Initial dataset.
+
+        Args:
+            force_redownload: Force raw data download even if pre-existing.
+        """
+        super().__init__(
+            "pal-tail-length-xiang-p4initial",
+            "frog",
+            force_redownload,
+            hf_url=(
+                "https://huggingface.co/datasets/morrislab/"
+                "pal-tail-length-xiang/resolve/main/"
+                "pal-tail-length-xiang-p4initial.parquet"
             )
         )
