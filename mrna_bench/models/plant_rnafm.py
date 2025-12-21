@@ -53,8 +53,6 @@ class PlantRNAFM(EmbeddingModel):
         self,
         sequence: str,
         agg_fn: Callable = torch.mean,
-        subset_start: int | None = None,
-        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using PlantRNAFM.
 
@@ -77,10 +75,6 @@ class PlantRNAFM(EmbeddingModel):
             embedding_chunks.append(cls_output)
 
         embedding = torch.cat(embedding_chunks, dim=1)
-
-        embedding = self.subset_sequence_emb(
-            embedding, subset_start, subset_end
-        )
 
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding

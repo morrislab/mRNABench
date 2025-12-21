@@ -88,10 +88,6 @@ class OmniGenome(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
-        embedding = self.subset_sequence_emb(
-            embedding, subset_start, subset_end
-        )
-
         aggregate_embedding = agg_fn(embedding, dim=1)
         return aggregate_embedding
 

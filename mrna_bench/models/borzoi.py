@@ -119,8 +119,6 @@ class Borzoi(EmbeddingModel):
         self,
         sequence: str,
         agg_fn: Callable = torch.mean,
-        subset_start: int | None = None,
-        subset_end: int | None = None
     ) -> torch.Tensor:
         """Embed sequence using Borzoi, excluding padded regions."""
 
@@ -166,23 +164,11 @@ class Borzoi(EmbeddingModel):
                 start_bin = padding_left // self.bin_size
                 end_bin = (padding_left + len(chunk) + (self.bin_size - 1)) // self.bin_size
 
-                embedding = self.subset_sequence_emb(
-                    embedded_chunk, start_bin, end_bin
-                )
+                embedding = embedded_chunk[:, :, start_bin:end_bin]
 
                 embedding_chunks.append(embedding)
 
         embedding = torch.cat(embedding_chunks, dim=2)
-
-        # convert start and end indices to bin indices
-        if subset_start is not None:
-            subset_start = subset_start // self.bin_size
-        if subset_end is not None:
-            subset_end = (subset_end + (self.bin_size - 1)) // self.bin_size
-
-        embedding = self.subset_sequence_emb(
-            embedding, subset_start, subset_end
-        )
 
         aggregate_embedding = agg_fn(embedding, dim=2)
         return aggregate_embedding
