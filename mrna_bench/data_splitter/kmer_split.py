@@ -65,8 +65,7 @@ class KMerSplitter(DataSplitter):
         if self.n_clusters:
             n_clusters = self.n_clusters
         else:
-            # n_clusters = max(2, len(df) // 100)
-            n_clusters = max(2, len(df) // 50) # for lncrna
+            n_clusters = max(2, len(df) // 100)
 
         self.cluster = KMeans(n_clusters=n_clusters, random_state=random_state)
         df["cluster"] = self.cluster.fit_predict(df["kmer"].tolist())
@@ -121,31 +120,3 @@ class KMerSplitter(DataSplitter):
         test_df.drop(columns=["kmer", "cluster", "split"], inplace=True)
 
         return train_df, test_df
-
-
-class HardKMerSplitter(KMerSplitter):
-
-    def cluster_sequences(
-        self,
-        df: pd.DataFrame,
-        random_state: int
-    ) -> pd.DataFrame:
-        """Cluster sequences based on k-mer counts.
-
-        Args:
-            df: Dataframe containing sequences and k-mer counts.
-            random_state: Random seed for KMeans.
-
-        Returns:
-            Dataframe with cluster id for each sequence.
-        """
-        if self.n_clusters:
-            n_clusters = self.n_clusters
-        else:
-            # n_clusters = max(2, len(df) // 1000)
-            n_clusters = max(2, len(df) // 250)
-
-        self.cluster = KMeans(n_clusters=n_clusters, random_state=random_state)
-        df["cluster"] = self.cluster.fit_predict(df["kmer"].tolist())
-
-        return df
