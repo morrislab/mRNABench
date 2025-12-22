@@ -24,7 +24,7 @@ from .utr_variants_bohn import (
     UTRVariantsBohnUTR5,
     UTRVariantsBohnUTR3
 )
-from .vep_mapsy import VEPMaPSy
+
 from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 from .eclip_binding import (
@@ -56,7 +56,6 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "translation-efficiency-mouse": TranslationEfficiencyMouse,
     "utr-variants-bohn-utr5": UTRVariantsBohnUTR5,
     "utr-variants-bohn-utr3": UTRVariantsBohnUTR3,
-    "vep-mapsy": VEPMaPSy,
     "vep-traitgym-complex": VEPTraitGymComplex,
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
@@ -189,12 +188,6 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
     },
     "utr-variants-bohn-utr3": {
         "dataset": "utr-variants-bohn-utr3",
-        "task": ["classification"],
-        "target_col": ["target"],
-        "split_type": "default",
-    },
-    "vep-mapsy": {
-        "dataset": "vep-mapsy",
         "task": ["classification"],
         "target_col": ["target"],
         "split_type": "default",
