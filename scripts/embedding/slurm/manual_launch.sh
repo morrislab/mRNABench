@@ -22,7 +22,6 @@ dataset_names=(
     # "prot-loc"
     # "mrl-hl-lbkwk" # needs only 1 chunk
     # "mrl-sugimoto"
-    # "vep-mapsy"
     # "vep-traitgym-complex"
     # "vep-traitgym-mendelian"
     # "mirna-target"

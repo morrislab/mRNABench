@@ -23,7 +23,7 @@ if __name__ == "__main__":
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
-        if 'vep' in dataset_name or 'utr' in dataset_name or 'mapsy' in dataset_name:
+        if 'vep' in dataset_name or 'utr' in dataset_name:
             continue
 
         target_cols = dataset_info["target_col"]
@@ -47,8 +47,6 @@ if __name__ == "__main__":
                     elif "mrl-hl-lbkwk" in dataset_name:
                         valid_split_types = ["default"]
                     elif "utr-variants" in dataset_name:
-                        valid_split_types = ["default"]
-                    elif "pal-tail-length-xiang-p4" in dataset_name:
                         valid_split_types = ["default"]
                     else:
                         valid_split_types = split_types
