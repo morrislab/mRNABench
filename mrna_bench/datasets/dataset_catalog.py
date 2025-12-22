@@ -9,12 +9,6 @@ from .rna_hl_mouse import RNAHalfLifeMouse
 from .rna_loc_fazal import RNALocalizationFazal
 from .rna_lifecycle_ietswaart import RNALifecycleIetswaart
 from .mrl_hl_lbkwk import MRLHLLBKWK
-from .pal_tail_length_xiang import (
-    PALTailLengthGV,
-    PALTailLengthGVTomii,
-    PALTailLengthP4Diff,
-    PALTailLengthP4Initial
-)
 from .prot_loc import ProteinLocalization
 from .mirna_target import MiRNATarget, MIRNA_TARGETS_WITH_PREFIX
 from .mrl_sugimoto import MRLSugimoto
@@ -50,10 +44,6 @@ DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
     "rna-lifecycle-ietswaart": RNALifecycleIetswaart,
-    "pal-tail-length-xiang-gv": PALTailLengthGV,
-    "pal-tail-length-xiang-gvtomii": PALTailLengthGVTomii,
-    "pal-tail-length-xiang-p4diff": PALTailLengthP4Diff,
-    "pal-tail-length-xiang-p4initial": PALTailLengthP4Initial,
     "prot-loc": ProteinLocalization,
     "mirna-target": MiRNATarget,
     "mrl-hl-lbkwk": MRLHLLBKWK,
@@ -147,30 +137,6 @@ DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
         "dataset": "mrl-sample-varying",
         "task": ["reg_ridge"],
         "target_col": ["target_mrl_varying_length"],
-        "split_type": "default",
-    },
-    "pal-tail-length-xiang-gv": {
-        "dataset": "pal-tail-length-xiang-gv",
-        "task": ["reg_ridge"],
-        "target_col": ["target"],
-        "split_type": "homology",
-    },
-    "pal-tail-length-xiang-gvtomii": {
-        "dataset": "pal-tail-length-xiang-gvtomii",
-        "task": ["reg_ridge"],
-        "target_col": ["target"],
-        "split_type": "homology",
-    },
-    "pal-tail-length-xiang-p4diff": {
-        "dataset": "pal-tail-length-xiang-p4diff",
-        "task": ["reg_ridge"],
-        "target_col": ["target"],
-        "split_type": "default",
-    },
-    "pal-tail-length-xiang-p4initial": {
-        "dataset": "pal-tail-length-xiang-p4initial",
-        "task": ["reg_ridge"],
-        "target_col": ["target"],
         "split_type": "default",
     },
     "prot-loc": {

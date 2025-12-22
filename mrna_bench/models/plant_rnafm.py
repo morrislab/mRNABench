@@ -9,7 +9,11 @@ from mrna_bench.models import EmbeddingModel
 class PlantRNAFM(EmbeddingModel):
     """Inference wrapper for PlantRNAFM.
 
-    PlantRNAFM is a transformer-based RNA foundation model trained on...
+    PlantRNAFM is a transformer-based RNA foundation model pretrained on
+    25M RNA sequences from 1,124 plant species (1KP). Pretraining uses
+    MLM (BERT-style), RNA secondary structure prediction (predicted by
+    ViennaRNA), and RNA region annotation prediction (e.g., CDS, 5' UTR,
+    3' UTR). All objectives are optimized with cross-entropy loss.
 
     Link: https://github.com/yangheng95/PlantRNA-FM
     """

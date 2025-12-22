@@ -46,4 +46,3 @@ else
     --checkpoint "$checkpoint" \
     --dataset_name "$dataset_name"
 fi
-

@@ -30,10 +30,6 @@ dataset_names=(
     # "mrl-sample-mcherry" # needs like 25 chunks
     # "mrl-sample-designed" # needs like 25 chunks
     # "mrl-sample-varying" # needs like 25 chunks
-    # "pal-tail-length-xiang-gv"
-    # "pal-tail-length-xiang-gvtomii"
-    # "pal-tail-length-xiang-p4initial"
-    # "pal-tail-length-xiang-p4diff"
     # "utr-variants-bohn-utr5"
     # "utr-variants-bohn-utr3"
     # "translation-efficiency-mouse"

@@ -1,7 +1,7 @@
 # mRNABench
 
 <div align="center">
-    
+
 [![PyPI version](https://badge.fury.io/py/mrna-bench.svg)](https://badge.fury.io/py/mrna-bench)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
@@ -13,8 +13,8 @@
 
 This repository contains the code for mRNABench, which benchmarks the embedding quality of genomic foundation models on mRNA specific tasks. The mRNABench contains a catalogue of datasets and training split logic which can be used to evaluate the embedding quality of several catalogued models.
 
-**Paper:** [BioRxiv Link](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)  
-**Notebook Example:** [Colab Notebook](https://colab.research.google.com/drive/1VZF5NPwJYowAR3e6wuaiAuQyw2v7TSwx?usp=sharing)  
+**Paper:** [BioRxiv Link](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)
+**Notebook Example:** [Colab Notebook](https://colab.research.google.com/drive/1VZF5NPwJYowAR3e6wuaiAuQyw2v7TSwx?usp=sharing)
 **Dataset Repository:** [HuggingFace Collection](https://huggingface.co/collections/morrislab/mrnabench-6825747c0b9253c3226078d9)
 
 ## Table of Contents
@@ -35,7 +35,7 @@ pip install mrna-bench
 ```
 
 ### Base Models
-> [!IMPORTANT]  
+> [!IMPORTANT]
 > **Requirements:** PyTorch 2.2.2 and CUDA 12.1+ are required for base models installation.
 
 The inference-capable version of mRNABench that can generate embeddings using most models (except Evo2 and Helix mRNA) can be installed as shown below.
@@ -43,7 +43,6 @@ The inference-capable version of mRNABench that can generate embeddings using mo
 ```bash
 conda create --name mrna_bench python=3.10 gxx=12.2.0 -y
 conda activate mrna_bench
-conda install conda-forge::genomekit=6.5.3
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
 # optionals: pip install jupyter
@@ -243,7 +242,7 @@ pip install -e .
 ```
 
 ## Dev Mode Setup
-Dev mode requires additional dependencies for generating datasets from scratch and accessing the RNA-Fazal localization dataset. 
+Dev mode requires additional dependencies for generating datasets from scratch and accessing the RNA-Fazal localization dataset.
 
 ```bash
 conda create --name mrna_bench_dev python=3.10

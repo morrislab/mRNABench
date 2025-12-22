@@ -9,12 +9,18 @@ from mrna_bench.models import EmbeddingModel
 class OmniGenome(EmbeddingModel):
     """Inference wrapper for OmniGenome.
 
-    OmniGenome is a transformer-based RNA foundation model trained on...
+    OmniGenome is a transformer-based RNA foundation model pretrained
+    on plant RNA sequences from the OneKP initiative, using single-nucleotide
+    tokenization and ViennaRNA-predicted secondary structures. It is trained
+    with three cross-entropy objectives: structure-contextualized masked token
+    reconstruction (Str2Seq), sequence-to-structure prediction (Seq2Str), and
+    MLM on the sequence.
 
-    Link: https://github.com/yangheng95/PlantRNA-FM
+
+    Link: https://github.com/yangheng95/OmniGenBench
     """
 
-    max_length = 4096
+    max_length = 1024
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
