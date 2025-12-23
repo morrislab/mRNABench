@@ -18,7 +18,8 @@ class RNALifecycleIetswaart(BenchmarkDataset):
             force_redownload=force_redownload,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
-                "rna-lifecycle-ietswaart/resolve/main/ietswaart_processed.parquet"
+                "rna-lifecycle-ietswaart/resolve/main/"
+                "ietswaart_processed.parquet"
             )
         )
 

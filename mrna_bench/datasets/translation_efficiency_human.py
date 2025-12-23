@@ -5,7 +5,7 @@ from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.utils import download_file
 
 
-TRANSLATION_EFFICIENCY_URL = (
+TRANSLATION_EFFICIENCY_HUMAN_URL = (
     "https://static-content.springer.com/"
     "esm/art%3A10.1038%2Fs41587-025-02712-x/MediaObjects/"
     "41587_2025_2712_MOESM3_ESM.xlsx"
@@ -40,13 +40,15 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
             )
         except ImportError:
             print(
-                "GenomeKit is required for raw processing with Gencode v41. See README."
+                "GenomeKit is required for raw processing "
+                "with Gencode v41. See README."
             )
             raise
 
         print("Downloading raw data...")
         self.raw_data_path = download_file(
-            TRANSLATION_EFFICIENCY_URL, self.raw_data_dir, "translation_efficiency.xlsx"
+            TRANSLATION_EFFICIENCY_HUMAN_URL,
+            self.raw_data_dir,
         )
 
         # Assuming data is in the first sheet, can be adjusted if needed.
@@ -61,7 +63,9 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
             t.id.split(".")[0]: t
             for t in tqdm(genome.transcripts, desc="Building transcript map")
         }
-        df["transcript_obj"] = df["transcript_id_no_version"].map(id_to_transcript_obj)
+        df["transcript_obj"] = df["transcript_id_no_version"].map(
+            id_to_transcript_obj
+        )
         df.dropna(subset=["transcript_obj"], inplace=True)
 
         # Get gene object from transcript object
@@ -77,7 +81,8 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
         )
 
         print(
-            f"Filtered to {len(df_subset)} transcripts with translation efficiency data."
+            f"Filtered to {len(df_subset)} transcripts "
+            "with translation efficiency data."
         )
 
         # Generate sequence, cds, and splice tracks

@@ -29,7 +29,8 @@ class PlantRNAFM(EmbeddingModel):
         """Initialize PlantRNAFM inference wrapper.
 
         Args:
-            model_version: Version of model to load. Only "plant_rnafm" is supported.
+            model_version: Version of model to load.
+                    Only "plant_rnafm" is supported.
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)

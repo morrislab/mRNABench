@@ -95,7 +95,6 @@ class VEPTraitGym(BenchmarkDataset):
         r_df["label"] = 0
         r_df["description"] = "wild-type"
 
-
         v_df = df.copy().drop(columns=["ref" + s for s in suffixes])
         v_df = v_df.rename(columns={"var" + s: s[1:] for s in suffixes})
 
@@ -125,7 +124,9 @@ class VEPTraitGym(BenchmarkDataset):
         df.rename(columns={"chrom": "chromosome"}, inplace=True)
 
         # Drop duplicate negative transcripts
-        df = df.drop_duplicates(subset=["transcript_id", "sequence", "target", "description"])
+        df = df.drop_duplicates(subset=[
+            "transcript_id", "sequence", "target", "description"]
+        )
         df.reset_index(drop=True, inplace=True)
 
         return df

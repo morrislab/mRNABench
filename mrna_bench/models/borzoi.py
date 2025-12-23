@@ -6,6 +6,7 @@ from mrna_bench import get_model_weights_path
 from mrna_bench.models.embedding_model import EmbeddingModel
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 
+
 class Borzoi(EmbeddingModel):
     """Inference wrapper for Borzoi.
 
@@ -139,11 +140,16 @@ class Borzoi(EmbeddingModel):
                 if len(chunk) < self.max_length:
 
                     if len(chunk) < self.min_length:
-                        padded_chunk, padding_left = center_padding(chunk, self.min_length)
+                        padded_chunk, padding_left = center_padding(
+                            chunk, self.min_length
+                        )
                     else:
                         # center pad to max length
-                        # if chunk is smaller than max length, but larger than min length
-                        padded_chunk, padding_left = center_padding(chunk, self.max_length)
+                        # if chunk is smaller than max length,
+                        # but larger than min length
+                        padded_chunk, padding_left = center_padding(
+                            chunk, self.max_length
+                        )
                 else:
                     padded_chunk, padding_left = chunk, 0
 
@@ -155,14 +161,20 @@ class Borzoi(EmbeddingModel):
 
                 # if using ensemble of models, average their embeddings
                 if hasattr(self, "models"):
-                    replicate_embeds = [model.get_embs_after_crop(batch) for model in self.models]
+                    replicate_embeds = [
+                        model.get_embs_after_crop(batch)
+                        for model in self.models
+                    ]
                     embedded_chunk = torch.stack(replicate_embeds).mean(dim=0)
                 else:
                     embedded_chunk = self.model.get_embs_after_crop(batch)
 
-                # extract the portion of the embedding corresponding to original unpadded seq
+                # extract the portion of the embedding
+                # corresponding to original unpadded seq
                 start_bin = padding_left // self.bin_size
-                end_bin = (padding_left + len(chunk) + (self.bin_size - 1)) // self.bin_size
+                end_bin = (
+                    padding_left + len(chunk) + (self.bin_size - 1)
+                ) // self.bin_size
 
                 embedding = embedded_chunk[:, :, start_bin:end_bin]
 

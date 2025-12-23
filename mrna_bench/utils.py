@@ -101,7 +101,9 @@ class DataManager:
             model_weights_path: New path to model weights storage directory.
         """
         model_weights_path = os.path.normpath(model_weights_path)
-        model_weights_path = str(Path(model_weights_path).expanduser().resolve())
+        model_weights_path = str(
+            Path(model_weights_path).expanduser().resolve()
+        )
 
         config = {"model_weights_path": model_weights_path}
 

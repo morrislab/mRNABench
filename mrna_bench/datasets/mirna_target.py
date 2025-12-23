@@ -80,12 +80,16 @@ class MiRNATarget(BenchmarkDataset):
             genome = gk.Genome("gencode.v41")
         except ImportError:
             print(
-                "GenomeKit is required for raw processing with Gencode v41. See README."
+                "GenomeKit is required for raw processing "
+                "with Gencode v41. See README."
             )
             raise
 
         print("Downloading raw data...")
-        self.raw_data_path = download_file(MIRNA_TARGET_URL, self.raw_data_dir)
+        self.raw_data_path = download_file(
+            MIRNA_TARGET_URL,
+            self.raw_data_dir
+        )
 
         df = pd.read_csv(self.raw_data_path)
         print(f"Starting with {len(df)} transcripts")
@@ -105,26 +109,36 @@ class MiRNATarget(BenchmarkDataset):
 
         # Group by gene and select top priority transcripts for each gene
         df_filtered = []
-        for gene_id, group in tqdm(df.groupby("gene ID"), desc="Filtering transcripts"):
+        for gene_id, group in tqdm(
+            df.groupby("gene ID"), desc="Filtering transcripts"
+        ):
             if gene_id in id_to_gene:
                 gene = id_to_gene[gene_id]
 
                 # Get top 5 priority transcripts for this gene
-                top_transcripts = get_top_n_priority_transcripts(gene, genome, n=5)
+                top_transcripts = get_top_n_priority_transcripts(
+                    gene,
+                    genome,
+                    n=5
+                )
 
                 if not top_transcripts:
                     continue
 
                 # Get transcript IDs from the top transcripts (strip version)
-                top_transcript_ids = [t.id.split(".")[0] for t in top_transcripts]
+                top_tx_ids = [
+                    t.id.split(".")[0] for t in top_transcripts
+                ]
 
                 # Create mapping from transcript ID to transcript object
-                transcript_id_to_obj = {t.id.split(".")[0]: t for t in top_transcripts}
+                transcript_id_to_obj = {
+                    t.id.split(".")[0]: t for t in top_transcripts
+                }
 
                 # Filter the group to only include
                 # these top transcripts (strip version from mRNA column)
                 filtered_group = group[
-                    group["mRNA"].str.split(".").str[0].isin(top_transcript_ids)
+                    group["mRNA"].str.split(".").str[0].isin(top_tx_ids)
                 ].copy()
 
                 # Add transcript object column to the filtered group
@@ -164,7 +178,8 @@ class MiRNATarget(BenchmarkDataset):
         )
 
         print(
-            f"Dataset filtered to {len(df)} transcripts using top priority transcripts per gene"
+            f"Dataset filtered to {len(df)} transcripts "
+            "using top priority transcripts per gene"
         )
 
         # Split miRNAs column and create binary matrix
@@ -199,7 +214,10 @@ class MiRNATarget(BenchmarkDataset):
         # Drop rows where 'transcript_obj' is NaN before proceeding
         df_subset.dropna(subset=["transcript_obj"], inplace=True)
 
-        with tqdm(total=len(df_subset), desc="Generating sequences and tracks") as pbar:
+        with tqdm(
+            total=len(df_subset),
+            desc="Generating sequences and tracks"
+        ) as pbar:
             df_subset["transcript_id"] = df_subset["transcript_obj"].apply(
                 lambda x: x.id
             )
@@ -220,7 +238,9 @@ class MiRNATarget(BenchmarkDataset):
                 lambda x: x.chrom
             )
             pbar.update(0)
-            df_subset["gene"] = df_subset["transcript_obj"].apply(lambda x: x.gene.name)
+            df_subset["gene"] = df_subset["transcript_obj"].apply(
+                lambda x: x.gene.name
+            )
             pbar.update(len(df_subset))
 
         required_cols = [

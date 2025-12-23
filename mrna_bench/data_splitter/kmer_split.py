@@ -123,6 +123,7 @@ class KMerSplitter(DataSplitter):
 
 
 class HardKMerSplitter(KMerSplitter):
+    """Split dataset using stringent k-mer–based clustering."""
 
     def cluster_sequences(
         self,

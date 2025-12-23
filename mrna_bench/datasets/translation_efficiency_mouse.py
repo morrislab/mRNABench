@@ -5,7 +5,11 @@ from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.utils import download_file
 
 
-TRANSLATION_EFFICIENCY_MOUSE_URL = ("https://static-content.springer.com/esm/art%3A10.1038%2Fs41587-025-02712-x/MediaObjects/41587_2025_2712_MOESM4_ESM.xlsx")
+TRANSLATION_EFFICIENCY_MOUSE_URL = (
+    "https://static-content.springer.com/esm/"
+    "art%3A10.1038%2Fs41587-025-02712-x/"
+    "MediaObjects/41587_2025_2712_MOESM4_ESM.xlsx"
+)
 
 
 class TranslationEfficiencyMouse(BenchmarkDataset):
@@ -34,14 +38,16 @@ class TranslationEfficiencyMouse(BenchmarkDataset):
                 get_transcript_sequence,
             )
         except ImportError:
-            print("GenomeKit is required for raw processing with Gencode vM31. See README.")
+            print(
+                "GenomeKit is required for raw processing "
+                "with Gencode vM31. See README."
+            )
             raise
 
         print("Downloading raw data...")
         self.raw_data_path = download_file(
             TRANSLATION_EFFICIENCY_MOUSE_URL,
             self.raw_data_dir,
-            "translation_efficiency_mouse.xlsx"
         )
 
         df = pd.read_excel(self.raw_data_path)
@@ -49,19 +55,33 @@ class TranslationEfficiencyMouse(BenchmarkDataset):
 
         df['transcript_id_no_version'] = df['tx_id'].str.split('.').str[0]
 
-        id_to_transcript_obj = {t.id.split('.')[0]: t for t in tqdm(genome.transcripts, desc="Building transcript map")}
-        df['transcript_obj'] = df['transcript_id_no_version'].map(id_to_transcript_obj)
+        id_to_transcript_obj = {
+            t.id.split('.')[0]: t
+            for t in tqdm(genome.transcripts, desc="Building transcript map")
+        }
+        df['transcript_obj'] = df['transcript_id_no_version'].map(
+            id_to_transcript_obj
+        )
         df.dropna(subset=['transcript_obj'], inplace=True)
 
         df['gene_obj'] = df['transcript_obj'].apply(lambda x: x.gene)
         df['gene_id'] = df['gene_obj'].apply(lambda x: x.id)
 
-        df_subset = df.sort_values(by='mean_te', ascending=False).groupby('gene_id').first().reset_index()
+        df_subset = df.sort_values(
+            by='mean_te', ascending=False
+        ).groupby('gene_id').first().reset_index()
 
-        print(f"Filtered to {len(df_subset)} transcripts with translation efficiency data.")
+        print(
+            f"Filtered to {len(df_subset)} transcripts "
+            "with translation efficiency data."
+        )
 
         processed_rows = []
-        for _, row in tqdm(df_subset.iterrows(), total=len(df_subset), desc="Generating sequences and tracks"):
+        for _, row in tqdm(
+            df_subset.iterrows(),
+            total=len(df_subset),
+            desc="Generating sequences and tracks"
+        ):
             transcript_obj = row['transcript_obj']
             seq = get_transcript_sequence(transcript_obj, genome)
             if not seq:

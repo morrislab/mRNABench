@@ -6,6 +6,7 @@ from mrna_bench import get_model_weights_path
 from mrna_bench.models.embedding_model import EmbeddingModel
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 
+
 class Enformer(EmbeddingModel):
     """Inference wrapper for Enformer.
 
@@ -18,13 +19,14 @@ class Enformer(EmbeddingModel):
     implementation of Enformer from EleutherAI, which is based on the
     original Enformer model from DeepMind.
 
-    Link: https://github.com/google-deepmind/deepmind-research/tree/master/enformer
+    Link: https://github.com/google-deepmind/deepmind-research
+        (Under enformer directory)
     Link: https://github.com/lucidrains/enformer-pytorch
     """
 
-    prediction_window = 114_688 # embedding is of the center 114688 bases
-    max_length = 196_608 # can take sequences up to 196608 bases
-    bin_size = 128 # embedding is in 128 base bins
+    prediction_window = 114_688  # embedding is of the center 114688 bases
+    max_length = 196_608  # can take sequences up to 196608 bases
+    bin_size = 128  # embedding is in 128 base bins
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -73,7 +75,9 @@ class Enformer(EmbeddingModel):
         with torch.inference_mode():
             for i, chunk in enumerate(chunks):
 
-                padded_chunk, padding_left = center_padding(chunk, self.max_length)
+                padded_chunk, padding_left = center_padding(
+                    chunk, self.max_length
+                )
 
                 # first OHE sequence chunk
                 batch = torch.tensor(
@@ -81,13 +85,19 @@ class Enformer(EmbeddingModel):
                     dtype=torch.float32
                 ).unsqueeze(0).to(self.device)
 
-                _, embedded_chunk = self.model(batch, return_embeddings=True, target_length = -1) # B, L, H
+                _, embedded_chunk = self.model(
+                    batch, return_embeddings=True, target_length=-1
+                )  # B, L, H
 
-                # extract the portion of the embedding corresponding to original unpadded seq
+                # extract the portion of the embedding
+                # corresponding to original unpadded seq
                 start_bin = padding_left // self.bin_size
-                end_bin = (padding_left + len(chunk) + (self.bin_size - 1)) // self.bin_size
+                end_bin = (
+                    padding_left + len(chunk) + (self.bin_size - 1)
+                ) // self.bin_size
 
-                embedding = embedded_chunk.permute(0, 2, 1)[:, :, start_bin:end_bin]
+                embedding = embedded_chunk.permute(0, 2, 1)
+                embedding = embedding[:, :, start_bin:end_bin]
 
                 embedding_chunks.append(embedding)
 

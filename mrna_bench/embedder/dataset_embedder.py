@@ -166,8 +166,6 @@ class DatasetEmbedder:
         cls,
         model: EmbeddingModel,
         data_df: pd.DataFrame,
-        s_chunk_overlap: int = 0,
-        transcript_avg: bool = False,
     ) -> "DatasetEmbedder":
         """Create a DatasetEmbedder instance from a custom dataframe.
 
@@ -177,12 +175,6 @@ class DatasetEmbedder:
                 - sequence: RNA sequence
                 - cds: CDS track information (as int32)
                 - splice: Splice track information (as int32)
-                - gene_id: (optional) Used when transcript_avg is True
-            s_chunk_overlap: Number of overlapping tokens between chunks in
-                individual sequences when using chunking to handle input
-                exceeding maximum model length.
-            transcript_avg: Whether to average embeddings of all transcripts
-                for a given gene.
 
         Returns:
             Initialized DatasetEmbedder.
@@ -192,12 +184,13 @@ class DatasetEmbedder:
         """
         # Check for required columns
         required_cols = ["sequence", "cds", "splice"]
-        missing_cols = [col for col in required_cols if col not in data_df.columns]
+        missing_cols = [
+            col for col in required_cols if col not in data_df.columns
+        ]
         if missing_cols:
-            raise ValueError(f"DataFrame is missing required columns: {missing_cols}")
-
-        if transcript_avg and "gene_id" not in data_df.columns:
-            raise ValueError("gene_id column is required when transcript_avg is True")
+            raise ValueError(
+                f"DataFrame is missing required columns: {missing_cols}"
+            )
 
         # Create a minimal BenchmarkDataset instance
         class MinimalBenchmarkDataset:
@@ -213,8 +206,6 @@ class DatasetEmbedder:
         return cls(
             model=model,
             dataset=dataset,
-            s_chunk_overlap=s_chunk_overlap,
-            transcript_avg=transcript_avg,
         )
 
 

@@ -1,9 +1,7 @@
-import numpy as np
 import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
-from mrna_bench.datasets.dataset_utils import ohe_to_str
-from mrna_bench.utils import download_file
+
 
 class UTRVariantsBohn(BenchmarkDataset):
     """UTR Variants dataset from Bohn et al."""
@@ -38,6 +36,7 @@ class UTRVariantsBohn(BenchmarkDataset):
             "Code documenting PAL tail length data is still in progress."
         )
 
+
 class UTRVariantsBohnUTR5(UTRVariantsBohn):
     """Concrete class for UTR Variants dataset (5' UTR)."""
 
@@ -56,6 +55,7 @@ class UTRVariantsBohnUTR5(UTRVariantsBohn):
                 "utr-variants-bohn-utr5.parquet"
             )
         )
+
 
 class UTRVariantsBohnUTR3(UTRVariantsBohn):
     """Concrete class for UTR Variants dataset (3' UTR)."""
