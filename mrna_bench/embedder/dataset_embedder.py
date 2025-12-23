@@ -193,13 +193,17 @@ class DatasetEmbedder:
             )
 
         # Create a minimal BenchmarkDataset instance
-        class MinimalBenchmarkDataset:
+        class MinimalBenchmarkDataset(BenchmarkDataset):
             def __init__(self, data_df):
                 self.data_df = data_df
                 self.dataset_name = "custom"
                 self.dataset_path = "custom"
                 self.embedding_dir = "custom"
                 self.species = "custom"  # Required for homology splitter
+
+            def _get_data_from_raw(self) -> pd.DataFrame:
+                """Abstract method."""
+                pass
 
         dataset = MinimalBenchmarkDataset(data_df)
 

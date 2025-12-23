@@ -60,9 +60,9 @@ def train_test_split_homologous(
         seen_groups.add(group)
 
         if len(train_indices) < len_of_train:
-            train_indices.extend(group_to_index.get(group, [index]))
+            train_indices.extend(group_to_index.get(group, [int(index)]))
         else:
-            test_indices.extend(group_to_index.get(group, [index]))
+            test_indices.extend(group_to_index.get(group, [int(index)]))
 
     train_indices = [int(ind) for ind in train_indices]
     test_indices = [int(ind) for ind in test_indices]

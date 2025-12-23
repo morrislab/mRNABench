@@ -51,7 +51,9 @@ dev = [
     "mypy",
     "flake8",
     "flake8-docstrings",
-    "pytest"
+    "pytest",
+    "types-requests",
+    "types-PyYAML"
 ]
 
 [build-system]

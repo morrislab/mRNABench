@@ -87,7 +87,7 @@ class RNALocalizationFazal(BenchmarkDataset):
         df_data = []
 
         for index, row in data.iterrows():
-            gene = id_to_gene.get(row['Ensembl_Gene'])
+            gene: gk.Gene = id_to_gene.get(row['Ensembl_Gene'])
 
             appris_transcripts = genome.appris_transcripts(gene)
 
