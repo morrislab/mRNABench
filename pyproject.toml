@@ -45,7 +45,6 @@ base_models = [
     "evo-model",
     "borzoi-pytorch==0.4.2",
     "enformer-pytorch==0.8.10",
-    "flash_attn==2.7.4post1",
     "ViennaRNA==2.7.0"
 ]
 dev = [
