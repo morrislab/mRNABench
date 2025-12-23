@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import math
 
 import torch
 
@@ -54,52 +55,55 @@ class Enformer(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device).eval()
 
+    @torch.inference_mode()
     def embed_sequence(
         self,
         sequence: str,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using Enformer, excluding padded regions."""
+        """Embed sequence using Enformer, excluding padded regions.
 
-        def center_padding(seq, length):
+        Args:
+            sequence: Sequence to be embedded.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            Tensor of shape (1, embedding_dim) representing embedded sequence.
+        """
+        def center_padding(seq: str, length: int) -> tuple[str, int]:
             """Center pad sequence to a given length."""
             padding_left = (length - len(seq)) // 2
             padding_right = length - len(seq) - padding_left
 
-            return 'N' * padding_left + seq + 'N' * padding_right, padding_left
+            return "N" * padding_left + seq + "N" * padding_right, padding_left
 
         chunks = self.chunk_sequence(sequence, self.max_length)
 
         embedding_chunks = []
 
-        with torch.inference_mode():
-            for i, chunk in enumerate(chunks):
+        for chunk in chunks:
+            padded_chunk, padding_left = center_padding(chunk, self.max_length)
 
-                padded_chunk, padding_left = center_padding(
-                    chunk, self.max_length
-                )
+            # first OHE sequence chunk
+            batch = torch.tensor(
+                str_to_ohe(padded_chunk),
+                dtype=torch.float32
+            ).unsqueeze(0).to(self.device)
 
-                # first OHE sequence chunk
-                batch = torch.tensor(
-                    str_to_ohe(padded_chunk),
-                    dtype=torch.float32
-                ).unsqueeze(0).to(self.device)
+            _, embedded_chunk = self.model(
+                batch,
+                return_embeddings=True,
+                target_length=-1
+            )
 
-                _, embedded_chunk = self.model(
-                    batch, return_embeddings=True, target_length=-1
-                )  # B, L, H
+            # extract embedding portion corresponding to original unpadded seq
+            start_bin = padding_left // self.bin_size
+            end_bin = math.ceil((padding_left + len(chunk)) / self.bin_size)
 
-                # extract the portion of the embedding
-                # corresponding to original unpadded seq
-                start_bin = padding_left // self.bin_size
-                end_bin = (
-                    padding_left + len(chunk) + (self.bin_size - 1)
-                ) // self.bin_size
+            embedded_chunk = embedded_chunk.permute(0, 2, 1)
+            embedding = embedded_chunk[:, :, start_bin:end_bin]
 
-                embedding = embedded_chunk.permute(0, 2, 1)
-                embedding = embedding[:, :, start_bin:end_bin]
-
-                embedding_chunks.append(embedding)
+            embedding_chunks.append(embedding)
 
         embedding = torch.cat(embedding_chunks, dim=2)
 

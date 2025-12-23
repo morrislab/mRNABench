@@ -41,11 +41,12 @@ def test_mrnafm_forward(mrnamodel):
     assert mrnamodel.max_length == 1024
     assert mrnamodel.is_sixtrack is True
 
-    out = mrnamodel.embed_sequence_sixtrack(
-        "ATGATG",
-        np.array([0, 0, 0, 0, 0, 0]),
-        np.array([1, 0, 0, 1, 0, 0])
-    )
+    with pytest.warns(UserWarning, match="No CDS found"):
+        out = mrnamodel.embed_sequence_sixtrack(
+            "ATGATG",
+            np.array([0, 0, 0, 0, 0, 0]),
+            np.array([1, 0, 0, 1, 0, 0])
+        )
     assert out.shape == (1, 1280)
 
 
@@ -157,10 +158,12 @@ def test_get_cds_missing(mrnamodel):
     sequence_2 = "CCGATGCC"
     cds_2 = np.array([0, 0, 0, 0, 0, 0, 0, 0])
 
-    cds_seq_1 = mrnamodel.get_cds(sequence_1, cds_1)
+    with pytest.warns(UserWarning, match="No CDS found"):
+        cds_seq_1 = mrnamodel.get_cds(sequence_1, cds_1)
     assert cds_seq_1 == "CCGATGCCG"
 
-    cds_seq_2 = mrnamodel.get_cds(sequence_2, cds_2)
+    with pytest.warns(UserWarning, match="No CDS found"):
+        cds_seq_2 = mrnamodel.get_cds(sequence_2, cds_2)
     assert cds_seq_2 == "CCGATG"
 
 
@@ -170,8 +173,10 @@ def test_get_cds_irregular(mrnamodel):
     cds_1 = np.array([0, 0, 0, 0, 1, 0, 0, 1, 0])
     cds_2 = np.array([0, 0, 0, 0, 0, 1, 0, 0, 1])
 
-    cds_1_seq = mrnamodel.get_cds(sequence, cds_1)
-    cds_2_seq = mrnamodel.get_cds(sequence, cds_2)
+    with pytest.warns(UserWarning, match="Irregular CDS"):
+        cds_1_seq = mrnamodel.get_cds(sequence, cds_1)
+    with pytest.warns(UserWarning, match="Irregular CDS"):
+        cds_2_seq = mrnamodel.get_cds(sequence, cds_2)
 
     assert cds_1_seq == "TGC"
     assert cds_2_seq == "GCC"

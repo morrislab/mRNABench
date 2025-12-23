@@ -1,4 +1,5 @@
 from collections.abc import Callable
+import math
 
 import torch
 
@@ -56,7 +57,6 @@ class Borzoi(EmbeddingModel):
             from borzoi_pytorch import Borzoi
             from borzoi_pytorch.config_borzoi import BorzoiConfig
         except ImportError:
-
             if "borzoi" in model_version:
                 raise ImportError("Borzoi missing required dependencies.")
 
@@ -67,118 +67,97 @@ class Borzoi(EmbeddingModel):
                 )
 
         if "flashzoi" in model_version:
-            # flashzoi uses float16 precision
             self.dtype = torch.float16
         else:
             self.dtype = torch.float32
 
         # load ensemble if base model name is given
+        self.models = []
+
         if model_version in ["borzoi", "flashzoi"]:
-
-            self.models = []
-
-            for i in range(4):
-
-                sub_version = f"{model_version}-replicate-{i}"
-
-                cfg = BorzoiConfig.from_pretrained(
-                    f'johahi/{sub_version}',
-                    cache_dir=get_model_weights_path()
-                )
-
-                cfg.return_center_bins_only = False
-
-                model_i = Borzoi.from_pretrained(
-                    f'johahi/{sub_version}',
-                    cache_dir=get_model_weights_path(),
-                    config=cfg
-                ).to(device, dtype=self.dtype).eval()
-
-                # avoid cropping in the model
-                # as we handle padding ourselves per chunk
-                model_i.crop = torch.nn.Identity()
-
-                self.models.append(model_i)
+            replicate_template = "{}-replicate-{{}}".format(model_version)
+            versions_to_load = [replicate_template.format(i) for i in range(4)]
         else:
+            versions_to_load = [model_version]
 
+        for version in versions_to_load:
             cfg = BorzoiConfig.from_pretrained(
-                f'johahi/{model_version}',
+                "johahi/{}".format(version),
                 cache_dir=get_model_weights_path()
             )
 
             cfg.return_center_bins_only = False
 
-            self.model = Borzoi.from_pretrained(
-                f'johahi/{model_version}',
+            model_i = Borzoi.from_pretrained(
+                "johahi/{}".format(version),
                 cache_dir=get_model_weights_path(),
                 config=cfg
             ).to(device, dtype=self.dtype).eval()
 
-            self.model.crop = torch.nn.Identity()
+            # Avoid cropping as we handle padding ourselves per chunk
+            model_i.crop = torch.nn.Identity()
 
+            self.models.append(model_i)
+
+    @torch.inference_mode()
     def embed_sequence(
         self,
         sequence: str,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using Borzoi, excluding padded regions."""
+        """Embed sequence using Borzoi, excluding padded regions.
 
-        def center_padding(seq, length):
+        Args:
+            sequence: Sequence to embed.
+            agg_fn: Aggregation function to apply across sequence bins.
+
+        Returns:
+            Aggregate embedding tensor of shape (1, embedding_dim).
+        """
+        def center_padding(seq: str, length: int) -> tuple[str, int]:
             """Center pad sequence to a given length."""
             padding_left = (length - len(seq)) // 2
             padding_right = length - len(seq) - padding_left
 
-            return 'N' * padding_left + seq + 'N' * padding_right, padding_left
+            return "N" * padding_left + seq + "N" * padding_right, padding_left
 
         chunks = self.chunk_sequence(sequence, self.max_length)
 
         embedding_chunks = []
 
-        with torch.inference_mode():
-            for i, chunk in enumerate(chunks):
+        for chunk in chunks:
+            if len(chunk) < self.min_length:
+                padded_chunk, padding_left = center_padding(
+                    chunk,
+                    self.min_length
+                )
+            elif len(chunk) < self.max_length:
+                padded_chunk, padding_left = center_padding(
+                    chunk,
+                    self.max_length
+                )
+            else:
+                padded_chunk, padding_left = chunk, 0
 
-                if len(chunk) < self.max_length:
+            # first OHE sequence chunk
+            batch = torch.tensor(
+                str_to_ohe(padded_chunk),
+                dtype=self.dtype
+            ).unsqueeze(0).permute(0, 2, 1).to(self.device)
 
-                    if len(chunk) < self.min_length:
-                        padded_chunk, padding_left = center_padding(
-                            chunk, self.min_length
-                        )
-                    else:
-                        # center pad to max length
-                        # if chunk is smaller than max length,
-                        # but larger than min length
-                        padded_chunk, padding_left = center_padding(
-                            chunk, self.max_length
-                        )
-                else:
-                    padded_chunk, padding_left = chunk, 0
+            # average embeddings across model replicates
+            replicate_embeds = [
+                m.get_embs_after_crop(batch) for m in self.models
+            ]
+            embedded_chunk = torch.stack(replicate_embeds).mean(dim=0)
 
-                # first OHE sequence chunk
-                batch = torch.tensor(
-                    str_to_ohe(padded_chunk),
-                    dtype=self.dtype
-                ).unsqueeze(0).permute(0, 2, 1).to(self.device)
+            # extract embedding portion corresponding to original unpadded seq
+            start_bin = padding_left // self.bin_size
+            end_bin = math.ceil((padding_left + len(chunk)) / self.bin_size)
 
-                # if using ensemble of models, average their embeddings
-                if hasattr(self, "models"):
-                    replicate_embeds = [
-                        model.get_embs_after_crop(batch)
-                        for model in self.models
-                    ]
-                    embedded_chunk = torch.stack(replicate_embeds).mean(dim=0)
-                else:
-                    embedded_chunk = self.model.get_embs_after_crop(batch)
+            embedding = embedded_chunk[:, :, start_bin:end_bin]
 
-                # extract the portion of the embedding
-                # corresponding to original unpadded seq
-                start_bin = padding_left // self.bin_size
-                end_bin = (
-                    padding_left + len(chunk) + (self.bin_size - 1)
-                ) // self.bin_size
-
-                embedding = embedded_chunk[:, :, start_bin:end_bin]
-
-                embedding_chunks.append(embedding)
+            embedding_chunks.append(embedding)
 
         embedding = torch.cat(embedding_chunks, dim=2)
 
