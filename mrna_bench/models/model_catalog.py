@@ -10,6 +10,7 @@ from .evo1 import Evo1
 from .evo2 import Evo2
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
+from .mrnabert import mRNABERT
 from .naive_baseline import NaiveBaseline
 from .naive_mamba import NaiveMamba
 from .nucleotide_transformer import NucleotideTransformer
@@ -39,6 +40,7 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "Evo2": Evo2,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
+    "mRNABERT": mRNABERT,
     "NaiveBaseline": NaiveBaseline,
     "NaiveMamba": NaiveMamba,
     "NucleotideTransformer": NucleotideTransformer,
@@ -94,6 +96,7 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "hyenadna-small-32k-seqlen-hf",
         "hyenadna-tiny-16k-seqlen-d128-hf"
     ],
+    "mRNABERT": ["mRNABERT"],
     "NaiveBaseline": [
         "naive-4-track",
         "naive-6-track"
