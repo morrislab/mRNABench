@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 import torch
 
-from mrna_bench import set_model_cache_var, revert_model_cache_var
+from mrna_bench import get_model_weights_path
 from mrna_bench.models.embedding_model import EmbeddingModel
 
 
@@ -39,13 +39,16 @@ class RNAFM(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            old_torch_cache = set_model_cache_var("TORCH_HOME")
             import fm
         except ImportError:
-            revert_model_cache_var(old_torch_cache)
             raise ImportError(
                 "Install base_models optional dependency to use RNA-FM."
             )
+
+        import os
+        hub_path = os.path.join(get_model_weights_path(), "hub")
+        old_hub_dir = torch.hub.get_dir()
+        torch.hub.set_dir(hub_path)
 
         if model_version == "rna-fm":
             model, alphabet = fm.pretrained.rna_fm_t12()
@@ -54,12 +57,13 @@ class RNAFM(EmbeddingModel):
             model, alphabet = fm.pretrained.mrna_fm_t12()
             self.is_sixtrack = True
         else:
+            torch.hub.set_dir(old_hub_dir)
             raise ValueError("Unknown model version.")
+
+        torch.hub.set_dir(old_hub_dir)
 
         self.model = model.to(device).eval()
         self.batch_converter = alphabet.get_batch_converter()
-
-        revert_model_cache_var(old_torch_cache)
 
     def embed_sequence(
         self,

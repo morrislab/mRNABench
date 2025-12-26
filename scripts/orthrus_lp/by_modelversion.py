@@ -5,13 +5,11 @@ import os
 
 import mrna_bench as mb
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
-from mrna_bench.models import MODEL_CATALOG
 
 default_seeds = "[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model_name", type=str)
-parser.add_argument("--model_version", type=str)
+parser.add_argument("--model_short_name", type=str)
 parser.add_argument("--dataset_name", type=str)
 parser.add_argument("--task", type=str)
 parser.add_argument("--target", type=str, default="target")
@@ -22,10 +20,8 @@ args = parser.parse_args()
 
 
 if __name__ == "__main__":
-    model_class = MODEL_CATALOG[args.model_name]
-    model_short_name = model_class.get_model_short_name(args.model_version)
 
-    print("Running linear probe for model:", model_short_name)
+    print("Running linear probe for model:", args.model_short_name)
     print("Dataset:", args.dataset_name)
     print("Task:", args.task)
     print("Target:", args.target)
@@ -36,7 +32,7 @@ if __name__ == "__main__":
 
     prober = (
         LinearProbeBuilder(dataset_name=args.dataset_name)
-        .fetch_embedding_by_model_name(model_short_name)
+        .fetch_embedding_by_model_name(args.model_short_name)
         .build_splitter(args.split_type, species="human", eval_all_splits=True)
         .build_evaluator(args.task)
         .set_target(args.target)

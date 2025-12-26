@@ -1,15 +1,16 @@
 #!/bin/bash
 
-#SBATCH --job-name=embed
+#SBATCH --job-name=evo_embed
 #SBATCH --partition=gpu
-#SBATCH --gres=gpu:1
 #SBATCH --nodes=1
+#SBATCH --gres=gpu:1
+#SBATCH --constraint=h100
 #SBATCH --ntasks-per-node=4
 #SBATCH --cpus-per-task=8
 #SBATCH --mem-per-cpu=8GB
-#SBATCH --time=15:00:00
-#SBATCH --output=./logs/embed.%A.out
-#SBATCH --error=./logs/embed.%A.err
+#SBATCH --time=02:00:00
+#SBATCH --output=./logs/evo_embed.%A.out
+#SBATCH --error=./logs/evo_embed.%A.err
 
 force_recompute="False"
 
@@ -27,16 +28,9 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 source [path/to/conda.sh]
-
-# if the model_name is Helix-mRNA, activate helix_bench conda environment
-if [[ "$model_name" == "Helix-mRNA" ]]; then
-    conda activate [path/to/helix_bench]
-else
-    conda activate [path/to/mrna_bench]
-fi
+conda activate [path/to/env]
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
-
 if [[ "$force_recompute" == "True" ]]; then
     python ../embed_dataset.py \
         --model_name "$model_name" \

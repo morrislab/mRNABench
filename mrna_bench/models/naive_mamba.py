@@ -28,7 +28,9 @@ class MixerModel(nn.Module):
         try:
             from mamba_ssm.modules.mamba_simple import Mamba, Block
         except ImportError:
-            raise ImportError("Install base_models optional dependency to use NaiveMamba.")
+            raise ImportError(
+                "Install base_models optional dependency to use NaiveMamba."
+            )
 
         self.embedding = nn.Linear(input_dim, d_model)
 

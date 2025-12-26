@@ -6,25 +6,19 @@ from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
-class RiNALMo(EmbeddingModel):
-    """Inference wrapper for RiNALMo.
+class PlantRNAFM(EmbeddingModel):
+    """Inference wrapper for PlantRNAFM.
 
-    RiNALMo is a transformer-based RNA foundation model trained on 36M ncRNA
-    sequences using MLM and other modern architectural improvements such as
-    RoPE, SwiGLU activations, and Flash Attention.
+    PlantRNAFM is a transformer-based RNA foundation model pretrained on
+    25M RNA sequences from 1,124 plant species (1KP). Pretraining uses
+    MLM (BERT-style), RNA secondary structure prediction (predicted by
+    ViennaRNA), and RNA region annotation prediction (e.g., CDS, 5' UTR,
+    3' UTR). All objectives are optimized with cross-entropy loss.
 
-    Link: https://github.com/lbcb-sci/RiNALMo
-
-    This wrapper uses the multimolecule implementation of RiNALMo:
-    https://huggingface.co/multimolecule
-
-    Available model versions:
-        - rinalmo-giga (0.7B parameters)
-        - rinalmo-mega (0.1B parameters)
-        - rinalmo-micro (33.5M parameters)
+    Link: https://github.com/yangheng95/PlantRNA-FM
     """
 
-    max_length = 8192
+    max_length = 1026
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -32,48 +26,47 @@ class RiNALMo(EmbeddingModel):
         return model_version
 
     def __init__(self, model_version: str, device: torch.device):
-        """Initialize RiNALMo inference wrapper.
+        """Initialize PlantRNAFM inference wrapper.
 
         Args:
-            model_version: Version of model to load. Valid versions: {
-                "rinalmo-giga", "rinalmo-mega", "rinalmo-micro"
-            }
+            model_version: Version of model to load.
+                    Only "plant_rnafm" is supported.
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
 
         try:
-            from multimolecule import RnaTokenizer, RiNALMoModel
+            from transformers import AutoModel, AutoTokenizer
         except ImportError:
             raise ImportError(
-                "Install base_models optional dependency to use RiNALMo."
+                "Install base_models optional dependency to use PlantRNAFM."
             )
 
-        model_path = "multimolecule/{}".format(model_version)
-
-        self.tokenizer = RnaTokenizer.from_pretrained(
-            model_path,
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            "yangheng/PlantRNA-FM",
+            trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
 
-        self.model = RiNALMoModel.from_pretrained(
-            model_path,
+        self.model = AutoModel.from_pretrained(
+            "yangheng/PlantRNA-FM",
+            trust_remote_code=True,
             cache_dir=get_model_weights_path()
-        ).to(device)
+        ).to(device).eval()
 
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using RiNALMo.
+        """Embed sequence using PlantRNAFM.
 
         Args:
             sequence: Sequence to be embedded.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            RiNALMo embedding of sequence with shape (1 x 1280).
+            PlantRNAFM embedding of sequence with shape (1 x 480).
         """
         sequence = sequence.replace("T", "U")
         chunks = self.chunk_sequence(sequence, self.max_length - 2)
@@ -93,4 +86,4 @@ class RiNALMo(EmbeddingModel):
 
     def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
-        raise NotImplementedError("Six track not available for NT.")
+        raise NotImplementedError("Six track not available for PlantRNAFM.")

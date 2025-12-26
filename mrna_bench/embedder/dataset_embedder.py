@@ -161,6 +161,57 @@ class DatasetEmbedder:
         for file in processed_files_paths:
             Path(file).unlink()
 
+    @classmethod
+    def from_dataframe(
+        cls,
+        model: EmbeddingModel,
+        data_df: pd.DataFrame,
+    ) -> "DatasetEmbedder":
+        """Create a DatasetEmbedder instance from a custom dataframe.
+
+        Args:
+            model: Model used to embed sequences.
+            data_df: DataFrame containing sequences and required columns:
+                - sequence: RNA sequence
+                - cds: CDS track information (as int32)
+                - splice: Splice track information (as int32)
+
+        Returns:
+            Initialized DatasetEmbedder.
+
+        Raises:
+            ValueError: If required columns are missing from the dataframe.
+        """
+        # Check for required columns
+        required_cols = ["sequence", "cds", "splice"]
+        missing_cols = [
+            col for col in required_cols if col not in data_df.columns
+        ]
+        if missing_cols:
+            raise ValueError(
+                f"DataFrame is missing required columns: {missing_cols}"
+            )
+
+        # Create a minimal BenchmarkDataset instance
+        class MinimalBenchmarkDataset(BenchmarkDataset):
+            def __init__(self, data_df):
+                self.data_df = data_df
+                self.dataset_name = "custom"
+                self.dataset_path = "custom"
+                self.embedding_dir = "custom"
+                self.species = "custom"  # Required for homology splitter
+
+            def _get_data_from_raw(self) -> pd.DataFrame:
+                """Abstract method - not used for custom datasets."""
+                raise NotImplementedError
+
+        dataset = MinimalBenchmarkDataset(data_df)
+
+        return cls(
+            model=model,
+            dataset=dataset,
+        )
+
 
 class KmerDatasetEmbedder(DatasetEmbedder):
     """Embeds sequences associated with dataset using specified embedder.
