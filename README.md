@@ -171,6 +171,8 @@ The current datasets catalogued are:
 | Mean Ribosome Load (Sugimoto) | <code>mrl&#8209;sugimoto</code> | Mean ribosome load (MRL) per transcript isoform as measured in human cells using isoform-resolved ribosome profiling. | `regression` | [paper](https://www.nature.com/articles/s41594-022-00819-2) |
 | Mean Ribosome Load (Sample) | <code>mrl&#8209;sample&#8209;egfp</code> <br><code>mrl&#8209;sample&#8209;mcherry</code><br><code>mrl&#8209;sample&#8209;designed</code><br><code>mrl&#8209;sample&#8209;varying</code> | Mean ribosome load (MRL) measured in an MPRA of randomized and designed 5'UTR regions attached to eGFP or mCherry reporters. Includes various RNA modifications and UTR lengths. | `regression` | [paper](https://pubmed.ncbi.nlm.nih.gov/31267113/)|
 | Mean Ribosome Load & Half-life | <code>mrl&#8209;hl&#8209;lbkwk</code> | Joint prediction of ribosome load and RNA half-life from synthetic mRNA sequences in the Leppek et al. dataset. | `regression` | [paper](https://pubmed.ncbi.nlm.nih.gov/33821271/) |
+| Translation Efficiency (Human) | <code>translation&#8209;efficiency&#8209;human</code> | Translation efficiency of human transcripts measured using ribosome profiling. | `regression` | [paper](https://www.nature.com/articles/s41587-025-02712-x) |
+| Translation Efficiency (Mouse) | <code>translation&#8209;efficiency&#8209;mouse</code> | Translation efficiency of mouse transcripts measured using ribosome profiling. | `regression` | [paper](https://www.nature.com/articles/s41587-025-02712-x) |
 
 ### RNA Stability
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
@@ -189,13 +191,23 @@ The current datasets catalogued are:
 |---|---|---|---|---|
 | Protein Subcellular Localization | <code>prot&#8209;loc</code> | Subcellular localization of transcript protein products based on experimental evidence from the Human Protein Atlas. | `multilabel` | [website](https://www.proteinatlas.org/) |
 | RNA Subcellular Localization (Fazal) | <code>rna&#8209;loc&#8209;fazal</code> | Subcellular localization of mRNA molecules measured using APEX-seq (proximity labeling + RNA-seq) in human cells. | `multilabel` | [paper](https://doi.org/10.1016/j.cell.2019.05.027) |
-| RNA Subcellular Localization (Ietswaart) | <code>rna&#8209;loc&#8209;ietswaart</code> | Subcellular localization of mRNA molecules in human cells using compartment-specific RNA-seq approaches. | `multilabel` | [paper](https://pubmed.ncbi.nlm.nih.gov/38964322/) |
+
+### RNA Lifecycle
+| Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
+|---|---|---|---|---|
+| RNA Lifecycle (Ietswaart) | <code>rna&#8209;lifecycle&#8209;ietswaart</code> | RNA lifecycle properties including synthesis, processing, and degradation rates in human cells. | `multilabel` | [paper](https://pubmed.ncbi.nlm.nih.gov/38964322/) |
+
+### miRNA Target Prediction
+| Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
+|---|---|---|---|---|
+| miRNA Target (MirTarClash) | <code>mirna&#8209;target</code> | Experimentally validated miRNA target sites on human mRNAs from CLASH-based experiments. Binary classification for top 20 most frequent miRNAs. | `multilabel` | [paper](https://academic.oup.com/database/article/doi/10.1093/database/baaf023/8106627) |
 
 ### Variant Effect Prediction
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
 |---|---|---|---|---|
 | VEP TraitGym (Mendelian) | <code>vep&#8209;traitgym&#8209;mendelian</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with Mendelian diseases. | `classification` | [paper](https://www.biorxiv.org/content/10.1101/2025.02.11.637758v1) |
 | VEP TraitGym (Complex) | <code>vep&#8209;traitgym&#8209;complex</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with complex traits. | `classification` | [paper](https://www.biorxiv.org/content/10.1101/2025.02.11.637758v1) |
+| UTR Variants (Bohn) | <code>utr&#8209;variants&#8209;bohn&#8209;utr5</code><br><code>utr&#8209;variants&#8209;bohn&#8209;utr3</code> | Variant effect prediction for 5'UTR and 3'UTR variants from Bohn et al. | `classification` | [paper](https://www.nature.com/articles/s41588-022-01084-x) |
 
 ### Adding a new dataset
 New datasets should inherit from `BenchmarkDataset`. Dataset names cannot contain underscores. Each new dataset should download raw data and process it into a dataframe by overriding `process_raw_data`. This dataframe should store transcript as rows, using string encoding in the `sequence` column. If homology splitting is required, a column `gene` containing gene names is required. Six track embedding also requires columns `cds` and `splice`. The target column can have any name, as it is specified at time of probing. New datasets should be added to `DATASET_CATALOG`.
@@ -239,17 +251,12 @@ pip install -e .
 ```
 
 ## Dev Mode Setup
-Dev mode requires additional dependencies for generating datasets from scratch and accessing the RNA-Fazal localization dataset.
+Dev mode requires additional dependencies for generating datasets from scratch and accessing certain datasets.
 
 ```bash
 conda create --name mrna_bench_dev python=3.10
 conda activate mrna_bench_dev
 
-# Install genome-kit first
-conda install -c conda-forge genome_kit=7.1.0
-conda install -c conda-forge gcc_linux-64 gxx_linux-64
-# Note: You might need to add gcc compilers to LD_LIBRARY_PATH if you encounter linking issues
-
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install mrna-bench[base_models]
+pip install mrna-bench[base_models, dev]
 ```
