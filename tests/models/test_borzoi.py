@@ -1,4 +1,5 @@
-from unittest.mock import Mock, patch
+import math
+from unittest.mock import Mock
 
 import pytest
 import torch
@@ -53,7 +54,7 @@ def test_borzoi_padding_logic(borzoi):
 
         padding_left = (min_length - seq_len) // 2
         expected_start_bin = padding_left // bin_size
-        expected_end_bin = (padding_left + seq_len + (bin_size - 1)) // bin_size
+        expected_end_bin = math.ceil((padding_left + seq_len) / bin_size)
         expected_num_bins = expected_end_bin - expected_start_bin
 
         assert output.shape[2] == expected_num_bins

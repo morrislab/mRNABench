@@ -33,10 +33,10 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
             import genome_kit as gk
 
             genome = gk.Genome("gencode.v41")
-            from mrna_bench.gk_utils import (
+            from mrna_bench.datasets.dataset_utils import (
                 create_cds_track,
                 create_splice_track,
-                get_transcript_sequence,
+                create_sequence,
             )
         except ImportError:
             print(
@@ -93,7 +93,7 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
             desc="Generating sequences and tracks",
         ):
             transcript_obj = row["transcript_obj"]
-            seq = get_transcript_sequence(transcript_obj, genome)
+            seq = create_sequence(transcript_obj, genome)
             if not seq:
                 continue
 
@@ -108,7 +108,7 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
                     "sequence": seq.upper(),
                     "cds": cds_track,
                     "splice": splice_track,
-                    "target": row["mean_te"],
+                    "target": row["mean_te"].astype("float32"),
                 }
             )
 

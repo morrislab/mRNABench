@@ -38,11 +38,20 @@ MIRNA_TARGETS_WITH_PREFIX = ["target_" + s for s in MIRNA_TARGETS]
 class MiRNATarget(BenchmarkDataset):
     """miRNA Target Prediction Dataset.
 
-    Note: This dataset is not available on Hugging Face Hub as
-    it is under a specific license which might prohibit redistribution.
-    We cannot redistribute the data, and nor should you. However, we do
-    provide functionality to download the data from the original source
-    and process it into a format compatible with the rest of mRNAbench.
+    This dataset contains experimentally validated miRNA target sites on
+    human mRNAs. The original dataset has been converted into a binary
+    classification task for the top 20 most frequently occurring miRNAs,
+    where each target column indicates whether the corresponding miRNA
+    targets the mRNA (1) or not (0).
+
+    The raw data is obtained from the MirTarClash database:
+    https://cosbi.ee.ncku.edu.tw/MirTarClash/home/
+
+    Note: This dataset is not available on Hugging Face Hub as we cannot find
+    its distribution license. We are not redistributing the data, and nor
+    should you. However, we do provide functionality to download the data
+    from the original source and process it into a format compatible with
+    the rest of mRNAbench.
     """
 
     def __init__(self, force_redownload: bool = False):
@@ -55,10 +64,6 @@ class MiRNATarget(BenchmarkDataset):
             dataset_name="mirna-target",
             species="human",
             force_redownload=force_redownload,
-            hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
-                "mirna-target/resolve/main/mirna_preprocessed.parquet"
-            ),
         )
         self.all_cols = MIRNA_TARGETS_WITH_PREFIX
 
@@ -70,11 +75,11 @@ class MiRNATarget(BenchmarkDataset):
         """
         try:
             import genome_kit as gk
-            from mrna_bench.gk_utils import (
+            from mrna_bench.datasets.dataset_utils import (
                 get_top_n_priority_transcripts,
                 create_cds_track,
                 create_splice_track,
-                get_transcript_sequence,
+                create_sequence,
             )
 
             genome = gk.Genome("gencode.v41")
@@ -214,44 +219,27 @@ class MiRNATarget(BenchmarkDataset):
         # Drop rows where 'transcript_obj' is NaN before proceeding
         df_subset.dropna(subset=["transcript_obj"], inplace=True)
 
-        with tqdm(
+        processed_rows = []
+        for _, row in tqdm(
+            df_subset.iterrows(),
             total=len(df_subset),
             desc="Generating sequences and tracks"
-        ) as pbar:
-            df_subset["transcript_id"] = df_subset["transcript_obj"].apply(
-                lambda x: x.id
-            )
-            pbar.update(0)
-            df_subset["cds"] = df_subset["transcript_obj"].apply(
-                lambda x: create_cds_track(x)
-            )
-            pbar.update(0)
-            df_subset["sequence"] = df_subset["transcript_obj"].apply(
-                lambda x: get_transcript_sequence(x, genome)
-            )
-            pbar.update(0)
-            df_subset["splice"] = df_subset["transcript_obj"].apply(
-                lambda x: create_splice_track(x)
-            )
-            pbar.update(0)
-            df_subset["chromosome"] = df_subset["transcript_obj"].apply(
-                lambda x: x.chrom
-            )
-            pbar.update(0)
-            df_subset["gene"] = df_subset["transcript_obj"].apply(
-                lambda x: x.gene.name
-            )
-            pbar.update(len(df_subset))
+        ):
+            transcript_obj = row["transcript_obj"]
+            processed_rows.append({
+                "transcript_id": transcript_obj.id,
+                "gene": transcript_obj.gene.name,
+                "chromosome": transcript_obj.chrom,
+                "sequence": create_sequence(transcript_obj, genome),
+                "cds": create_cds_track(transcript_obj),
+                "splice": create_splice_track(transcript_obj),
+                **{col: row[col] for col in MIRNA_TARGETS_WITH_PREFIX},
+            })
 
-        required_cols = [
-            "splice",
-            "cds",
-            "sequence",
-            "chromosome",
-            "gene",
-            "transcript_id",
-        ] + MIRNA_TARGETS_WITH_PREFIX
+        df_final = pd.DataFrame(processed_rows)
 
-        df_final = df_subset[required_cols].copy()
+        # Cast target columns to int8 to match HuggingFace dataset
+        for col in MIRNA_TARGETS_WITH_PREFIX:
+            df_final[col] = df_final[col].astype("int8")
 
         return df_final

@@ -202,8 +202,8 @@ class DatasetEmbedder:
                 self.species = "custom"  # Required for homology splitter
 
             def _get_data_from_raw(self) -> pd.DataFrame:
-                """Abstract method."""
-                pass
+                """Abstract method - not used for custom datasets."""
+                raise NotImplementedError
 
         dataset = MinimalBenchmarkDataset(data_df)
 
