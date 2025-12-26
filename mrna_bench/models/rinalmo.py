@@ -15,8 +15,13 @@ class RiNALMo(EmbeddingModel):
 
     Link: https://github.com/lbcb-sci/RiNALMo
 
-    This wrapper uses the multimoleule implementation of RiNALMo:
-    https://huggingface.co/multimolecule/rinalmo
+    This wrapper uses the multimolecule implementation of RiNALMo:
+    https://huggingface.co/multimolecule
+
+    Available model versions:
+        - rinalmo-giga (0.7B parameters)
+        - rinalmo-mega (0.1B parameters)
+        - rinalmo-micro (33.5M parameters)
     """
 
     max_length = 8192
@@ -30,7 +35,9 @@ class RiNALMo(EmbeddingModel):
         """Initialize RiNALMo inference wrapper.
 
         Args:
-            model_version: Version of model to load. Only "rinalmo" valid.
+            model_version: Version of model to load. Valid versions: {
+                "rinalmo-giga", "rinalmo-mega", "rinalmo-micro"
+            }
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
@@ -42,13 +49,15 @@ class RiNALMo(EmbeddingModel):
                 "Install base_models optional dependency to use RiNALMo."
             )
 
+        model_path = "multimolecule/{}".format(model_version)
+
         self.tokenizer = RnaTokenizer.from_pretrained(
-            "multimolecule/rinalmo",
+            model_path,
             cache_dir=get_model_weights_path()
         )
 
         self.model = RiNALMoModel.from_pretrained(
-            "multimolecule/rinalmo",
+            model_path,
             cache_dir=get_model_weights_path()
         ).to(device)
 

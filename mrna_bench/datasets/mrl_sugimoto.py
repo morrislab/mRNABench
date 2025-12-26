@@ -22,7 +22,7 @@ class MRLSugimoto(BenchmarkDataset):
             species="human",
             force_redownload=force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "mrl-sugimoto/resolve/main/mrl-sugimoto.parquet"
             )
         )

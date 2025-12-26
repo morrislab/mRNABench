@@ -1,20 +1,20 @@
 [project]
 name = "mrna-bench"
-version = "1.2.0"
+version = "1.2.2"
 description = "Benchmarking suite for mRNA property prediction."
 readme = "README.md"
 authors = [
     { name = "Ruian (Ian) Shi", email = "ian.shi@mail.utoronto.ca" },
-    { name = "Taykhoom Dalal" },
-    { name = "Phil Fradkin" },
-    { name = "Divya Koyyalagunta" }
+    { name = "Taykhoom Dalal", email = "tid4007@med.cornell.edu" },
+    { name = "Phil Fradkin", email = "phil.fradkin@gmail.com" },
+    { name = "Divya Koyyalagunta", email = "dko4001@med.cornell.edu" }
 ]
 requires-python = ">= 3.10"
 license = { file = "LICENSE" }  # Include a LICENSE file in your repo
 keywords = ["mrna", "genomic foundation model", "benchmark"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
     "Operating System :: Unix"
 ]
 dependencies = [
@@ -23,7 +23,10 @@ dependencies = [
     "scikit-learn",
     "numpy<2",
     "pandas<=2.2.2",
-    "requests"
+    "requests",
+    "pyarrow==20.0.0",
+    "fastparquet",
+    "openpyxl"
 ]
 
 [project.urls]
@@ -32,19 +35,24 @@ Repository = "https://github.com/morrislab/mRNABench"
 [project.optional-dependencies]
 base_models = [
     "torch==2.2.2",
-    "transformers",
+    "transformers==4.38.0",
+    "flash-attn==2.7.4.post1",
     "mamba-ssm==1.2.0.post1",
     "rna-fm==0.2.2",
-    "accelerate",
-    "multimolecule",
-    "modelgenerator==0.1.1-4",
-    "evo-model"
+    "accelerate==1.8.1",
+    "multimolecule==0.0.7",
+    "evo-model==0.4",
+    "borzoi-pytorch==0.4.2",
+    "enformer-pytorch==0.8.10",
+    "ViennaRNA==2.7.0"
 ]
 dev = [
     "mypy",
     "flake8",
     "flake8-docstrings",
-    "pytest"
+    "pytest",
+    "types-requests",
+    "types-PyYAML"
 ]
 
 [build-system]

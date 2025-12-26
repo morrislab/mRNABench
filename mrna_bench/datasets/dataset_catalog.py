@@ -1,27 +1,16 @@
 from collections.abc import Callable
 
 from .benchmark_dataset import BenchmarkDataset
+from .go_bio_proc import GOBiologicalProcess
+from .go_cell_comp import GOCellularComponent
 from .go_mol_func import GOMolecularFunction
-from .pcg_essentiality import (
-    PCGEssHAP1,
-    PCGEssHEK293FT,
-    PCGEssK562,
-    PCGEssMDA_MB_231,
-    PCGEssTHP1,
-    PCGEssShared
-)
-from .lncrna_essentiality import (
-    LNCRNAEssHAP1,
-    LNCRNAEssHEK293FT,
-    LNCRNAEssK562,
-    LNCRNAEssMDA_MB_231,
-    LNCRNAEssTHP1,
-    LNCRNAEssShared
-)
 from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
-from .rna_loc_ietswaart import RNALocalizationIetswaart
+from .rna_loc_fazal import RNALocalizationFazal
+from .rna_lifecycle_ietswaart import RNALifecycleIetswaart
+from .mrl_hl_lbkwk import MRLHLLBKWK
 from .prot_loc import ProteinLocalization
+from .mirna_target import MiRNATarget, MIRNA_TARGETS_WITH_PREFIX
 from .mrl_sugimoto import MRLSugimoto
 from .mrl_sample import (
     MRLSampleEGFP,
@@ -29,160 +18,190 @@ from .mrl_sample import (
     MRLSampleDesigned,
     MRLSampleVarying
 )
+from .translation_efficiency_human import TranslationEfficiencyHuman
+from .translation_efficiency_mouse import TranslationEfficiencyMouse
+from .utr_variants_bohn import (
+    UTRVariantsBohnUTR5,
+    UTRVariantsBohnUTR3
+)
+
 from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 from .eclip_binding import (
     eCLIPBindingK562,
-    eCLIP_K562_TOP_RBPS_LIST,
+    ECLIP_K562_TOP_RBPS_LIST,
     eCLIPBindingHepG2,
-    eCLIP_HepG2_TOP_RBPS_LIST
+    ECLIP_HEPG2_TOP_RBPS_LIST
 )
 
 DATASET_CATALOG: dict[str, Callable[..., BenchmarkDataset]] = {
     "eclip-binding-k562": eCLIPBindingK562,
     "eclip-binding-hepg2": eCLIPBindingHepG2,
+    "go-bp": GOBiologicalProcess,
+    "go-cc": GOCellularComponent,
     "go-mf": GOMolecularFunction,
-    "pcg-ess-hap1": PCGEssHAP1,
-    "pcg-ess-hek293ft": PCGEssHEK293FT,
-    "pcg-ess-k562": PCGEssK562,
-    "pcg-ess-mda-mb-231": PCGEssMDA_MB_231,
-    "pcg-ess-thp1": PCGEssTHP1,
-    "pcg-ess-shared": PCGEssShared,
-    "lncrna-ess-hap1": LNCRNAEssHAP1,
-    "lncrna-ess-hek293ft": LNCRNAEssHEK293FT,
-    "lncrna-ess-k562": LNCRNAEssK562,
-    "lncrna-ess-mda-mb-231": LNCRNAEssMDA_MB_231,
-    "lncrna-ess-thp1": LNCRNAEssTHP1,
-    "lncrna-ess-shared": LNCRNAEssShared,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
-    "rna-loc-ietswaart": RNALocalizationIetswaart,
+    "rna-loc-fazal": RNALocalizationFazal,
+    "rna-lifecycle-ietswaart": RNALifecycleIetswaart,
     "prot-loc": ProteinLocalization,
+    "mirna-target": MiRNATarget,
+    "mrl-hl-lbkwk": MRLHLLBKWK,
     "mrl-sugimoto": MRLSugimoto,
     "mrl-sample-egfp": MRLSampleEGFP,
     "mrl-sample-mcherry": MRLSampleMCherry,
     "mrl-sample-designed": MRLSampleDesigned,
     "mrl-sample-varying": MRLSampleVarying,
+    "translation-efficiency-human": TranslationEfficiencyHuman,
+    "translation-efficiency-mouse": TranslationEfficiencyMouse,
+    "utr-variants-bohn-utr5": UTRVariantsBohnUTR5,
+    "utr-variants-bohn-utr3": UTRVariantsBohnUTR3,
     "vep-traitgym-complex": VEPTraitGymComplex,
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
 
-DATASET_INFO = {
+DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
     "eclip-binding-k562": {
         "dataset": "eclip-binding-k562",
-        "task": "classification",
-        "target_col": eCLIP_K562_TOP_RBPS_LIST,
+        "task": ["classification"] * len(ECLIP_K562_TOP_RBPS_LIST),
+        "target_col": ECLIP_K562_TOP_RBPS_LIST,
         "split_type": "homology",
     },
     "eclip-binding-hepg2": {
         "dataset": "eclip-binding-hepg2",
-        "task": "classification",
-        "target_col": eCLIP_HepG2_TOP_RBPS_LIST,
+        "task": ["classification"] * len(ECLIP_HEPG2_TOP_RBPS_LIST),
+        "target_col": ECLIP_HEPG2_TOP_RBPS_LIST,
+        "split_type": "homology",
+    },
+    "go-bp": {
+        "dataset": "go-bp",
+        "task": ["multilabel"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "go-cc": {
+        "dataset": "go-cc",
+        "task": ["multilabel"],
+        "target_col": ["target"],
         "split_type": "homology",
     },
     "go-mf": {
         "dataset": "go-mf",
-        "task": "multilabel",
-        "target_col": "target",
+        "task": ["multilabel"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "mirna-target": {
+        "dataset": "mirna-target",
+        "task": ["classification"] * len(MIRNA_TARGETS_WITH_PREFIX),
+        "target_col": MIRNA_TARGETS_WITH_PREFIX,
         "split_type": "homology",
     },
     "mrl-sugimoto": {
         "dataset": "mrl-sugimoto",
-        "task": "reg_ridge",
-        "target_col": "target",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
         "split_type": "homology",
     },
-    "mrl-sample-egfp-m1pseudo": {
-        "dataset": "mrl-sample-egfp",
-        "task": "reg_ridge",
-        "target_col": "target_mrl_egfp_m1pseudo",
+    "mrl-hl-lbkwk": {
+        "dataset": "mrl-hl-lbkwk",
+        "task": ["reg_ridge", "reg_ridge"],
+        "target_col": ["target_in_cell_half_life",
+                       "target_ribosome_load"],
         "split_type": "default",
     },
-    "mrl-sample-egfp-pseudo": {
+    "mrl-sample-egfp": {
         "dataset": "mrl-sample-egfp",
-        "task": "reg_ridge",
-        "target_col": "target_mrl_egfp_pseudo",
-        "split_type": "default",
-    },
-    "mrl-sample-egfp-unmod": {
-        "dataset": "mrl-sample-egfp",
-        "task": "reg_ridge",
-        "target_col": "target_mrl_egfp_unmod",
+        "task": ["reg_ridge"] * 3,
+        "target_col": [
+            "target_mrl_egfp_m1pseudo",
+            "target_mrl_egfp_pseudo",
+            "target_mrl_egfp_unmod"
+        ],
         "split_type": "default",
     },
     "mrl-sample-mcherry": {
         "dataset": "mrl-sample-mcherry",
-        "task": "reg_ridge",
-        "target_col": "target_mrl_mcherry",
+        "task": ["reg_ridge"],
+        "target_col": ["target_mrl_mcherry"],
         "split_type": "default",
     },
     "mrl-sample-designed": {
         "dataset": "mrl-sample-designed",
-        "task": "reg_ridge",
-        "target_col": "target_mrl_designed",
+        "task": ["reg_ridge"],
+        "target_col": ["target_mrl_designed"],
         "split_type": "default",
     },
     "mrl-sample-varying": {
         "dataset": "mrl-sample-varying",
-        "task": "reg_ridge",
-        "target_col": "target_mrl_varying_length",
+        "task": ["reg_ridge"],
+        "target_col": ["target_mrl_varying_length"],
         "split_type": "default",
     },
     "prot-loc": {
         "dataset": "prot-loc",
-        "task": "multilabel",
-        "target_col": "target",
+        "task": ["multilabel"],
+        "target_col": ["target"],
         "split_type": "homology",
     },
     "rnahl-human": {
         "dataset": "rnahl-human",
-        "task": "reg_ridge",
-        "target_col": "target",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
         "split_type": "homology",
     },
     "rnahl-mouse": {
         "dataset": "rnahl-mouse",
-        "task": "reg_ridge",
-        "target_col": "target",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
         "split_type": "homology",
     },
-    "rna-loc-ietswaart": {
-        "dataset": "rna-loc-ietswaart",
-        "task": "multilabel",
-        "target_col": "target",
+    "rna-loc-fazal": {
+        "dataset": "rna-loc-fazal",
+        "task": ["multilabel"],
+        "target_col": ["target"],
         "split_type": "homology",
+    },
+    "rna-lifecycle-ietswaart": {
+        "dataset": "rna-lifecycle-ietswaart",
+        "task": ["multilabel"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "translation-efficiency-human": {
+        "dataset": "translation-efficiency-human",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "translation-efficiency-mouse": {
+        "dataset": "translation-efficiency-mouse",
+        "task": ["reg_ridge"],
+        "target_col": ["target"],
+        "split_type": "homology",
+    },
+    "utr-variants-bohn-utr5": {
+        "dataset": "utr-variants-bohn-utr5",
+        "task": ["classification"],
+        "target_col": ["target"],
+        "split_type": "default",
+    },
+    "utr-variants-bohn-utr3": {
+        "dataset": "utr-variants-bohn-utr3",
+        "task": ["classification"],
+        "target_col": ["target"],
+        "split_type": "default",
     },
     "vep-traitgym-complex": {
         "dataset": "vep-traitgym-complex",
-        "task": "classification",
-        "target_col": "target",
-        "split_type": "homology",
+        "task": ["classification"],
+        "target_col": ["target"],
+        "split_type": "default",
     },
     "vep-traitgym-mendelian": {
         "dataset": "vep-traitgym-mendelian",
-        "task": "classification",
-        "target_col": "target",
-        "split_type": "homology",
+        "task": ["classification"],
+        "target_col": ["target"],
+        "split_type": "default",
     },
 }
-
-for ttype in ["pcg", "lncrna"]:
-    split_type = "homology" if ttype == "pcg" else "default"
-    for cell in ["hap1", "hek293ft", "k562", "mda-mb-231", "thp1", "shared"]:
-
-        cell_upper = cell.upper()
-
-        DATASET_INFO[f"{ttype}-ess-{cell}"] = {
-            "dataset": f"{ttype}-ess-{cell}",
-            "task": "classification",
-            "target_col": f"target_essential_{cell_upper}",
-            "split_type": split_type,
-        }
-
-        if cell != "shared":
-            DATASET_INFO[f"{ttype}-ess-{cell}-day14-log2fc"] = {
-                "dataset": f"{ttype}-ess-{cell}",
-                "task": "reg_ridge",
-                "target_col": f"target_day14_log2fc_{cell_upper}",
-                "split_type": split_type,
-            }

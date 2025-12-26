@@ -3,26 +3,26 @@ import pandas as pd
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 
 
-class RNALocalizationIetswaart(BenchmarkDataset):
-    """RNA Subcellular Localization Dataset."""
+class GOCellularComponent(BenchmarkDataset):
+    """GO Cellular Component Dataset."""
 
     def __init__(self, force_redownload: bool = False):
-        """Initialize RNALocalization dataset.
+        """Initialize GO Cellular Component dataset.
 
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
         super().__init__(
-            dataset_name="rna-loc-ietswaart",
+            dataset_name="go-cc",
             species="human",
             force_redownload=force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
-                "rna-loc-ietswaart/resolve/main/rna-loc-ietswaart.parquet"
+                "https://huggingface.co/datasets/morrislab/"
+                "go-cc/resolve/main/go_dna_dataset_cc.parquet"
             )
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
         raise NotImplementedError(
-            "Code documenting RNA localization data is still in progress."
+            "Code documenting GO Cellular Component data is still in progress."
         )

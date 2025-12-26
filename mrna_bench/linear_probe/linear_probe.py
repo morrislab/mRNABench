@@ -2,7 +2,8 @@ import numpy as np
 import pandas as pd
 
 from sklearn.base import BaseEstimator
-from sklearn.linear_model import RidgeCV, LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.multioutput import MultiOutputClassifier
 
 from mrna_bench.data_splitter.data_splitter import DataSplitter
@@ -28,11 +29,11 @@ class LinearProbe:
     """
 
     linear_models = {
-        "regression": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-        "reg_lin": LinearRegression(n_jobs=-1),
-        "reg_ridge": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-        "classification": LogisticRegression(max_iter=5000, n_jobs=-1),
-        "multilabel": MultiOutputClassifier(
+        "regression": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+        "reg_lin": lambda: LinearRegression(n_jobs=-1),
+        "reg_ridge": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+        "classification": lambda: LogisticRegression(max_iter=5000, n_jobs=-1),
+        "multilabel": lambda: MultiOutputClassifier(
             LogisticRegression(max_iter=5000, n_jobs=-1),
             n_jobs=-1
         )
@@ -147,11 +148,19 @@ class LinearProbe:
         Returns:
             Dictionary of linear probing metrics per split.
         """
-        model = self.linear_models[self.task]
+        model = self.linear_models[self.task]()
         splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
-        model.fit(splits["train_X"], splits["train_y"])
+
+        try:
+            model.fit(splits["train_X"], splits["train_y"])
+        except ValueError:
+            if self.task in ["regression", "reg_ridge"]:
+                model = Ridge(solver="sag", alpha=1e-3)
+                model.fit(splits["train_X"], splits["train_y"])
+            else:
+                raise
 
         self.models[random_seed] = model
 

@@ -2,7 +2,7 @@ import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 
-eCLIP_K562_RBPS_LIST = [
+ECLIP_K562_RBPS_LIST = [
     'AATF', 'ABCF1', 'AKAP1', 'APOBEC3C', 'AQR', 'BUD13', 'CPEB4', 'CPSF6',
     'CSTF2T', 'DDX21', 'DDX24', 'DDX3X', 'DDX42', 'DDX51', 'DDX52', 'DDX55',
     'DDX6', 'DGCR8', 'DHX30', 'DROSHA', 'EFTUD2', 'EIF3G', 'EIF4G2', 'EWSR1',
@@ -18,13 +18,13 @@ eCLIP_K562_RBPS_LIST = [
     'YWHAG', 'ZC3H11A', 'ZNF622', 'ZRANB2'
 ]
 
-eCLIP_K562_TOP_RBPS_LIST = [
+ECLIP_K562_TOP_RBPS_LIST = [
     'YBX3', 'UCHL5', 'ZNF622', 'DDX3X', 'LIN28B', 'PUM2', 'PABPC4', 'DDX24',
     'IGF2BP1', 'IGF2BP2', 'RBM15', 'FAM120A', 'PUM1', 'SND1', 'DDX6', 'METAP2',
     'FXR2', 'PCBP1', 'TIA1', 'FMR1'
 ]
 
-eCLIP_HepG2_RBPS_LIST = [
+ECLIP_HEPG2_RBPS_LIST = [
     'AKAP1', 'AQR', 'BCCIP', 'BUD13', 'CDC40', 'CSTF2', 'CSTF2T', 'DDX3X',
     'DDX52', 'DDX55', 'DDX6', 'DGCR8', 'DHX30', 'DKC1', 'DROSHA', 'EFTUD2',
     'EIF3D', 'EIF3H', 'EXOSC5', 'FAM120A', 'FASTKD2', 'FKBP4', 'FXR2', 'G3BP1',
@@ -38,23 +38,23 @@ eCLIP_HepG2_RBPS_LIST = [
     'UTP18', 'WDR43', 'XPO5', 'YBX3', 'ZC3H11A'
 ]
 
-eCLIP_HepG2_TOP_RBPS_LIST = [
+ECLIP_HEPG2_TOP_RBPS_LIST = [
     'PPIG', 'DDX3X', 'LARP4', 'LIN28B', 'G3BP1', 'NCBP2', 'IGF2BP1', 'AKAP1',
     'PCBP2', 'PABPN1', 'SND1', 'UCHL5', 'DDX55', 'FXR2', 'EIF3H', 'IGF2BP3',
     'SRSF1', 'HLTF', 'LSM11', 'PRPF4'
 ]
 
-eCLIP_K562_RBPS_LIST = [
-    'target_' + col for col in eCLIP_K562_RBPS_LIST
+ECLIP_K562_RBPS_LIST = [
+    'target_' + col for col in ECLIP_K562_RBPS_LIST
 ]
-eCLIP_HepG2_RBPS_LIST = [
-    'target_' + col for col in eCLIP_HepG2_RBPS_LIST
+ECLIP_HEPG2_RBPS_LIST = [
+    'target_' + col for col in ECLIP_HEPG2_RBPS_LIST
 ]
-eCLIP_K562_TOP_RBPS_LIST = [
-    'target_' + col for col in eCLIP_K562_TOP_RBPS_LIST
+ECLIP_K562_TOP_RBPS_LIST = [
+    'target_' + col for col in ECLIP_K562_TOP_RBPS_LIST
 ]
-eCLIP_HepG2_TOP_RBPS_LIST = [
-    'target_' + col for col in eCLIP_HepG2_TOP_RBPS_LIST
+ECLIP_HEPG2_TOP_RBPS_LIST = [
+    'target_' + col for col in ECLIP_HEPG2_TOP_RBPS_LIST
 ]
 
 
@@ -98,13 +98,13 @@ class eCLIPBindingK562(eCLIPBinding):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.all_cols = eCLIP_K562_RBPS_LIST
+        self.all_cols = ECLIP_K562_RBPS_LIST
 
         super().__init__(
             "eclip-binding-k562",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "eclip/resolve/main/eclip-k562.parquet"
             )
         )
@@ -119,13 +119,13 @@ class eCLIPBindingHepG2(eCLIPBinding):
         Args:
             force_redownload: Force raw data download even if pre-existing.
         """
-        self.all_cols = eCLIP_HepG2_RBPS_LIST
+        self.all_cols = ECLIP_HEPG2_RBPS_LIST
 
         super().__init__(
             "eclip-binding-hepg2",
             force_redownload,
             hf_url=(
-                "https://huggingface.co/datasets/quietflamingo/"
+                "https://huggingface.co/datasets/morrislab/"
                 "eclip/resolve/main/eclip-hepg2.parquet"
             )
         )

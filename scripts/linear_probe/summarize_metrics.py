@@ -29,6 +29,6 @@ if __name__ == "__main__":
             .build()
         )
 
-        seeds = [2541, 413, 411, 412, 2547]
+        seeds = [2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]
         metrics = prober.persister.load_multirun_results(seeds)
         results = prober.compute_multirun_results(metrics, persist=True)
