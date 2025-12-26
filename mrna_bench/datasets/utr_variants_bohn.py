@@ -12,7 +12,7 @@ class UTRVariantsBohn(BenchmarkDataset):
         force_redownload: bool = False,
         hf_url: str | None = None
     ):
-        """Initialize PALTailLengthHuman dataset.
+        """Initialize UTRVariantsBohn dataset.
 
         Args:
             dataset_name: Dataset name formatted utr-variants-bohn-{utr_type}
@@ -26,14 +26,14 @@ class UTRVariantsBohn(BenchmarkDataset):
         if type(self) is UTRVariantsBohn:
             raise TypeError("UTRVariantsBohn is an abstract class.")
 
-        self.cell_type = dataset_name.split("-")[-1]
-        assert self.cell_type in ["utr5", "utr3"]
+        self.utr_type = dataset_name.split("-")[-1]
+        assert self.utr_type in ["utr5", "utr3"]
 
         super().__init__(dataset_name, "human", force_redownload, hf_url)
 
     def _get_data_from_raw(self) -> pd.DataFrame:
         raise NotImplementedError(
-            "Code documenting PAL tail length data is still in progress."
+            "Code documenting UTR variants data is still in progress."
         )
 
 
