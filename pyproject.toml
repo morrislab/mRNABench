@@ -71,3 +71,7 @@ include = ["mrna_bench*"]
 packages = ["mrna_bench"]
 exclude = ["tests", "scripts", "experiments"]
 ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 79
+

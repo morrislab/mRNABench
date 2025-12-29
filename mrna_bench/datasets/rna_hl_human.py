@@ -3,7 +3,7 @@ import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
-    DatasetMetadata
+    DatasetMetadata,
 )
 from mrna_bench.datasets.dataset_utils import ohe_to_str
 from mrna_bench.utils import download_file
@@ -25,13 +25,13 @@ class RNAHalfLifeHuman(BenchmarkDataset):
         task=["regression"],
         target_col=["target"],
         default_split_type="homology",
-        benchmark_set="core"
+        benchmark_set="core",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize RNAHalfLifeHuman dataset.
 
@@ -42,7 +42,7 @@ class RNAHalfLifeHuman(BenchmarkDataset):
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
-            hf_url=HF_URL
+            hf_url=HF_URL,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
@@ -53,6 +53,7 @@ class RNAHalfLifeHuman(BenchmarkDataset):
         """
         try:
             import genome_kit as gk
+
             hg_genes = gk.Genome("gencode.v41").genes
         except ImportError:
             print("GenomeKit is required for raw processing. See README.")
@@ -66,16 +67,18 @@ class RNAHalfLifeHuman(BenchmarkDataset):
         print("Processing raw data...")
         seq_str = ohe_to_str(X[:, :, :4])
         lens = [len(s) for s in seq_str]
-        cds = [X[i, :lens[i], 4] for i in range(len(X))]
-        splice = [X[i, :lens[i], 5] for i in range(len(X))]
+        cds = [X[i, : lens[i], 4] for i in range(len(X))]
+        splice = [X[i, : lens[i], 5] for i in range(len(X))]
 
-        df = pd.DataFrame({
-            "gene": data["genes"],
-            "sequence": seq_str,
-            "cds": cds,
-            "splice": splice,
-            "target": [y for y in data["y"]],
-        })
+        df = pd.DataFrame(
+            {
+                "gene": data["genes"],
+                "sequence": seq_str,
+                "cds": cds,
+                "splice": splice,
+                "target": [y for y in data["y"]],
+            }
+        )
 
         # Some sequences have no gene name, making the current chromosome
         # lookup impossible. We remove those sequences, but these could be

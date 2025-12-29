@@ -3,7 +3,7 @@ from tqdm import tqdm
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
-    DatasetMetadata
+    DatasetMetadata,
 )
 from mrna_bench.utils import download_file
 
@@ -63,13 +63,13 @@ class MiRNATarget(BenchmarkDataset):
         task=["classification"],
         target_col=MIRNA_TARGETS_WITH_PREFIX,
         default_split_type="homology",
-        benchmark_set="core"
+        benchmark_set="core",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize MiRNATarget dataset.
 
@@ -79,7 +79,7 @@ class MiRNATarget(BenchmarkDataset):
         """
         super().__init__(
             force_redownload_hf=force_redownload_hf,
-            force_rebuild_raw=force_rebuild_raw
+            force_rebuild_raw=force_rebuild_raw,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
@@ -106,10 +106,7 @@ class MiRNATarget(BenchmarkDataset):
             raise
 
         print("Downloading raw data...")
-        self.raw_data_path = download_file(
-            MIRNA_TARGET_URL,
-            self.raw_data_dir
-        )
+        self.raw_data_path = download_file(MIRNA_TARGET_URL, self.raw_data_dir)
 
         df = pd.read_csv(self.raw_data_path)
         print(f"Starting with {len(df)} transcripts")
@@ -139,16 +136,14 @@ class MiRNATarget(BenchmarkDataset):
                 top_transcripts = get_top_n_priority_transcripts(
                     gene,
                     genome,
-                    n=5
+                    n=5,
                 )
 
                 if not top_transcripts:
                     continue
 
                 # Get transcript IDs from the top transcripts (strip version)
-                top_tx_ids = [
-                    t.id.split(".")[0] for t in top_transcripts
-                ]
+                top_tx_ids = [t.id.split(".")[0] for t in top_transcripts]
 
                 # Create mapping from transcript ID to transcript object
                 transcript_id_to_obj = {
@@ -235,18 +230,20 @@ class MiRNATarget(BenchmarkDataset):
         for _, row in tqdm(
             df_subset.iterrows(),
             total=len(df_subset),
-            desc="Generating sequences and tracks"
+            desc="Generating sequences and tracks",
         ):
             transcript_obj = row["transcript_obj"]
-            processed_rows.append({
-                "transcript_id": transcript_obj.id,
-                "gene": transcript_obj.gene.name,
-                "chromosome": transcript_obj.chrom.replace("chr", ""),
-                "sequence": create_sequence(transcript_obj, genome),
-                "cds": create_cds_track(transcript_obj),
-                "splice": create_splice_track(transcript_obj),
-                **{col: row[col] for col in MIRNA_TARGETS_WITH_PREFIX},
-            })
+            processed_rows.append(
+                {
+                    "transcript_id": transcript_obj.id,
+                    "gene": transcript_obj.gene.name,
+                    "chromosome": transcript_obj.chrom.replace("chr", ""),
+                    "sequence": create_sequence(transcript_obj, genome),
+                    "cds": create_cds_track(transcript_obj),
+                    "splice": create_splice_track(transcript_obj),
+                    **{col: row[col] for col in MIRNA_TARGETS_WITH_PREFIX},
+                }
+            )
 
         df_final = pd.DataFrame(processed_rows)
 

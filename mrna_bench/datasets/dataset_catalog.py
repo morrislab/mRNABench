@@ -10,7 +10,7 @@ from .mrl_sample import (
     MRLSampleEGFP,
     MRLSampleMCherry,
     MRLSampleDesigned,
-    MRLSampleVarying
+    MRLSampleVarying,
 )
 from .mrl_sugimoto import MRLSugimoto
 from .prot_loc import ProteinLocalization

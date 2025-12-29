@@ -2,7 +2,7 @@ import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
-    DatasetMetadata
+    DatasetMetadata,
 )
 
 
@@ -21,13 +21,13 @@ class GOBiologicalProcess(BenchmarkDataset):
         task=["multilabel"],
         target_col=["target"],
         default_split_type="homology",
-        benchmark_set="extended"
+        benchmark_set="extended",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize GO Biological Process dataset.
 
@@ -38,7 +38,7 @@ class GOBiologicalProcess(BenchmarkDataset):
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
-            hf_url=HF_URL
+            hf_url=HF_URL,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
