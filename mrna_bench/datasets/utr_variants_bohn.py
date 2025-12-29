@@ -1,6 +1,9 @@
 import pandas as pd
 
-from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 
 
 class UTRVariantsBohn(BenchmarkDataset):
@@ -8,28 +11,28 @@ class UTRVariantsBohn(BenchmarkDataset):
 
     def __init__(
         self,
-        dataset_name: str,
-        force_redownload: bool = False,
-        hf_url: str | None = None
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+        hf_url: str = ""
     ):
         """Initialize UTRVariantsBohn dataset.
 
         Args:
-            dataset_name: Dataset name formatted utr-variants-bohn-{utr_type}
-                where utr_type is in: {
-                    "utr5",
-                    "utr3",
-                }.
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
             hf_url: URL to download the dataset from Hugging Face.
         """
         if type(self) is UTRVariantsBohn:
             raise TypeError("UTRVariantsBohn is an abstract class.")
 
-        self.utr_type = dataset_name.split("-")[-1]
+        self.utr_type = self.METADATA.dataset_name.split("-")[-1]
         assert self.utr_type in ["utr5", "utr3"]
 
-        super().__init__(dataset_name, "human", force_redownload, hf_url)
+        super().__init__(
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=hf_url
+        )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
         raise NotImplementedError(
@@ -40,15 +43,29 @@ class UTRVariantsBohn(BenchmarkDataset):
 class UTRVariantsBohnUTR5(UTRVariantsBohn):
     """Concrete class for UTR Variants dataset (5' UTR)."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="utr-variants-bohn-utr5",
+        species="human",
+        task=["classification", "zeroshot"],
+        target_col=["target"],
+        default_split_type="default",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize UTRVariantsBohnUTR5 dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "utr-variants-bohn-utr5",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "utr-variants-bohn/resolve/main/"
@@ -60,15 +77,29 @@ class UTRVariantsBohnUTR5(UTRVariantsBohn):
 class UTRVariantsBohnUTR3(UTRVariantsBohn):
     """Concrete class for UTR Variants dataset (3' UTR)."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="utr-variants-bohn-utr3",
+        species="human",
+        task=["classification"],
+        target_col=["target"],
+        default_split_type="default",
+        benchmark_set="extended"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize UTRVariantsBohnUTR3 dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "utr-variants-bohn-utr3",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "utr-variants-bohn/resolve/main/"

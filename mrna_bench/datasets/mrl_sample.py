@@ -9,7 +9,10 @@ import tarfile
 import numpy as np
 import pandas as pd
 
-from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 from mrna_bench.utils import download_file
 
 
@@ -91,30 +94,28 @@ class MRLSample(BenchmarkDataset):
 
     def __init__(
         self,
-        dataset_name: str,
-        force_redownload: bool = False,
-        hf_url: str | None = None
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+        hf_url: str = ""
     ):
         """Initialize MRLSample dataset.
 
         Args:
-            dataset_name: Dataset name formatted mrl-sample-{experiment_name}
-                where experiment_name is in: {
-                    "egfp",
-                    "mcherry",
-                    "designed",
-                    "varying"
-                }.
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
             hf_url: URL to download the dataset from Hugging Face.
         """
         if type(self) is MRLSample:
             raise TypeError("MRLSample is an abstract class.")
 
-        self.exp_target = dataset_name.split("-")[-1]
+        self.exp_target = self.METADATA.dataset_name.split("-")[-1]
         assert self.exp_target in ["egfp", "mcherry", "designed", "varying"]
 
-        super().__init__(dataset_name, "synthetic", force_redownload, hf_url)
+        super().__init__(
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=hf_url
+        )
 
     def _download_raw_data(self):
         """Download raw data from source."""
@@ -122,7 +123,7 @@ class MRLSample(BenchmarkDataset):
 
         dlflag = self.raw_data_dir + "/downloaded"
 
-        if os.path.exists(dlflag) and not self.force_redownload:
+        if os.path.exists(dlflag) and not self.force_rebuild_raw:
             files = pathlib.Path(self.raw_data_dir).glob("*.csv")
             self.raw_data_files = [str(file.absolute()) for file in files]
             return
@@ -255,15 +256,33 @@ class MRLSample(BenchmarkDataset):
 class MRLSampleEGFP(MRLSample):
     """Concrete class for MRL Sample for egfp experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-egfp",
+        species="synthetic",
+        task=["regression"],
+        target_col=[
+            "target_mrl_egfp_m1pseudo",
+            "target_mrl_egfp_pseudo",
+            "target_mrl_egfp_unmod"
+        ],
+        default_split_type="default",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize MRLSampleEGFP dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-egfp",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-egfp.parquet"
@@ -363,15 +382,29 @@ class MRLSampleEGFP(MRLSample):
 class MRLSampleMCherry(MRLSample):
     """Concrete class for MRL Sample for mCherry experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-mcherry",
+        species="synthetic",
+        task=["regression"],
+        target_col=["target_mrl_mcherry"],
+        default_split_type="default",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize MRLSampleMCherry dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-mcherry",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-mcherry.parquet"
@@ -382,15 +415,29 @@ class MRLSampleMCherry(MRLSample):
 class MRLSampleDesigned(MRLSample):
     """Concrete class for MRL Sample for designed experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-designed",
+        species="synthetic",
+        task=["regression"],
+        target_col=["target_mrl_designed"],
+        default_split_type="default",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize MRLSampleDesigned dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-designed",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-designed.parquet"
@@ -401,15 +448,29 @@ class MRLSampleDesigned(MRLSample):
 class MRLSampleVarying(MRLSample):
     """Concrete class for MRL Sample for varying length experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-varying",
+        species="synthetic",
+        task=["regression"],
+        target_col=["target_mrl_varying_length"],
+        default_split_type="default",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize MRLSampleVarying dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-varying",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-varying.parquet"

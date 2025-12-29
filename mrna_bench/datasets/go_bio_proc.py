@@ -1,25 +1,44 @@
 import pandas as pd
 
-from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
+
+
+HF_URL = (
+    "https://huggingface.co/datasets/morrislab/"
+    "go-bp/resolve/main/go_dna_dataset_bp.parquet"
+)
 
 
 class GOBiologicalProcess(BenchmarkDataset):
     """GO Biological Process Dataset."""
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="go-bp",
+        species="human",
+        task=["multilabel"],
+        target_col=["target"],
+        default_split_type="homology",
+        benchmark_set="extended"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize GO Biological Process dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            dataset_name="go-bp",
-            species="human",
-            force_redownload=force_redownload,
-            hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
-                "go-bp/resolve/main/go_dna_dataset_bp.parquet"
-            )
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=HF_URL
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:

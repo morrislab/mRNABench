@@ -38,12 +38,17 @@ def load_model(
 
 def load_dataset(
     dataset_name: str,
-    force_redownload: bool = False
+    force_redownload_hf: bool = False,
+    force_rebuild_raw: bool = False
 ) -> BenchmarkDataset:
     """Load Benchmark Dataset.
 
     Args:
         dataset_name: Name of the dataset.
-        force_redownload: Forces data file redownload.
+        force_redownload_hf: Forces redownload from HuggingFace.
+        force_rebuild_raw: Forces rebuild from raw data source.
     """
-    return DATASET_CATALOG[dataset_name](force_redownload)
+    return DATASET_CATALOG[dataset_name](
+        force_redownload_hf=force_redownload_hf,
+        force_rebuild_raw=force_rebuild_raw
+    )

@@ -7,7 +7,7 @@ from tqdm import tqdm
 import torch
 
 from mrna_bench.models import EmbeddingModel
-from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.datasets import BenchmarkDataset, DatasetMetadata
 from mrna_bench.embedder.embedder_utils import get_embedding_filepath
 from sklearn.preprocessing import StandardScaler
 
@@ -194,12 +194,21 @@ class DatasetEmbedder:
 
         # Create a minimal BenchmarkDataset instance
         class MinimalBenchmarkDataset(BenchmarkDataset):
-            def __init__(self, data_df):
+            METADATA = DatasetMetadata(
+                dataset_name="custom",
+                species="custom",
+                task=["regression"],
+                target_col=["target"],
+                default_split_type="default",
+                benchmark_set="extended"
+            )
+
+            def __init__(self, data_df: pd.DataFrame):
                 self.data_df = data_df
                 self.dataset_name = "custom"
                 self.dataset_path = "custom"
                 self.embedding_dir = "custom"
-                self.species = "custom"  # Required for homology splitter
+                self.metadata = self.METADATA
 
             def _get_data_from_raw(self) -> pd.DataFrame:
                 """Abstract method - not used for custom datasets."""

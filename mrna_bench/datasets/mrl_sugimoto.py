@@ -1,30 +1,48 @@
 import numpy as np
 import pandas as pd
 
-from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 from mrna_bench.datasets.dataset_utils import ohe_to_str
 from mrna_bench.utils import download_file
 
+
 MRLS_URL = "https://zenodo.org/records/14708163/files/mrl_isoform_resolved.npz"
+HF_URL = (
+    "https://huggingface.co/datasets/morrislab/"
+    "mrl-sugimoto/resolve/main/mrl-sugimoto.parquet"
+)
 
 
 class MRLSugimoto(BenchmarkDataset):
     """Mean Ribosome Load Dataset from Sugimoto et al. 2022."""
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sugimoto",
+        species="human",
+        task=["regression"],
+        target_col=["target"],
+        default_split_type="homology",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize MRLSugimoto dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            dataset_name="mrl-sugimoto",
-            species="human",
-            force_redownload=force_redownload,
-            hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
-                "mrl-sugimoto/resolve/main/mrl-sugimoto.parquet"
-            )
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=HF_URL
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:

@@ -5,9 +5,8 @@ import zipfile
 import pandas as pd
 import numpy as np
 
-from mrna_bench import get_data_path
 from mrna_bench.data_splitter.data_splitter import DataSplitter
-from mrna_bench.utils import download_file
+from mrna_bench.utils import download_file, get_data_path
 
 
 def train_test_split_homologous(

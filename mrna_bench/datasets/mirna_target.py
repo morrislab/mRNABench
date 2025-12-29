@@ -1,7 +1,10 @@
 import pandas as pd
 from tqdm import tqdm
 
-from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 from mrna_bench.utils import download_file
 
 
@@ -54,18 +57,30 @@ class MiRNATarget(BenchmarkDataset):
     the rest of mRNAbench.
     """
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="mirna-target",
+        species="human",
+        task=["classification"],
+        target_col=MIRNA_TARGETS_WITH_PREFIX,
+        default_split_type="homology",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize MiRNATarget dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            dataset_name="mirna-target",
-            species="human",
-            force_redownload=force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw
         )
-        self.all_cols = MIRNA_TARGETS_WITH_PREFIX
 
     def _get_data_from_raw(self) -> pd.DataFrame:
         """Process raw data into Pandas dataframe.
@@ -216,9 +231,6 @@ class MiRNATarget(BenchmarkDataset):
             f" {df_subset['gene ID'].nunique()})"
         )
 
-        # Drop rows where 'transcript_obj' is NaN before proceeding
-        df_subset.dropna(subset=["transcript_obj"], inplace=True)
-
         processed_rows = []
         for _, row in tqdm(
             df_subset.iterrows(),
@@ -229,7 +241,7 @@ class MiRNATarget(BenchmarkDataset):
             processed_rows.append({
                 "transcript_id": transcript_obj.id,
                 "gene": transcript_obj.gene.name,
-                "chromosome": transcript_obj.chrom,
+                "chromosome": transcript_obj.chrom.replace("chr", ""),
                 "sequence": create_sequence(transcript_obj, genome),
                 "cds": create_cds_track(transcript_obj),
                 "splice": create_splice_track(transcript_obj),
@@ -238,7 +250,6 @@ class MiRNATarget(BenchmarkDataset):
 
         df_final = pd.DataFrame(processed_rows)
 
-        # Cast target columns to int8 to match HuggingFace dataset
         for col in MIRNA_TARGETS_WITH_PREFIX:
             df_final[col] = df_final[col].astype("int8")
 
