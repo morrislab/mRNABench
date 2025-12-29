@@ -2,7 +2,7 @@ import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
-    DatasetMetadata
+    DatasetMetadata,
 )
 
 
@@ -21,13 +21,13 @@ class MRLHLLBKWK(BenchmarkDataset):
         task=["regression"],
         target_col=["target_in_cell_half_life", "target_ribosome_load"],
         default_split_type="default",
-        benchmark_set="core"
+        benchmark_set="core",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize MRLHLLBKWK dataset.
 
@@ -38,7 +38,7 @@ class MRLHLLBKWK(BenchmarkDataset):
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
-            hf_url=HF_URL
+            hf_url=HF_URL,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:

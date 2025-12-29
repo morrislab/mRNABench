@@ -2,7 +2,7 @@ import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
-    DatasetMetadata
+    DatasetMetadata,
 )
 
 
@@ -13,7 +13,7 @@ class UTRVariantsBohn(BenchmarkDataset):
         self,
         force_redownload_hf: bool = False,
         force_rebuild_raw: bool = False,
-        hf_url: str = ""
+        hf_url: str = "",
     ):
         """Initialize UTRVariantsBohn dataset.
 
@@ -31,7 +31,7 @@ class UTRVariantsBohn(BenchmarkDataset):
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
-            hf_url=hf_url
+            hf_url=hf_url,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
@@ -49,13 +49,13 @@ class UTRVariantsBohnUTR5(UTRVariantsBohn):
         task=["classification", "zeroshot"],
         target_col=["target"],
         default_split_type="default",
-        benchmark_set="core"
+        benchmark_set="core",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize UTRVariantsBohnUTR5 dataset.
 
@@ -70,7 +70,7 @@ class UTRVariantsBohnUTR5(UTRVariantsBohn):
                 "https://huggingface.co/datasets/morrislab/"
                 "utr-variants-bohn/resolve/main/"
                 "utr-variants-bohn-utr5.parquet"
-            )
+            ),
         )
 
 
@@ -83,13 +83,13 @@ class UTRVariantsBohnUTR3(UTRVariantsBohn):
         task=["classification"],
         target_col=["target"],
         default_split_type="default",
-        benchmark_set="extended"
+        benchmark_set="core",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize UTRVariantsBohnUTR3 dataset.
 
@@ -104,5 +104,5 @@ class UTRVariantsBohnUTR3(UTRVariantsBohn):
                 "https://huggingface.co/datasets/morrislab/"
                 "utr-variants-bohn/resolve/main/"
                 "utr-variants-bohn-utr3.parquet"
-            )
+            ),
         )

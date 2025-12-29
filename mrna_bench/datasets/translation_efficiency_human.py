@@ -3,7 +3,7 @@ from tqdm import tqdm
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
-    DatasetMetadata
+    DatasetMetadata,
 )
 from mrna_bench.utils import download_file
 
@@ -28,13 +28,13 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
         task=["regression"],
         target_col=["target"],
         default_split_type="homology",
-        benchmark_set="core"
+        benchmark_set="core",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize TranslationEfficiencyHuman dataset.
 
@@ -45,7 +45,7 @@ class TranslationEfficiencyHuman(BenchmarkDataset):
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
-            hf_url=HF_URL
+            hf_url=HF_URL,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:

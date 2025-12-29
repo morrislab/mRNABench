@@ -15,7 +15,7 @@ VALID_TASKS = (
     "multilabel",
     "reg_lin",
     "reg_ridge",
-    "zeroshot"
+    "zeroshot",
 )
 
 
@@ -64,7 +64,7 @@ class BenchmarkDataset(ABC):
         self,
         force_redownload_hf: bool = False,
         force_rebuild_raw: bool = False,
-        hf_url: str = ""
+        hf_url: str = "",
     ):
         """Initialize BenchmarkDataset.
 
@@ -100,9 +100,7 @@ class BenchmarkDataset(ABC):
                 try:
                     self.data_df = self.get_data_hf()
                 except Exception as e:
-                    print(
-                        "Error downloading from HuggingFace: {}".format(e)
-                    )
+                    print("Error downloading from HuggingFace: {}".format(e))
                     print("Attempting to process from raw data.")
                     self.data_df = self._get_data_from_raw()
             else:
@@ -146,13 +144,15 @@ class BenchmarkDataset(ABC):
             raise TypeError("Dataframe is not a pandas DataFrame.")
 
         # Set invariant columns
-        invariant_col_set = set([
-            "sequence",
-            "gene",
-            "chromosome",
-            "cds",
-            "splice"
-        ])
+        invariant_col_set = set(
+            [
+                "sequence",
+                "gene",
+                "chromosome",
+                "cds",
+                "splice",
+            ]
+        )
 
         keep_col_set = invariant_col_set.union(set(target_cols))
         keep_cols = [c for c in self.data_df.columns if c in keep_col_set]
@@ -208,7 +208,7 @@ class BenchmarkDataset(ABC):
         split_ratios: tuple[float, float, float],
         random_seed: int = 2541,
         split_type: str | None = None,
-        split_kwargs: dict = {}
+        split_kwargs: dict = {},
     ) -> dict[str, pd.DataFrame]:
         """Get data splits for the dataset.
 
@@ -233,13 +233,13 @@ class BenchmarkDataset(ABC):
         splits = splitter.get_all_splits_df(
             self.data_df,
             split_ratios,
-            random_seed
+            random_seed,
         )
 
         split_df = {
             "train_df": splits[0],
             "val_df": splits[1],
-            "test_df": splits[2]
+            "test_df": splits[2],
         }
 
         return split_df

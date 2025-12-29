@@ -3,7 +3,7 @@ import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
-    DatasetMetadata
+    DatasetMetadata,
 )
 from mrna_bench.datasets.dataset_utils import ohe_to_str
 from mrna_bench.utils import download_file
@@ -25,13 +25,13 @@ class ProteinLocalization(BenchmarkDataset):
         task=["multilabel"],
         target_col=["target"],
         default_split_type="homology",
-        benchmark_set="extended"
+        benchmark_set="extended",
     )
 
     def __init__(
         self,
         force_redownload_hf: bool = False,
-        force_rebuild_raw: bool = False
+        force_rebuild_raw: bool = False,
     ):
         """Initialize ProteinLocalization dataset.
 
@@ -42,7 +42,7 @@ class ProteinLocalization(BenchmarkDataset):
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
-            hf_url=HF_URL
+            hf_url=HF_URL,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
@@ -53,6 +53,7 @@ class ProteinLocalization(BenchmarkDataset):
         """
         try:
             import genome_kit as gk
+
             hg_genes = gk.Genome("gencode.v41").genes
         except ImportError:
             print("GenomeKit is required for raw processing. See README.")
@@ -66,8 +67,8 @@ class ProteinLocalization(BenchmarkDataset):
         print("Processing raw data...")
         seq_str = ohe_to_str(X[:, :, :4])
         lens = [len(s) for s in seq_str]
-        cds = [X[i, :lens[i], 4] for i in range(len(X))]
-        splice = [X[i, :lens[i], 5] for i in range(len(X))]
+        cds = [X[i, : lens[i], 4] for i in range(len(X))]
+        splice = [X[i, : lens[i], 5] for i in range(len(X))]
 
         chrs = []
         for gene in data["genes"]:
@@ -75,13 +76,15 @@ class ProteinLocalization(BenchmarkDataset):
             transcript_chr = transcript_chr.replace("chr", "")
             chrs.append(transcript_chr)
 
-        df = pd.DataFrame({
-            "gene": data["genes"],
-            "chromosome": chrs,
-            "sequence": seq_str,
-            "cds": cds,
-            "splice": splice,
-            "target": [y for y in data["y"]],
-        })
+        df = pd.DataFrame(
+            {
+                "gene": data["genes"],
+                "chromosome": chrs,
+                "sequence": seq_str,
+                "cds": cds,
+                "splice": splice,
+                "target": [y for y in data["y"]],
+            }
+        )
 
         return df
