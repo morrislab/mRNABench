@@ -6,7 +6,10 @@ if TYPE_CHECKING:
 import numpy as np
 import pandas as pd
 
-from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 from mrna_bench.datasets.dataset_utils import (
     create_sequence,
     create_cds_track,
@@ -37,22 +40,21 @@ class VEPTraitGym(BenchmarkDataset):
 
     def __init__(
         self,
-        dataset_name: str,
-        force_redownload: bool = False,
-        hf_url: str | None = None,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+        hf_url: str = ""
     ):
         """Initialize TraitGym dataset.
 
         Args:
-            dataset_name: Dataset name formatted in "vep-traitgym-{data_type}"
-                where data_type is in: {"mendelian", "complex"}.
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
             hf_url: URL to HF repo the dataset will be downloaded from.
         """
         if type(self) is VEPTraitGym:
             raise TypeError("VEPTraitGym is an abstract class.")
 
-        data_type = dataset_name.split("-")[-1]
+        data_type = self.METADATA.dataset_name.split("-")[-1]
 
         if data_type == "mendelian":
             self.data_url = self.source_hf_url + self.mendelian_url
@@ -61,7 +63,11 @@ class VEPTraitGym(BenchmarkDataset):
         else:
             raise ValueError("Invalid data type.")
 
-        super().__init__(dataset_name, "human", force_redownload, hf_url)
+        super().__init__(
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=hf_url
+        )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
         """Process data from TraitGym into six-track dataset."""
@@ -270,15 +276,29 @@ class VEPTraitGym(BenchmarkDataset):
 class VEPTraitGymMendelian(VEPTraitGym):
     """Mendelian subset of TraitGym benchmark for variant effect prediction."""
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="vep-traitgym-mendelian",
+        species="human",
+        task=["classification", "zeroshot"],
+        target_col=["target"],
+        default_split_type="default",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize Mendelian subset of TraitGym dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "vep-traitgym-mendelian",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "vep-traitgym-mrna/resolve/main/vep-traitgym-mendelian.parquet"
@@ -289,15 +309,29 @@ class VEPTraitGymMendelian(VEPTraitGym):
 class VEPTraitGymComplex(VEPTraitGym):
     """Complex subset of TraitGym benchmark for variant effect prediction."""
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="vep-traitgym-complex",
+        species="human",
+        task=["classification", "zeroshot"],
+        target_col=["target"],
+        default_split_type="default",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize Complex subset of TraitGym dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "vep-traitgym-complex",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "vep-traitgym-mrna/resolve/main/vep-traitgym-complex.parquet"

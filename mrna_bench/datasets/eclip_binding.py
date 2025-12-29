@@ -1,6 +1,9 @@
 import pandas as pd
 
-from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 
 ECLIP_K562_RBPS_LIST = [
     'AATF', 'ABCF1', 'AKAP1', 'APOBEC3C', 'AQR', 'BUD13', 'CPEB4', 'CPSF6',
@@ -63,25 +66,23 @@ class eCLIPBinding(BenchmarkDataset):
 
     def __init__(
         self,
-        dataset_name: str,
-        force_redownload: bool = False,
-        hf_url: str | None = None
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+        hf_url: str = ""
     ):
         """Initialize eCLIPBinding dataset.
 
         Args:
-            dataset_name: Dataset name formatted eclip-binding-{exp_name}
-                where exp_name is in: {"k562", "hepg2"}.
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
             hf_url: Hugging Face URL for dataset.
         """
         if type(self) is eCLIPBinding:
             raise TypeError("eCLIPBinding is an abstract class.")
 
         super().__init__(
-            dataset_name=dataset_name,
-            species="human",
-            force_redownload=force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=hf_url
         )
 
@@ -92,17 +93,29 @@ class eCLIPBinding(BenchmarkDataset):
 class eCLIPBindingK562(eCLIPBinding):
     """Concrete class for K562 cell line experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="eclip-binding-k562",
+        species="human",
+        task=["classification"],
+        target_col=ECLIP_K562_TOP_RBPS_LIST,
+        default_split_type="homology",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize K562 dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
-        self.all_cols = ECLIP_K562_RBPS_LIST
-
         super().__init__(
-            "eclip-binding-k562",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "eclip/resolve/main/eclip-k562.parquet"
@@ -113,17 +126,29 @@ class eCLIPBindingK562(eCLIPBinding):
 class eCLIPBindingHepG2(eCLIPBinding):
     """Concrete class for HepG2 cell line experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="eclip-binding-hepg2",
+        species="human",
+        task=["classification"],
+        target_col=ECLIP_HEPG2_TOP_RBPS_LIST,
+        default_split_type="homology",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize HepG2 dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
-        self.all_cols = ECLIP_HEPG2_RBPS_LIST
-
         super().__init__(
-            "eclip-binding-hepg2",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "eclip/resolve/main/eclip-hepg2.parquet"

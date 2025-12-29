@@ -1,13 +1,17 @@
 import numpy as np
 import pandas as pd
 
-from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 from mrna_bench.utils import download_file
 from mrna_bench.datasets.dataset_utils import (
     create_sequence,
     create_cds_track,
     create_splice_track
 )
+
 
 RNA_LOC_FAZAL_URL = (
     "https://ars.els-cdn.com/content/image/"
@@ -25,17 +29,29 @@ class RNALocalizationFazal(BenchmarkDataset):
     and process it into a format compatible with the rest of mRNAbench.
     """
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="rna-loc-fazal",
+        species="human",
+        task=["multilabel"],
+        target_col=["target"],
+        default_split_type="homology",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
         """Initialize RNALocalizationFazal dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            dataset_name="rna-loc-fazal",
-            species="human",
-            force_redownload=force_redownload,
-            hf_url=None
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:

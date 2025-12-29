@@ -1,7 +1,10 @@
 import pandas as pd
 from tqdm import tqdm
 
-from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata
+)
 from mrna_bench.utils import download_file
 
 
@@ -10,21 +13,39 @@ TRANSLATION_EFFICIENCY_MOUSE_URL = (
     "art%3A10.1038%2Fs41587-025-02712-x/"
     "MediaObjects/41587_2025_2712_MOESM4_ESM.xlsx"
 )
+HF_URL = (
+    "https://huggingface.co/datasets/morrislab/"
+    "translation-efficiency-mouse/resolve/main/te_mouse.parquet"
+)
 
 
 class TranslationEfficiencyMouse(BenchmarkDataset):
     """Translation Efficiency Prediction Dataset for Mouse."""
 
-    def __init__(self, force_redownload: bool = False):
-        """Initialize TranslationEfficiencyMouse dataset."""
+    METADATA = DatasetMetadata(
+        dataset_name="translation-efficiency-mouse",
+        species="mouse",
+        task=["regression"],
+        target_col=["target"],
+        default_split_type="homology",
+        benchmark_set="core"
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False
+    ):
+        """Initialize TranslationEfficiencyMouse dataset.
+
+        Args:
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
+        """
         super().__init__(
-            dataset_name="translation-efficiency-mouse",
-            species="mouse",
-            force_redownload=force_redownload,
-            hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
-                "translation-efficiency-mouse/resolve/main/te_mouse.parquet"
-            )
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=HF_URL
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:

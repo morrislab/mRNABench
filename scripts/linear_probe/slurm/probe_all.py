@@ -41,7 +41,7 @@ if __name__ == "__main__":
                     model_short_name = MODEL_CATALOG[model_name].get_model_short_name(model_version)
 
                     if args.canonical_split:
-                        valid_split_types = [DATASET_INFO[dataset_name]["split_type"]]
+                        valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
                     elif "mrl-sample" in dataset_name:
                         valid_split_types = ["default", "hard-kmer", "kmer"]
                     elif "mrl-hl-lbkwk" in dataset_name:
