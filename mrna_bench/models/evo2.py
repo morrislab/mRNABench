@@ -14,7 +14,10 @@ class Evo2(EmbeddingModel):
     resolution. Owing to its StripedHyena2 backbone, it has an ultra long
     context window. The `base` variants can handle sequences up to 8192
     nucleotides in length while the larger variants can handle sequences up
-    to 1 million nucleotides in length.
+    to 1 million nucleotides in length. While it can in principle handle
+    sequences longer than 1 MB due, due to GPU memory constraints, we limit
+    the maximum sequence length to 1,000,000 nucleotides. This can be
+    increased if more GPU memory is available.
 
     Link: https://github.com/ArcInstitute/evo2
     """
@@ -23,9 +26,10 @@ class Evo2(EmbeddingModel):
     version_to_middle_layer = {
         "evo2_40b": "blocks.25.pre_norm",
         "evo2_7b": "blocks.16.pre_norm",
+        "evo2_7b_262k": "blocks.16.pre_norm",
         "evo2_40b_base": "blocks.25.pre_norm",
         "evo2_7b_base": "blocks.16.pre_norm",
-        "evo2_1b_base": "blocks.12.pre_norm"
+        "evo2_1b_base": "blocks.12.pre_norm",
     }
 
     @staticmethod
@@ -66,6 +70,9 @@ class Evo2(EmbeddingModel):
 
         if model_version in ["evo2_40b", "evo2_7b"]:
             self.max_length = 1_000_000
+
+        if model_version == "evo2_7b_262k":
+            self.max_length = 262_144
 
         revert_model_cache_var(old_hf_cache)
 
