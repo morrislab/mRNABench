@@ -63,7 +63,11 @@ class DNABERT2(EmbeddingModel):
 
         # Reset AutoModel mapping to use default BertConfig for scenarios
         # where additional non-DNABERT loading occurs.
-        AutoModel._model_mapping.register(BertConfig, BertModel, exist_ok=True)
+        AutoModel._model_mapping.register(
+            BertConfig,
+            (BertModel, BertModel),
+            exist_ok=True
+        )
 
     def embed_sequence(
         self,
