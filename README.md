@@ -36,17 +36,32 @@ pip install mrna-bench
 
 ### Base Models
 > [!IMPORTANT]
-> **Requirements:** PyTorch 2.2.2 and CUDA 12.1+ are required for base models installation.
+> **Requirements:** PyTorch 2.7.1 and CUDA 12.6 are required for base models installation.
 
-The inference-capable version of mRNABench that can generate embeddings using most models (except Evo2 and Helix mRNA) can be installed as shown below.
+The inference-capable version of mRNABench that can generate embeddings using almost all models (except Helix mRNA) can be installed as shown below.
 
 ```bash
-conda create --name mrna_bench python=3.10
+conda create --name mrna_bench python=3.12
 conda activate mrna_bench
 
-pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
+pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126
+pip install psutil
+
+pip install mrna-bench[base_models] --no-build-isolation
+```
+
+If you are using a system with an older version of GLIBC (less than 2.32), you may need to install some many of dependencies via conda:
+
+```bash
+conda create --name mrna_bench python=3.12
+conda activate mrna_bench
+
+conda install -c nvidia cuda-nvcc cuda-cudart-dev # might be needed depending on system
+conda install -c conda-forge pytorch=2.7.1 mamba-ssm=2.2.5 flash-attn-layer-norm=2.7.4 transformer-engine-torch=2.5.0
+
 pip install mrna-bench[base_models]
 ```
+
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
 
