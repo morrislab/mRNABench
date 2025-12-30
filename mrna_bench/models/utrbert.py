@@ -46,7 +46,7 @@ class UTRBERT(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            from multimolecule import RnaTokenizer, UtrBertModel
+            from multimolecule import RnaTokenizer, UtrBertModel, UtrBertConfig
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use 3UTRBERT."
@@ -57,16 +57,19 @@ class UTRBERT(EmbeddingModel):
         else:
             self.is_sixtrack = False
 
+        self.kmer_size = int(model_version.split("-")[1].replace("mer", ""))
+
+        cfg = UtrBertConfig(nmers=self.kmer_size)
+
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version.replace("-utronly", "")),
             cache_dir=get_model_weights_path()
         )
         self.model = UtrBertModel.from_pretrained(
             "multimolecule/{}".format(model_version.replace("-utronly", "")),
-            cache_dir=get_model_weights_path()
+            cache_dir=get_model_weights_path(),
+            config=cfg
         ).to(device)
-
-        self.kmer_size = int(model_version.split("-")[1].replace("mer", ""))
 
     def embed_sequence(
         self,

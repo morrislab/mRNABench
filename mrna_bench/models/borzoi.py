@@ -89,10 +89,15 @@ class Borzoi(EmbeddingModel):
             cfg.return_center_bins_only = False
 
             model_i = Borzoi.from_pretrained(
-                "johahi/{}".format(version),
+                f"johahi/{version}",
                 cache_dir=get_model_weights_path(),
                 config=cfg
-            ).to(device, dtype=self.dtype).eval()
+            )
+            model_i.to_empty(device=device)
+            model_i.load_state_dict(model_i.state_dict())
+            for p in model_i.parameters():
+                p.data = p.data.to(self.dtype)
+            model_i.eval()
 
             # Avoid cropping as we handle padding ourselves per chunk
             model_i.crop = torch.nn.Identity()
