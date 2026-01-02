@@ -32,9 +32,9 @@ class LinearProbe:
         "regression": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
         "reg_lin": lambda: LinearRegression(n_jobs=-1),
         "reg_ridge": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-        "classification": lambda: LogisticRegression(max_iter=5000, n_jobs=-1),
+        "classification": lambda: LogisticRegression(max_iter=5000),
         "multilabel": lambda: MultiOutputClassifier(
-            LogisticRegression(max_iter=5000, n_jobs=-1),
+            LogisticRegression(max_iter=5000),
             n_jobs=-1
         )
     }
