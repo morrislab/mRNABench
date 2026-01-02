@@ -14,6 +14,7 @@ from .mrnabert import mRNABERT
 from .naive_baseline import NaiveBaseline
 from .naive_mamba import NaiveMamba
 from .nucleotide_transformer import NucleotideTransformer
+from .nucleotide_transformer_v3 import NucleotideTransformerV3
 from .omnigenome import OmniGenome
 from .orthrus import Orthrus
 from .plant_rnafm import PlantRNAFM
@@ -44,6 +45,7 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "NaiveBaseline": NaiveBaseline,
     "NaiveMamba": NaiveMamba,
     "NucleotideTransformer": NucleotideTransformer,
+    "NucleotideTransformerV3": NucleotideTransformerV3,
     "RiNALMo": RiNALMo,
     "OmniGenome": OmniGenome,
     "Orthrus": Orthrus,
@@ -113,6 +115,13 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "v2-100m-multi-species",
         "v2-250m-multi-species",
         "v2-500m-multi-species"
+    ],
+    "NucleotideTransformerV3": [
+        "NTv3_8M_pre",
+        "NTv3_100M_pre",
+        "NTv3_650M_pre",
+        "NTv3_100M_pos",
+        "NTv3_650M_pos"
     ],
     "OmniGenome": [
         "omnigenome-52m",

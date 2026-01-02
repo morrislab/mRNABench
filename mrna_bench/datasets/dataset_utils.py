@@ -82,12 +82,12 @@ def create_cds_track(transcript: "Transcript") -> np.ndarray:
     # set every third position to 1
     cds_track[0::3] = 1
     # concat with zeros of utr3 and utr5
-    cds_track = np.concatenate([
+    full_track = np.concatenate([
         np.zeros(len_utr5, dtype=np.int8),
         cds_track,
         np.zeros(len_utr3, dtype=np.int8)
     ])
-    return cds_track
+    return full_track
 
 
 def create_splice_track(transcript: "Transcript") -> np.ndarray:
