@@ -89,7 +89,7 @@ class Borzoi(EmbeddingModel):
             cfg.return_center_bins_only = False
 
             model_i = Borzoi.from_pretrained(
-                f"johahi/{version}",
+                "johahi/{}".format(version),
                 cache_dir=get_model_weights_path(),
                 config=cfg
             )
