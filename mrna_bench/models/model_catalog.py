@@ -117,11 +117,11 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "v2-500m-multi-species"
     ],
     "NucleotideTransformerV3": [
-        "NTv3_8M_pre",
-        "NTv3_100M_pre",
-        "NTv3_650M_pre",
-        "NTv3_100M_pos",
-        "NTv3_650M_pos"
+        "v3_8M_pre",
+        "v3_100M_pre",
+        "v3_650M_pre",
+        "v3_100M_pos",
+        "v3_650M_pos"
     ],
     "OmniGenome": [
         "omnigenome-52m",
