@@ -30,7 +30,7 @@ class NucleotideTransformerV3(EmbeddingModel):
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
-        return "nt_" + model_version
+        return "nt_" + model_version.replace("_", "-")
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize NucleotideTransformer inference wrapper.

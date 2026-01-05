@@ -120,8 +120,8 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "v3_8M_pre",
         "v3_100M_pre",
         "v3_650M_pre",
-        "v3_100M_pos",
-        "v3_650M_pos"
+        "v3_100M_post",
+        "v3_650M_post"
     ],
     "OmniGenome": [
         "omnigenome-52m",
@@ -132,7 +132,11 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "orthrus-base-4-track"
     ],
     "Plant-RNAFM": ["plant_rnafm"],
-    "RiNALMo": ["rinalmo"],
+    "RiNALMo": [
+        "rinalmo-micro",
+        "rinalmo-mega",
+        "rinalmo-giga"
+    ],
     "RNABERT": ["rnabert"],
     "RNAErnie": ["rnaernie"],
     "RNA-FM": ["rna-fm", "mrna-fm"],
