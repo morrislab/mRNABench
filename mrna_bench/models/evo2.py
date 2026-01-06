@@ -44,6 +44,7 @@ class Evo2(EmbeddingModel):
             model_version: Version of model used. Valid versions: {
                 "evo2_40b",
                 "evo2_7b",
+                "evo2_7b_262k",
                 "evo2_40b_base",
                 "evo2_7b_base",
                 "evo2_1b_base",
