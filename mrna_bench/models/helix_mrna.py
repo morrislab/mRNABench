@@ -3,6 +3,7 @@ from collections.abc import Callable
 import numpy as np
 import torch
 
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -31,16 +32,22 @@ class HelixmRNAWrapper(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            from helical import HelixmRNA, HelixmRNAConfig
+            from transformers import AutoTokenizer, AutoModel
         except ImportError:
             raise ImportError("Helix-mRNA missing required dependencies.")
 
-        helix_mrna_config = HelixmRNAConfig(
-            batch_size=1,
-            device=device
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            "Taykhoom/Helix-mRNA-Wrapper",
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
         )
 
-        self.model = HelixmRNA(configurer=helix_mrna_config)
+        self.model = AutoModel.from_pretrained(
+            "Taykhoom/Helix-mRNA-Wrapper",
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
+        ).to(self.device).eval()
+
         self.is_sixtrack = True
 
     def embed_sequence(
@@ -57,12 +64,26 @@ class HelixmRNAWrapper(EmbeddingModel):
         Returns:
             Helix-mRNA representation of sequence with shape (1 x 256).
         """
-        sequence = sequence.upper().replace("T", "U")
+        sequence = self.convert_dna_to_rna(sequence)
 
-        dataset = self.model.process_data(sequence)
-        rna_embeddings = torch.Tensor(self.model.get_embeddings(dataset))
+        inputs = self.tokenizer(
+            sequence,
+            return_tensors="pt",
+            truncation=True,
+            padding="longest",
+            max_length=self.tokenizer.model_max_length,
+            return_special_tokens_mask=True,
+        ).to(self.device)
 
-        return agg_fn(rna_embeddings, dim=1)
+        special_tokens_mask = inputs["special_tokens_mask"]
+        attention_mask = 1 - special_tokens_mask
+
+        embedding = self.model(
+            input_ids=inputs["input_ids"],
+            attention_mask=attention_mask,
+        ).last_hidden_state
+
+        return agg_fn(embedding, dim=1)
 
     def embed_sequence_sixtrack(
         self,
@@ -104,3 +125,7 @@ class HelixmRNAWrapper(EmbeddingModel):
             modified_sequence += sequence[i]
 
         return modified_sequence
+
+    def convert_dna_to_rna(self, sequence: str) -> str:
+        """Convert DNA sequence to RNA sequence."""
+        return sequence.upper().replace("T", "U")

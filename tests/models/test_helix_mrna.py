@@ -1,12 +1,9 @@
 import pytest
-from unittest.mock import patch
 
 import numpy as np
 import torch
 
 from mrna_bench.models.helix_mrna import HelixmRNAWrapper
-
-pytest.importorskip("helical")
 
 
 @pytest.fixture(scope="module")
@@ -30,27 +27,9 @@ def test_helix_mrna_forward(helix_mrna):
     assert out.shape == (1, 256)
 
 
-def test_helix_mrna_forward_token_convert(helix_mrna):
-    """Test Helix-mRNA converts tokens from T->U."""
-    with patch.object(
-        helix_mrna.model,
-        "process_data",
-        wraps=helix_mrna.model.process_data
-    ) as mock_forward:
-        helix_mrna.embed_sequence("ATGATG")
-        mock_forward.assert_called_once_with("AUGAUG")
-
-    with patch.object(
-        helix_mrna.model,
-        "process_data",
-        wraps=helix_mrna.model.process_data
-    ) as mock_forward:
-        helix_mrna.embed_sequence_sixtrack(
-            "ATGATG",
-            np.zeros((6,)),
-            np.zeros((6,))
-        )
-        mock_forward.assert_called_once_with("AUGAUG")
+def test_helix_mrna_dna_to_rna(helix_mrna):
+    """Test Helix-mRNA sequence conversion from DNA to RNA."""
+    assert helix_mrna.convert_dna_to_rna("ATGATG") == "AUGAUG"
 
 
 def test_helix_mrna_converter(helix_mrna):
