@@ -1,4 +1,5 @@
 from typing import Callable
+from functools import partial
 
 import numpy as np
 import torch
@@ -55,7 +56,7 @@ class Orthrus(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable | None = None
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using four track Orthrus.
 
@@ -66,11 +67,6 @@ class Orthrus(EmbeddingModel):
         Returns:
             Orthrus representation of sequence.
         """
-        if agg_fn is not None:
-            raise NotImplementedError(
-                "Inference currently does not support alternative aggregation."
-            )
-
         if self.is_sixtrack:
             raise ValueError((
                 "Currently loaded model is six track."
@@ -80,22 +76,17 @@ class Orthrus(EmbeddingModel):
         ohe_sequence = self.model.seq_to_oh(sequence).to(self.device)
         model_input_tt = ohe_sequence.unsqueeze(0)
 
-        lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
+        embedding = self.model(model_input_tt, channel_last=True)
 
-        embedding = self.model.representation(
-            model_input_tt,
-            lengths,
-            channel_last=True
-        )
-
-        return embedding
+        aggregated_embedding = agg_fn(embedding)
+        return aggregated_embedding
 
     def embed_sequence_sixtrack(
         self,
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        agg_fn: Callable | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using six track Orthrus.
 
@@ -111,11 +102,6 @@ class Orthrus(EmbeddingModel):
         Returns:
             Orthrus representation of sequence.
         """
-        if agg_fn is not None:
-            raise NotImplementedError(
-                "Inference currently does not support alternative aggregation."
-            )
-
         ohe_sequence = self.model.seq_to_oh(sequence).numpy()
 
         model_input = np.hstack((
@@ -127,12 +113,7 @@ class Orthrus(EmbeddingModel):
         model_input_tt = torch.Tensor(model_input).to(self.device)
         model_input_tt = model_input_tt.unsqueeze(0)
 
-        lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
+        embedding = self.model(model_input_tt, channel_last=True)
 
-        embedding = self.model.representation(
-            model_input_tt,
-            lengths,
-            channel_last=True
-        )
-
-        return embedding
+        aggregated_embedding = agg_fn(embedding)
+        return aggregated_embedding

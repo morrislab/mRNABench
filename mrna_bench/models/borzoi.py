@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 import math
 
 import torch
@@ -115,7 +116,7 @@ class Borzoi(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using Borzoi, excluding padded regions.
 
@@ -169,13 +170,13 @@ class Borzoi(EmbeddingModel):
 
             embedding = embedded_chunk[:, :, start_bin:end_bin]
 
-            embedding_chunks.append(embedding)
+            embedding_chunks.append(embedding.permute(0, 2, 1))
 
-        embedding = torch.cat(embedding_chunks, dim=2)
+        embedding = torch.cat(embedding_chunks, dim=1)
 
-        aggregate_embedding = agg_fn(embedding, dim=2)
+        aggregate_embedding = agg_fn(embedding)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not possible with Borzoi.")

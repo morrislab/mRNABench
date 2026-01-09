@@ -1,7 +1,7 @@
-from collections import namedtuple
-
 import pytest
+
 from unittest.mock import patch
+from collections import namedtuple
 
 import torch
 

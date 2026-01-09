@@ -1,6 +1,7 @@
 import pytest
-from unittest.mock import patch
 
+from unittest.mock import patch
+from functools import partial
 
 pytest.importorskip("torch")
 import torch
@@ -42,14 +43,20 @@ def test_rinalmo_forward(rinalmo):
     assert model.is_sixtrack is False
 
     text = "ACTTTGGCCA"
-    output = model.embed_sequence(text, agg_fn=torch.mean).cpu()
+    output = model.embed_sequence(
+        text,
+        agg_fn=partial(torch.mean, dim=1)
+    ).cpu()
     assert output.shape == (1, embed_dim)
 
 
 def test_rinalmo_giga_output(rinalmo_giga):
     """Test RiNALMo giga produces expected output."""
     text = "ACTTTGGCCA"
-    output = rinalmo_giga.embed_sequence(text, agg_fn=torch.mean).cpu()
+    output = rinalmo_giga.embed_sequence(
+        text,
+        agg_fn=partial(torch.mean, dim=1)
+    ).cpu()
     assert output.shape == (1, 1280)
 
     # Matches output from official release

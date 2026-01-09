@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 
 import torch
 import numpy as np
@@ -78,7 +79,7 @@ class mRNABERT(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using mRNABERT.
 
@@ -137,7 +138,7 @@ class mRNABERT(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
+        aggregate_embedding = agg_fn(embedding)
         return aggregate_embedding
 
     def chunk_sequence_cds_aware(

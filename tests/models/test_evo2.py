@@ -1,11 +1,10 @@
 import pytest
-import numpy as np
 
+import numpy as np
 
 import torch
 from mrna_bench.models.evo2 import Evo2
 
-# pytestmark = pytest.mark.skip(reason="temporary skip")
 
 EVO2_VERSIONS = [
     "evo2_7b",
@@ -51,4 +50,4 @@ def test_evo2_max_length_setting(model):
 def test_evo2_sixtrack_not_supported(model):
     """Six-track embedding should raise NotImplementedError."""
     with pytest.raises(NotImplementedError):
-        model.embed_sequence_sixtrack("ATG", np.array([0]), np.array([0]))
+        model.embed_sequence_sixtrack("ATG", np.array([0]), np.array([0]), agg_fn=lambda x, dim: x)

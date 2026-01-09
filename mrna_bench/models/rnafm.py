@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 import warnings
 
 import numpy as np
@@ -68,7 +69,7 @@ class RNAFM(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using RNA-FM.
 
@@ -106,7 +107,7 @@ class RNAFM(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
+        aggregate_embedding = agg_fn(embedding)
         return aggregate_embedding
 
     def embed_sequence_sixtrack(
@@ -114,7 +115,7 @@ class RNAFM(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using mRNA-FM.
 
@@ -158,7 +159,7 @@ class RNAFM(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
+        aggregate_embedding = agg_fn(embedding)
         return aggregate_embedding
 
     def get_cds(self, sequence: str, cds: np.ndarray) -> str:

@@ -1,6 +1,6 @@
-import numpy as np
-
 import pytest
+
+import numpy as np
 import torch
 
 from mrna_bench.models.mrnabert import mRNABERT

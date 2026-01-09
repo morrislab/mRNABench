@@ -1,8 +1,6 @@
-from unittest.mock import patch
-
 import pytest
-pytestmark = pytest.mark.omnigenome
 
+from unittest.mock import patch
 import torch
 
 from mrna_bench.models.omnigenome import OmniGenome

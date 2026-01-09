@@ -1,4 +1,5 @@
 import pytest
+
 from unittest.mock import patch
 
 pytest.importorskip("torch")

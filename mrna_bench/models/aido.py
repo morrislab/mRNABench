@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 
 import torch
 
@@ -60,7 +61,7 @@ class AIDORNA(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using AIDO.RNA.
 
@@ -88,24 +89,26 @@ class AIDORNA(EmbeddingModel):
             t_keys = ["input_ids", "attention_mask"]
 
             # Strip start and stop tokens from all but first and last chunk
-            if i == 0:
-                for k in t_keys:
-                    batch[k] = batch[k][:, :-1]
-            elif i == len(chunks) - 1:
-                for k in t_keys:
-                    batch[k] = batch[k][:, 1:]
-            else:
-                for k in t_keys:
-                    batch[k] = batch[k][:, 1:-1]
+            # if only one chunk, do nothing
+            if len(chunks) != 1:
+                if i == 0:
+                    for k in t_keys:
+                        batch[k] = batch[k][:, :-1]
+                elif i == len(chunks) - 1:
+                    for k in t_keys:
+                        batch[k] = batch[k][:, 1:]
+                else:
+                    for k in t_keys:
+                        batch[k] = batch[k][:, 1:-1]
 
             embedded_chunk = self.model(**batch).last_hidden_state
             embedding_chunks.append(embedded_chunk)
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
+        aggregate_embedding = agg_fn(embedding)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not possible with AIDO.RNA.")

@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 
 import torch
 
@@ -66,7 +67,7 @@ class NucleotideTransformer(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using NucleotideTransformer.
 
@@ -99,7 +100,7 @@ class NucleotideTransformer(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
+        aggregate_embedding = agg_fn(embedding)
         return aggregate_embedding
 
     def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):

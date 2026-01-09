@@ -1,6 +1,7 @@
+import pytest
+
 from collections import namedtuple
 
-import pytest
 from unittest.mock import patch
 
 import numpy as np

@@ -1,6 +1,7 @@
-from collections import namedtuple
-
 import pytest
+
+from collections import namedtuple
+from functools import partial
 from unittest.mock import patch
 
 import numpy as np
@@ -32,7 +33,7 @@ def utrlm_5utr(device) -> UTRLM:
 def test_utrlm_forward(utrlm):
     """Test UTR-LM initialization and forward pass."""
     text = "ACUUUGGCCA"
-    output = utrlm.embed_sequence(text, agg_fn=torch.mean).cpu()
+    output = utrlm.embed_sequence(text, agg_fn=partial(torch.mean, dim=1)).cpu()
     assert output.shape == (1, 128)
 
 

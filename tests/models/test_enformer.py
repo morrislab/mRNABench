@@ -1,7 +1,8 @@
+import pytest
+
 import math
 from unittest.mock import patch
 
-import pytest
 import torch
 
 from mrna_bench.models.enformer import Enformer
@@ -46,14 +47,14 @@ def test_enformer_padding_logic(enformer):
         short_seq = "ACGT" * 10000
         seq_len = len(short_seq)
 
-        output = enformer.embed_sequence(short_seq, agg_fn=lambda x, dim: x)
+        output = enformer.embed_sequence(short_seq, agg_fn=lambda x: x)
 
         padding_left = (max_length - seq_len) // 2
         expected_start_bin = padding_left // bin_size
         expected_end_bin = math.ceil((padding_left + seq_len) / bin_size)
         expected_num_bins = expected_end_bin - expected_start_bin
 
-        assert output.shape[2] == expected_num_bins
+        assert output.shape[1] == expected_num_bins
 
         first_bin_val = output[0, 0, 0].item()
         assert first_bin_val == expected_start_bin

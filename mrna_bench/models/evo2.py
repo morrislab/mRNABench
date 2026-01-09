@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 
 import torch
 
@@ -80,7 +81,7 @@ class Evo2(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using Evo2.
 
@@ -121,7 +122,7 @@ class Evo2(EmbeddingModel):
             layer_chunks = [
                 embedding_chunks[i][layer_name] for i in range(n_chunks)
             ]
-            agg_chunks = agg_fn(torch.cat(layer_chunks, dim=1), dim=1)
+            agg_chunks = agg_fn(torch.cat(layer_chunks, dim=1))
             aggregate_embeddings.append(agg_chunks.float().cpu())
 
         # concatenate the embeddings across the layers
@@ -129,6 +130,6 @@ class Evo2(EmbeddingModel):
 
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice):
+    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
         """Not supported."""
         raise NotImplementedError("Six track not possible with Evo2.")

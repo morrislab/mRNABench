@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 
 import numpy as np
 import torch
@@ -74,7 +75,7 @@ class UTRBERT(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using 3UTRBERT.
 
@@ -107,7 +108,7 @@ class UTRBERT(EmbeddingModel):
 
         embedding = torch.cat(embedding_chunks, dim=1)
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
+        aggregate_embedding = agg_fn(embedding)
         return aggregate_embedding
 
     def embed_sequence_sixtrack(
@@ -115,7 +116,7 @@ class UTRBERT(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using only 3'UTR region using 3UTRBERT.
 

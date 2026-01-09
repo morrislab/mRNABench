@@ -1,6 +1,6 @@
-from unittest.mock import patch
-
 import pytest
+
+from unittest.mock import patch
 import torch
 
 from mrna_bench.models.plant_rnafm import PlantRNAFM

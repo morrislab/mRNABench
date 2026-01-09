@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from functools import partial
 
 import numpy as np
 import torch
@@ -53,7 +54,7 @@ class HelixmRNAWrapper(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using Helix-mRNA.
 
@@ -83,14 +84,14 @@ class HelixmRNAWrapper(EmbeddingModel):
             attention_mask=attention_mask,
         ).last_hidden_state
 
-        return agg_fn(embedding, dim=1)
+        return agg_fn(embedding)
 
     def embed_sequence_sixtrack(
         self,
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable = partial(torch.mean, dim=1),
     ) -> torch.Tensor:
         """Embed sequence using Helix-mRNA.
 
