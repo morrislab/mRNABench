@@ -67,6 +67,12 @@ class KMerSplitter(DataSplitter):
         else:
             n_clusters = max(2, len(df) // 100)
 
+        # HACK:
+        # We should make the number of clusters adaptive to dataset size
+        if (len(df) // 100) < 2:
+            # if dataset is too small, reduce divisor
+            n_clusters = max(2, len(df) // 10)
+
         self.cluster = KMeans(n_clusters=n_clusters, random_state=random_state)
         df["cluster"] = self.cluster.fit_predict(df["kmer"].tolist())
 
@@ -143,6 +149,15 @@ class HardKMerSplitter(KMerSplitter):
             n_clusters = self.n_clusters
         else:
             n_clusters = max(2, len(df) // 1000)
+
+        # HACK:
+        # We should make the number of clusters adaptive to dataset size
+        if (len(df) // 1000) < 2:
+            # if dataset is too small, reduce divisor
+            n_clusters = max(2, len(df) // 250)
+
+            if (len(df) // 250) < 2:
+                n_clusters = max(2, len(df) // 25)
 
         self.cluster = KMeans(n_clusters=n_clusters, random_state=random_state)
         df["cluster"] = self.cluster.fit_predict(df["kmer"].tolist())
