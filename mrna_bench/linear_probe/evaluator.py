@@ -53,6 +53,7 @@ def eval_classification(
         "auroc": roc_auc_score(y, y_pred),
         "auprc": average_precision_score(y, y_pred)
     }
+
     return metrics
 
 
@@ -170,6 +171,6 @@ class LinearProbeEvaluator:
                 raise ValueError("Invalid task: {}".format(self.task))
 
             for metric_name, metric_val in split_metrics.items():
-                metrics[split_name + "_" + metric_name] = metric_val
+                metrics[split_name + "_" + metric_name] = float(metric_val)
 
         return metrics
