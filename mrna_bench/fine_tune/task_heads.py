@@ -1,9 +1,26 @@
+from typing import Protocol, runtime_checkable
+
 import torch
 import torch.nn as nn
 
 
+@runtime_checkable
+class TaskHeadProtocol(Protocol):
+    """Interface that any fine-tuning head must implement.
+
+    Custom heads (CNN, attention, etc.) should satisfy this protocol
+    so the trainer can obtain the loss function and task type.
+    """
+
+    task_type: str
+
+    def get_loss_fn(self) -> nn.Module:
+        """Return appropriate loss function for the task."""
+        ...
+
+
 class TaskHead(nn.Module):
-    """Task-specific prediction head for fine-tuning.
+    """MLP prediction head for fine-tuning.
 
     Supports regression, classification, and multilabel tasks with
     optional hidden layers.
@@ -57,13 +74,19 @@ class TaskHead(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through head.
 
+        For regression, squeezes the last dimension so the output shape
+        matches the target shape (batch,) rather than (batch, 1).
+
         Args:
             x: Input embedding tensor of shape (batch, input_dim).
 
         Returns:
-            Output tensor of shape (batch, output_dim).
+            Output tensor.
         """
-        return self.mlp(x)
+        out = self.mlp(x)
+        if self.task_type == "regression":
+            out = out.squeeze(-1)
+        return out
 
     def get_loss_fn(self) -> nn.Module:
         """Return appropriate loss function for task type.

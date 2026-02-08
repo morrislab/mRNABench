@@ -1,15 +1,21 @@
-from mrna_bench.fine_tune.fine_tune_mixin import FineTuneMixin, make_fine_tunable
-from mrna_bench.fine_tune.task_heads import TaskHead
+from mrna_bench.fine_tune.fine_tune_wrapper import FineTuneWrapper
+from mrna_bench.fine_tune.task_heads import TaskHead, TaskHeadProtocol
 from mrna_bench.fine_tune.trainer import FineTuneTrainer, TrainerConfig
-from mrna_bench.fine_tune.dataloader import SequenceDataset
+from mrna_bench.fine_tune.dataloader import (
+    SequenceDataset,
+    collate_fn,
+    create_dataloaders,
+)
 from mrna_bench.fine_tune.persister import FineTunePersister
 
 __all__ = [
-    "FineTuneMixin",
-    "make_fine_tunable",
+    "FineTuneWrapper",
     "TaskHead",
+    "TaskHeadProtocol",
     "FineTuneTrainer",
     "TrainerConfig",
     "SequenceDataset",
+    "collate_fn",
+    "create_dataloaders",
     "FineTunePersister",
 ]

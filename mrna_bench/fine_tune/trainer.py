@@ -1,9 +1,14 @@
+"""Trainer for fine-tuning genomic foundation models."""
+
+from copy import deepcopy
 from dataclasses import dataclass
 
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+
+from mrna_bench.fine_tune.fine_tune_wrapper import FineTuneWrapper
 
 
 @dataclass
@@ -21,20 +26,17 @@ class TrainerConfig:
 class FineTuneTrainer:
     """Trainer for fine-tuning nucleotide foundation models."""
 
-    def __init__(self, model, config: TrainerConfig | None = None):
+    def __init__(self, wrapper: FineTuneWrapper, config: TrainerConfig | None = None):
         """Initialize FineTuneTrainer.
 
         Args:
-            model: Fine-tunable model with attached head.
+            wrapper: FineTuneWrapper with backbone and task head.
             config: Training configuration. Uses defaults if not provided.
         """
-        if model._task_head is None:
-            raise ValueError("Model must have task head attached.")
-
-        self.model = model
-        self.device = model.device
+        self.wrapper = wrapper
+        self.device = wrapper.device
         self.config = config or TrainerConfig()
-        self.loss_fn = model._task_head.get_loss_fn()
+        self.loss_fn = wrapper.task_head.get_loss_fn()
         self.optimizer: torch.optim.Optimizer | None = None
         self.scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
         self.history: dict[str, list[float]] = {
@@ -44,7 +46,7 @@ class FineTuneTrainer:
 
     def _create_optimizer(self) -> torch.optim.Optimizer:
         """Create AdamW optimizer for trainable parameters."""
-        params = self.model.get_trainable_parameters()
+        params = self.wrapper.get_trainable_parameters()
         return torch.optim.AdamW(
             params,
             lr=self.config.learning_rate,
@@ -63,6 +65,44 @@ class FineTuneTrainer:
             total_iters=self.config.warmup_steps,
         )
 
+    def _save_trainable_state(self) -> dict:
+        """Save only trainable (LoRA + head) state dicts.
+
+        Returns:
+            Dictionary with LoRA and head state dicts.
+        """
+        try:
+            from peft import get_peft_model_state_dict
+            lora_state = deepcopy(
+                get_peft_model_state_dict(self.wrapper.backbone.model)
+            )
+        except (ImportError, AttributeError):
+            lora_state = deepcopy({
+                k: v for k, v in self.wrapper.backbone.model.state_dict().items()
+                if v.requires_grad
+            })
+
+        head_state = deepcopy(self.wrapper.task_head.state_dict())
+        return {"lora": lora_state, "head": head_state}
+
+    def _restore_trainable_state(self, state: dict):
+        """Restore trainable state dicts.
+
+        Args:
+            state: Dictionary with LoRA and head state dicts.
+        """
+        try:
+            from peft import set_peft_model_state_dict
+            set_peft_model_state_dict(
+                self.wrapper.backbone.model, state["lora"]
+            )
+        except (ImportError, AttributeError):
+            self.wrapper.backbone.model.load_state_dict(
+                state["lora"], strict=False
+            )
+
+        self.wrapper.task_head.load_state_dict(state["head"])
+
     def train_epoch(self, dataloader: DataLoader) -> float:
         """Train for one epoch.
 
@@ -72,7 +112,7 @@ class FineTuneTrainer:
         Returns:
             Average training loss.
         """
-        self.model.set_train_mode()
+        self.wrapper.set_train_mode()
         total_loss = 0.0
         num_batches = 0
 
@@ -89,11 +129,7 @@ class FineTuneTrainer:
             cds = batch.get("cds")
             splice = batch.get("splice")
 
-            output = self.model.forward_with_head(sequences, cds, splice)
-            # Only squeeze last dim for regression (output_dim=1)
-            # Multilabel needs [batch, num_classes] shape preserved
-            if output.shape[-1] == 1:
-                output = output.squeeze(-1)
+            output = self.wrapper.forward(sequences, cds, splice)
             loss = self.loss_fn(output, target)
 
             batch_loss = loss.item()
@@ -102,7 +138,7 @@ class FineTuneTrainer:
 
             if (batch_idx + 1) % self.config.gradient_accumulation_steps == 0:
                 torch.nn.utils.clip_grad_norm_(
-                    self.model.get_trainable_parameters(),
+                    self.wrapper.get_trainable_parameters(),
                     self.config.max_grad_norm,
                 )
                 self.optimizer.step()
@@ -128,7 +164,7 @@ class FineTuneTrainer:
         Returns:
             Dictionary of evaluation metrics.
         """
-        self.model.set_inference_mode()
+        self.wrapper.set_inference_mode()
         total_loss = 0.0
         all_preds = []
         all_targets = []
@@ -143,11 +179,7 @@ class FineTuneTrainer:
             cds = batch.get("cds")
             splice = batch.get("splice")
 
-            output = self.model.forward_with_head(sequences, cds, splice)
-            # Only squeeze last dim for regression (output_dim=1)
-            # Multilabel needs [batch, num_classes] shape preserved
-            if output.shape[-1] == 1:
-                output = output.squeeze(-1)
+            output = self.wrapper.forward(sequences, cds, splice)
             loss = self.loss_fn(output, target)
             total_loss += loss.item() * len(sequences)
 
@@ -160,7 +192,7 @@ class FineTuneTrainer:
 
         metrics = {"loss": avg_loss}
 
-        task_type = self.model._task_head.task_type
+        task_type = self.wrapper.task_head.task_type
         if task_type == "regression":
             from scipy.stats import pearsonr, spearmanr
             preds_np = preds.numpy().flatten()
@@ -177,7 +209,9 @@ class FineTuneTrainer:
                         targets_np, preds_np, average="micro"
                     ))
                 else:
-                    metrics["auroc"] = float(roc_auc_score(targets_np, preds_np))
+                    metrics["auroc"] = float(roc_auc_score(
+                        targets_np, preds_np
+                    ))
             except ValueError:
                 metrics["auroc"] = float("nan")
 
@@ -188,7 +222,7 @@ class FineTuneTrainer:
         train_dataloader: DataLoader,
         val_dataloader: DataLoader | None = None,
     ) -> dict[str, list[float]]:
-        """Full training loop.
+        """Full training loop with early stopping and best-model restore.
 
         Args:
             train_dataloader: Training data loader.
@@ -201,6 +235,7 @@ class FineTuneTrainer:
         self.scheduler = self._create_scheduler(self.optimizer)
 
         best_val_loss = float("inf")
+        best_state = None
         patience_counter = 0
 
         for epoch in range(self.config.epochs):
@@ -218,6 +253,7 @@ class FineTuneTrainer:
 
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
+                    best_state = self._save_trainable_state()
                     patience_counter = 0
                 else:
                     patience_counter += 1
@@ -225,5 +261,8 @@ class FineTuneTrainer:
                 if patience_counter >= self.config.early_stopping_patience:
                     print("Early stopping at epoch {}".format(epoch + 1))
                     break
+
+        if best_state is not None:
+            self._restore_trainable_state(best_state)
 
         return self.history

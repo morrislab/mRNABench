@@ -18,6 +18,7 @@ class FineTunePersister:
         split_type: str,
         learning_rate: float,
         lora_rank: int | None = None,
+        head_type: str = "mlp",
     ):
         """Initialize FineTunePersister.
 
@@ -28,7 +29,8 @@ class FineTunePersister:
             target_col: Target column evaluated.
             split_type: Type of data split used.
             learning_rate: Learning rate used for fine-tuning.
-            lora_rank: LoRA rank used for fine-tuning (None if full fine-tune).
+            lora_rank: LoRA rank used (None if full fine-tune).
+            head_type: Type of task head used (e.g. "mlp", "cnn").
         """
         self.dataset = dataset
         self.model_short_name = model_short_name
@@ -37,6 +39,7 @@ class FineTunePersister:
         self.split_type = split_type
         self.learning_rate = learning_rate
         self.lora_rank = lora_rank
+        self.head_type = head_type
 
         self._result_dir = Path(dataset.dataset_path) / "ft_results"
 
@@ -60,9 +63,31 @@ class FineTunePersister:
         if self.lora_rank is not None:
             parts.append("lora-{}".format(self.lora_rank))
 
+        parts.append("head-{}".format(self.head_type))
         parts.append("rs-{}".format(random_seed))
 
         return self._result_dir / ("_".join(parts) + suffix)
+
+    def _build_config(self, random_seed: int | str) -> dict:
+        """Build config dict for self-describing results.
+
+        Args:
+            random_seed: Random seed used for data split.
+
+        Returns:
+            Configuration dictionary.
+        """
+        return {
+            "model": self.model_short_name,
+            "dataset": self.dataset.dataset_name,
+            "task": self.task,
+            "target_col": self.target_col,
+            "split_type": self.split_type,
+            "learning_rate": self.learning_rate,
+            "lora_rank": self.lora_rank,
+            "head_type": self.head_type,
+            "seed": random_seed,
+        }
 
     def persist_run_results(
         self,
@@ -79,7 +104,10 @@ class FineTunePersister:
         """
         self._result_dir.mkdir(exist_ok=True)
 
-        results = {"metrics": metrics}
+        results = {
+            "config": self._build_config(random_seed),
+            "metrics": metrics,
+        }
         if history is not None:
             results["history"] = history
 
@@ -93,7 +121,7 @@ class FineTunePersister:
             random_seed: Random seed used for data split.
 
         Returns:
-            Dictionary containing metrics and optionally history.
+            Dictionary containing config, metrics, and optionally history.
         """
         with open(self._get_path(random_seed, ".json"), "r") as f:
             return json.load(f)

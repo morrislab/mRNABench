@@ -20,6 +20,7 @@ class Orthrus(EmbeddingModel):
 
     default_version = "orthrus-large-6-track"
     valid_versions = ["orthrus-large-6-track", "orthrus-base-4-track"]
+    lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:

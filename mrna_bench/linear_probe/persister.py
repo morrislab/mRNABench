@@ -76,7 +76,7 @@ class LinearProbePersister:
         result_fn = self.get_output_filename(random_seed)
 
         with open(result_dir / result_fn, "w") as f:
-            json.dump(metrics, f)
+            json.dump(metrics, f, default=float)
 
     def load_multirun_results(
         self,

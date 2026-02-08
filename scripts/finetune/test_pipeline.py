@@ -8,20 +8,13 @@ from mrna_bench import load_dataset
 from mrna_bench.fine_tune import (
     FineTunePersister,
     FineTuneTrainer,
+    FineTuneWrapper,
     SequenceDataset,
     TaskHead,
     TrainerConfig,
-    make_fine_tunable,
+    collate_fn,
 )
 from mrna_bench.models import MODEL_CATALOG
-
-
-def collate_fn(batch: list[dict]) -> dict:
-    """Collate batch keeping variable-length arrays as lists."""
-    return {
-        "sequence": [item["sequence"] for item in batch],
-        "target": np.array([item["target"] for item in batch]),
-    }
 
 
 if __name__ == "__main__":
@@ -43,19 +36,23 @@ if __name__ == "__main__":
     model_version = model_class.default_version
     model_short_name = model_class.get_model_short_name(model_version)
 
-    FineTunableModel = make_fine_tunable(model_class)
-    model = FineTunableModel(model_version, device)
+    model = model_class(model_version, device)
+    model.set_inference_mode()
 
     lora_rank = 4
     learning_rate = 1e-4
-    model.apply_lora(rank=lora_rank)
 
-    # Get embedding dim and attach head
+    # Get embedding dim
     emb_dim = model.embed(["AUGC"]).shape[-1]
     print("Embedding dim: {}".format(emb_dim))
 
+    # Create wrapper with head and LoRA
     head = TaskHead(input_dim=emb_dim, output_dim=1, task_type=task)
-    model.attach_head(head)
+    wrapper = FineTuneWrapper(model, head)
+    wrapper.apply_lora(rank=lora_rank)
+
+    param_info = wrapper.get_parameter_count()
+    print("Parameters: {}".format(param_info))
 
     # Create tiny synthetic dataset for quick test
     sequences = ["AUGCAUGCAUGC" * 10] * 20
@@ -73,7 +70,7 @@ if __name__ == "__main__":
         epochs=2,
         early_stopping_patience=5,
     )
-    trainer = FineTuneTrainer(model, config)
+    trainer = FineTuneTrainer(wrapper, config)
     history = trainer.fit(train_loader, val_loader)
 
     print("\nHistory: {}".format(history))

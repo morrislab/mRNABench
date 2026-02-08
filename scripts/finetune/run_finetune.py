@@ -1,26 +1,25 @@
 """Run fine-tuning for a model on a benchmark dataset."""
 
 import argparse
+import json
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
 
 import mrna_bench as mb
-from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.fine_tune import (
     FineTunePersister,
     FineTuneTrainer,
-    SequenceDataset,
+    FineTuneWrapper,
     TaskHead,
     TrainerConfig,
-    make_fine_tunable,
+    create_dataloaders,
 )
 from mrna_bench.models import MODEL_CATALOG
 
 default_seeds = "[0]"
-default_lrs = "[1e-4]"
-default_ranks = "[8]"
+default_lrs = "[1e-5, 1e-4, 1e-3]"
+default_ranks = "[4, 8, 16]"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_name", type=str, required=True)
@@ -40,99 +39,70 @@ parser.add_argument("--force_recompute", action="store_true")
 args = parser.parse_args()
 
 
-def collate_fn(batch: list[dict]) -> dict:
-    """Collate batch keeping variable-length arrays as lists."""
-    sequences = [item["sequence"] for item in batch]
-    targets = np.array([item["target"] for item in batch])
-
-    result = {
-        "sequence": sequences,
-        "target": targets,
-    }
-
-    if "cds" in batch[0]:
-        result["cds"] = [item["cds"] for item in batch]
-    if "splice" in batch[0]:
-        result["splice"] = [item["splice"] for item in batch]
-
-    return result
-
-
-def create_dataloaders(
-    dataset: BenchmarkDataset,
-    target_col: str,
-    split_type: str,
-    random_seed: int,
-    batch_size: int,
-) -> tuple[DataLoader, DataLoader, DataLoader]:
-    """Create train/val/test dataloaders from dataset splits.
+def get_embedding_dim(model, dataset):
+    """Probe embedding dimension using a short dummy sequence.
 
     Args:
-        dataset: Benchmark dataset.
-        target_col: Target column name.
-        split_type: Type of data split.
-        random_seed: Random seed for split.
-        batch_size: Batch size for dataloaders.
+        model: EmbeddingModel instance.
+        dataset: BenchmarkDataset to check for CDS/splice tracks.
 
     Returns:
-        Tuple of (train_loader, val_loader, test_loader).
+        Embedding dimension (int).
     """
-    splits = dataset.get_splits(
-        split_ratios=(0.7, 0.15, 0.15),
-        random_seed=random_seed,
-        split_type=split_type,
-    )
+    dummy_seq = "ATGATG"
+    kwargs = {}
+    if "cds" in dataset.data_df.columns:
+        kwargs["cds"] = [np.zeros(len(dummy_seq), dtype=np.float32)]
+    if "splice" in dataset.data_df.columns:
+        kwargs["splice"] = [np.zeros(len(dummy_seq), dtype=np.float32)]
 
-    def df_to_loader(df, shuffle: bool) -> DataLoader:
-        sequences = df["sequence"].tolist()
+    with torch.no_grad():
+        emb = model.embed([dummy_seq], **kwargs)
+    return emb.shape[-1]
 
-        # Handle multilabel targets (arrays) vs scalar targets
-        raw_targets = df[target_col].values
-        if hasattr(raw_targets[0], "__len__"):
-            targets = np.stack(raw_targets).astype(np.float32)
-        else:
-            targets = raw_targets.astype(np.float32)
 
-        cds = df["cds"].tolist() if "cds" in df.columns else None
-        splice = df["splice"].tolist() if "splice" in df.columns else None
+def get_output_dim(dataset, task, target_col):
+    """Infer output dimension from dataset and task.
 
-        ds = SequenceDataset(sequences, targets, cds, splice)
-        return DataLoader(
-            ds,
-            batch_size=batch_size,
-            shuffle=shuffle,
-            collate_fn=collate_fn,
-        )
+    Args:
+        dataset: BenchmarkDataset instance.
+        task: Task type (regression, classification, multilabel).
+        target_col: Target column name.
 
-    train_loader = df_to_loader(splits["train_df"], shuffle=True)
-    val_loader = df_to_loader(splits["val_df"], shuffle=False)
-    test_loader = df_to_loader(splits["test_df"], shuffle=False)
-
-    return train_loader, val_loader, test_loader
+    Returns:
+        Output dimension (int).
+    """
+    if task == "regression":
+        return 1
+    elif task == "multilabel":
+        sample_target = dataset.data_df[target_col].iloc[0]
+        return len(sample_target) if hasattr(sample_target, "__len__") else 1
+    else:
+        return dataset.data_df[target_col].nunique()
 
 
 def run_finetune(
     model_class,
-    model_version: str,
-    dataset: BenchmarkDataset,
-    task: str,
-    target_col: str,
-    split_type: str,
-    learning_rate: float,
-    lora_rank: int,
-    epochs: int,
-    batch_size: int,
-    accumulation_steps: int,
-    random_seed: int,
-    device: torch.device,
-    eval_test: bool = False,
-) -> tuple[dict[str, float], dict[str, float] | None, dict[str, list[float]]]:
-    """Run fine-tuning for a single seed.
+    model_version,
+    dataset,
+    task,
+    target_col,
+    split_type,
+    learning_rate,
+    lora_rank,
+    epochs,
+    batch_size,
+    accumulation_steps,
+    random_seed,
+    device,
+    eval_test=False,
+):
+    """Run fine-tuning for a single (lr, rank, seed) configuration.
 
     Args:
         model_class: Model class from MODEL_CATALOG.
         model_version: Version of the model.
-        dataset: Benchmark dataset.
+        dataset: BenchmarkDataset instance.
         task: Task type (regression, classification, multilabel).
         target_col: Target column name.
         split_type: Type of data split.
@@ -148,34 +118,21 @@ def run_finetune(
     Returns:
         Tuple of (val_metrics, test_metrics, history).
     """
-    # Create fine-tunable model
-    FineTunableModel = make_fine_tunable(model_class)
-    model = FineTunableModel(model_version, device)
+    model = model_class(model_version, device)
+    model.set_inference_mode()
 
-    # Apply LoRA
-    model.apply_lora(rank=lora_rank)
-
-    # Get embedding dimension and attach head
-    dummy_seq = "ATGATG"
-    dummy_cds = [np.zeros(len(dummy_seq), dtype=np.float32)]
-    dummy_splice = [np.zeros(len(dummy_seq), dtype=np.float32)]
-    emb_dim = model.embed([dummy_seq], cds=dummy_cds, splice=dummy_splice).shape[-1]
-
-    # Determine output dimension based on task type
-    if task == "regression":
-        output_dim = 1
-    elif task == "multilabel":
-        # Infer from target column shape
-        sample_target = dataset.data_df[target_col].iloc[0]
-        output_dim = len(sample_target) if hasattr(sample_target, "__len__") else 1
-    else:
-        # Classification: infer from unique values
-        output_dim = dataset.data_df[target_col].nunique()
+    emb_dim = get_embedding_dim(model, dataset)
+    output_dim = get_output_dim(dataset, task, target_col)
 
     head = TaskHead(input_dim=emb_dim, output_dim=output_dim, task_type=task)
-    model.attach_head(head)
+    wrapper = FineTuneWrapper(model, head)
+    wrapper.apply_lora(rank=lora_rank)
 
-    # Create dataloaders
+    param_info = wrapper.get_parameter_count()
+    print("  Parameters: {} trainable / {} total".format(
+        param_info["total_trainable"], param_info["backbone_total"]
+    ))
+
     train_loader, val_loader, test_loader = create_dataloaders(
         dataset=dataset,
         target_col=target_col,
@@ -184,19 +141,16 @@ def run_finetune(
         batch_size=batch_size,
     )
 
-    # Create trainer and fit
     config = TrainerConfig(
         learning_rate=learning_rate,
         epochs=epochs,
         gradient_accumulation_steps=accumulation_steps,
     )
-    trainer = FineTuneTrainer(model, config)
+    trainer = FineTuneTrainer(wrapper, config)
     trainer.fit(train_loader, val_loader)
 
-    # Always evaluate on val
     val_metrics = trainer.evaluate(val_loader)
 
-    # Optionally evaluate on test
     test_metrics = None
     if eval_test:
         test_metrics = trainer.evaluate(test_loader)
@@ -208,12 +162,10 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: {}".format(device))
 
-    # Get model class and version (use default if not specified)
     model_class = MODEL_CATALOG[args.model_name]
     model_version = args.model_version or model_class.default_version
     model_short_name = model_class.get_model_short_name(model_version)
 
-    # Load dataset and infer defaults from metadata
     dataset = mb.load_dataset(args.dataset_name)
     metadata = dataset.metadata
 
@@ -226,14 +178,15 @@ if __name__ == "__main__":
     print("Task: {}".format(task))
     print("Target: {}".format(target))
     print("Split type: {}".format(split_type))
-    print("Learning rates: {}".format(args.learning_rates))
-    print("LoRA ranks: {}".format(args.lora_ranks))
-    print("Seeds: {}".format(args.seeds))
-    print("Eval test: {}".format(args.eval_test))
 
-    seeds = eval(args.seeds)
-    learning_rates = eval(args.learning_rates)
-    lora_ranks = eval(args.lora_ranks)
+    seeds = json.loads(args.seeds)
+    learning_rates = json.loads(args.learning_rates)
+    lora_ranks = json.loads(args.lora_ranks)
+
+    print("Learning rates: {}".format(learning_rates))
+    print("LoRA ranks: {}".format(lora_ranks))
+    print("Seeds: {}".format(seeds))
+    print("Eval test: {}".format(args.eval_test))
 
     for lr in learning_rates:
         for lora_rank in lora_ranks:
