@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -17,6 +18,18 @@ class NucleotideTransformer(EmbeddingModel):
 
     Link: https://github.com/instadeepai/nucleotide-transformer
     """
+
+    default_version = "2.5b-multi-species"
+    valid_versions = [
+        "2.5b-multi-species",
+        "2.5b-1000g",
+        "500m-human-ref",
+        "500m-1000g",
+        "v2-50m-multi-species",
+        "v2-100m-multi-species",
+        "v2-250m-multi-species",
+        "v2-500m-multi-species",
+    ]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -63,45 +76,70 @@ class NucleotideTransformer(EmbeddingModel):
 
         self.max_length = self.tokenizer.model_max_length
 
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = torch.mean
-    ) -> torch.Tensor:
-        """Embed sequence using NucleotideTransformer.
+        chunks: list[str]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            NT embedding of sequence with shape (1 x H).
+            Tuple of (hidden_states, pooling_mask). The pooling_mask
+            excludes padding and special tokens (CLS/SEP).
         """
-        tokenized = self.tokenizer.encode_plus(sequence, verbose=False)
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
 
-        chunks = self.chunk_tokens(tokenized["input_ids"], self.max_length)
+        torch_outs = self.model(
+            toks["input_ids"],
+            attention_mask=toks["attention_mask"],
+            encoder_attention_mask=toks["attention_mask"],
+            output_hidden_states=True
+        )
 
-        embedding_chunks = []
+        hidden_states = torch_outs["hidden_states"][-1]
+        pooling_mask = toks["attention_mask"].clone()
 
-        for _, chunk in enumerate(chunks):
-            chunk_tt = torch.Tensor(chunk).unsqueeze(0).to(self.device).long()
-            attention_mask = torch.ones_like(chunk_tt).to(self.device).long()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
 
-            torch_outs = self.model(
-                chunk_tt,
-                attention_mask=attention_mask,
-                encoder_attention_mask=attention_mask,
-                output_hidden_states=True
-            )
+        return hidden_states, pooling_mask
 
-            model_out = torch_outs["hidden_states"][-1]
-            embedding_chunks.append(model_out)
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using NucleotideTransformer.
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
+        Returns:
+            NT embeddings with shape (batch_size, H).
+        """
+        _, _ = cds, splice
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for NT.")
+        # NT uses 6-mer tokenization. max_length is in tokens.
+        # Each token covers ~6 nucleotides, so max nucleotides is approx
+        # (max_length - 2) * 6
+        max_chunk_length = (self.max_length - 2) * 6
+
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=max_chunk_length,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

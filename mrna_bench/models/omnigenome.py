@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -20,12 +21,10 @@ class OmniGenome(EmbeddingModel):
     Link: https://github.com/yangheng95/OmniGenBench
     """
 
-    max_length = 1024
+    default_version = "omnigenome-186m"
+    valid_versions = ["omnigenome-52m", "omnigenome-186m"]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    max_length = 1024
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize OmniGenome inference wrapper.
@@ -64,39 +63,94 @@ class OmniGenome(EmbeddingModel):
         self.model = AutoModel.from_pretrained(
             path,
             trust_remote_code=True,
-            cache_dir=get_model_weights_path()
-        ).to(device, dtype=torch.float16).eval()
+            cache_dir=get_model_weights_path(),
+            token_dropout=False,
+        ).to(device, dtype=torch.float16)
 
-    def embed_sequence(
+    def _forward_chunks(
+        self,
+        chunks: list[str]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of sequence chunks.
+
+        Args:
+            chunks: List of sequence chunks to embed.
+
+        Returns:
+            Tuple of (hidden_states, pooling_mask). The pooling_mask
+            excludes padding and special tokens (CLS/SEP).
+        """
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
+
+        hidden_states = self.model(**toks).last_hidden_state
+        pooling_mask = toks["attention_mask"].clone()
+
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            last_pos = seq_lengths[idx] - 1
+            pooling_mask[idx, last_pos] = 0
+
+        return hidden_states, pooling_mask
+
+    def _embed_single_sequence(
         self,
         sequence: str,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using OmniGenome.
+        """Embed a single sequence with chunking support.
 
         Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
+            sequence: Sequence to embed (already converted to RNA).
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            OmniGenome embedding of sequence with shape (1 x (480 or 720)).
+            Embedding with shape (1, hidden_dim).
         """
-        sequence = sequence.replace("T", "U")
         chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
-        embedding_chunks = []
-
+        all_hidden = []
         for chunk in chunks:
-            toks = self.tokenizer(chunk, return_tensors="pt").to(self.device)
+            hidden_states, pooling_mask = self._forward_chunks([chunk])
+            mask = pooling_mask.reshape(-1).bool()
+            hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
+            all_hidden.append(hidden[mask])
 
-            cls_output = self.model(**toks).last_hidden_state
-            embedding_chunks.append(cls_output)
+        combined_hidden = torch.cat(all_hidden, dim=0)
+        return agg_fn(combined_hidden, dim=0).unsqueeze(0)
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using OmniGenome.
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
+        Note: OmniGenome processes sequences individually due to architectural
+        constraints (LayerNorm, attention masking) that cause different
+        embeddings when sequences are batched with padding.
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for OmniGenome.")
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
+
+        Returns:
+            Embeddings with shape (batch_size, 480 or 720).
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        all_embeddings = []
+        for sequence in sequences:
+            embedding = self._embed_single_sequence(sequence, agg_fn=agg_fn)
+            all_embeddings.append(embedding)
+
+        return torch.cat(all_embeddings, dim=0)

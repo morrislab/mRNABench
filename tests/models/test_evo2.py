@@ -1,9 +1,9 @@
 import pytest
 
 pytest.importorskip("torch")
-pytest.importorskip("transformers")
+pytest.importorskip("evo2")
 import torch
-from mrna_bench.models.hyenadna import HyenaDNA
+from mrna_bench.models.evo2 import Evo2
 
 
 @pytest.fixture(scope="module")
@@ -14,46 +14,46 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def model(device) -> HyenaDNA:
-    """Get HyenaDNA model."""
-    return HyenaDNA("hyenadna-small-32k-seqlen-hf", device)
+def model(device) -> Evo2:
+    """Get Evo2 model."""
+    return Evo2("evo2_1b_base", device)
 
 
-def test_hyenadna_forward(model):
-    """Test HyenaDNA forward pass."""
-    model.set_inference_mode()
+def test_evo2_forward(model):
+    """Test Evo2 forward pass."""
     out = model.embed_sequence("ATGATG")
-    assert out.shape == (1, 256)
+    # Evo2 concatenates middle + last layer embeddings
+    # evo2_1b_base has hidden_dim=2048, so 2048*2=4096
+    assert out.shape == (1, 4096)
 
 
-def test_hyenadna_max_length(device):
-    """Test HyenaDNA max_length is set correctly."""
-    model_32k = HyenaDNA("hyenadna-small-32k-seqlen-hf", device)
-    assert model_32k.max_length == 32000
+def test_evo2_max_length(device):
+    """Test Evo2 max_length is set correctly for base variant."""
+    model = Evo2("evo2_1b_base", device)
+    assert model.max_length == 8192
 
 
-def test_hyenadna_embed_batch(model):
-    """Test batch embed matches individual embeddings."""
-    model.set_inference_mode()
+@torch.no_grad()
+def test_evo2_embed_batch(model):
+    """Test batch embedding matches individual embeddings."""
     sequences = [
         "ATGATG" * 10,
         "ATGATG" * 50,
-        "ATGATG" * 100,
     ]
 
     batch_output = model.embed(sequences).cpu()
-    assert batch_output.shape == (3, 256)
+    assert batch_output.shape == (2, 4096)
 
     for i, seq in enumerate(sequences):
         single_output = model.embed_sequence(seq).cpu()
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
-            atol=1e-4
+            atol=1e-5
         ), "Mismatch at sequence {} (len {})".format(i, len(seq))
 
 
-def test_hyenadna_gradient_flow(model):
+def test_evo2_gradient_flow(model):
     """Test that gradients can flow through the model."""
     model.set_train_mode()
 

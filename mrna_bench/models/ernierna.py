@@ -1,5 +1,6 @@
-from typing import Callable
+from collections.abc import Callable
 
+import numpy as np
 import torch
 
 from mrna_bench.models import EmbeddingModel
@@ -22,12 +23,10 @@ class ERNIERNA(EmbeddingModel):
     https://huggingface.co/multimolecule/ernierna
     """
 
-    max_length = 1024
+    default_version = "ernierna"
+    valid_versions = ["ernierna", "ernierna-ss"]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    max_length = 1022  # 1024 - 2 for CLS/SEP
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize ERNIE-RNA inference wrapper.
@@ -56,38 +55,60 @@ class ERNIERNA(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device)
 
-        self.is_sixtrack = False
-
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = torch.mean
-    ) -> torch.Tensor:
-        """Embed sequence using ERNIE-RNA.
+        chunks: list[str]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            ERNIE-RNA embedding of sequence with shape (1 x 768).
+            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
+            padding and special tokens (CLS/SEP).
         """
-        sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
 
-        embedding_chunks = []
+        hidden_states = self.model(**toks).last_hidden_state
+        pooling_mask = toks["attention_mask"].clone()
 
-        for chunk in chunks:
-            toks = self.tokenizer(chunk, return_tensors="pt").to(self.device)
+        # Exclude special tokens (CLS at pos 0, SEP at last real pos)
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
 
-            cls_output = self.model(**toks).last_hidden_state
-            embedding_chunks.append(cls_output)
+        return hidden_states, pooling_mask
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using ERNIE-RNA.
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not implemented for ERNIE-RNA."""
-        raise NotImplementedError("ERNIE-RNA does not support sixtrack mode.")
+        Returns:
+            Embeddings with shape (batch_size, 768).
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

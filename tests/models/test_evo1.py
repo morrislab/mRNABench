@@ -37,7 +37,41 @@ def test_evo1_max_length(device):
     assert model_8k.max_length == 8192
 
 
-def test_evo1_sixtrack_not_supported(model):
-    """Test Evo1 sixtrack raises NotImplementedError."""
-    with pytest.raises(NotImplementedError):
-        model.embed_sequence_sixtrack("ATGATG", None, None, None)
+def test_evo1_embed_batch(model):
+    """Test batch embed matches individual embeddings."""
+    model.set_inference_mode()
+    sequences = [
+        "ATGATG" * 10,
+        "ATGATG" * 50,
+        "ATGATG" * 100,
+    ]
+
+    batch_output = model.embed(sequences).cpu()
+    assert batch_output.shape == (3, 4096)
+
+    for i, seq in enumerate(sequences):
+        single_output = model.embed_sequence(seq).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-4
+        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+
+
+def test_evo1_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
+
+    out = model.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
+
+    loss = out.sum()
+    loss.backward()
+
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
+
+    assert has_grad, "No gradients flowed to model parameters"

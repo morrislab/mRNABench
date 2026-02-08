@@ -1,10 +1,8 @@
-from collections import namedtuple
-
 import pytest
-from unittest.mock import patch
+
+pytest.importorskip("torch")
 
 import torch
-
 from mrna_bench.models.rnabert import RNABERT
 
 
@@ -16,62 +14,85 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def rnabert(device) -> RNABERT:
+def model(device) -> RNABERT:
     """Get RNABERT model."""
     return RNABERT("rnabert", device)
 
 
-def test_rnabert_forward(rnabert):
+def test_rnabert_forward(model):
     """Test RNABERT forward pass."""
-    assert rnabert.is_sixtrack is False
-
-    text = "ACTTGGCCA"
-    output = rnabert.embed_sequence(text)
-    assert output.shape == (1, 120)
+    out = model.embed_sequence("ATGATG")
+    assert out.shape == (1, 120)
 
 
-def test_rnabert_forward_conversion(rnabert):
-    """Test RNABERT forward pass converts T->U."""
-    text = "ACTTGGCCA"
+@torch.no_grad()
+def test_rnabert_converts_t_to_u(model):
+    """Test that RNABERT converts T->U for proper tokenization."""
+    dna_seq = "ATGATGATG"
+    rna_seq = "AUGAUGAUG"
 
-    with patch.object(
-        rnabert,
-        "chunk_sequence",
-        side_effect=rnabert.chunk_sequence
-    ) as mock:
-        rnabert.embed_sequence(text)
-        mock.assert_called_once_with("ACUUGGCCA", rnabert.max_length - 2)
+    dna_output = model.embed_sequence(dna_seq).cpu()
+    rna_output = model.embed_sequence(rna_seq).cpu()
+
+    assert torch.allclose(dna_output, rna_output, atol=1e-5), \
+        "DNA (T) and RNA (U) sequences should produce identical embeddings"
 
 
-def test_rnabert_forward_chunked(rnabert):
-    """Test RNABERT forward pass for chunked inputs."""
-    input_length = rnabert.max_length + 100
-    text = "A" * input_length
+@torch.no_grad()
+def test_rnabert_embed_batch_ragged(model):
+    """Test ragged batches match individual embeddings."""
+    sequences = [
+        "ATGATG" * 10,
+        "ATGATG" * 50,
+        "ATGATG" * 100,
+    ]
 
-    # Assume only two chunks. Adding constant of 4 accounts for sep/cls for
-    # both first and second chunk.
-    ground_truth_vals = torch.mean(torch.cat([
-        torch.arange(rnabert.max_length).float(),
-        torch.arange((input_length - rnabert.max_length) + 4).float()
-    ]))
+    batch_output = model.embed(sequences).cpu()
+    assert batch_output.shape == (3, 120)
 
-    def side_effect(input_ids, attention_mask):
-        if mock_forward.call_count == 1:
-            assert input_ids.shape[1] == rnabert.max_length
-        else:
-            assert input_ids.shape[1] == input_length - rnabert.max_length + 4
+    for i, seq in enumerate(sequences):
+        single_output = model.embed_sequence(seq).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-4
+        ), "Mismatch at sequence {}".format(i)
 
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 120)
 
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
+@torch.no_grad()
+def test_rnabert_excludes_special_tokens(model):
+    """Test that CLS and SEP tokens are excluded from pooling."""
+    text = "AUGAUG" * 20
 
-    with patch.object(
-        rnabert,
-        "model",
-        side_effect=side_effect
-    ) as mock_forward:
-        output = rnabert.embed_sequence(text)
-        assert torch.allclose(output, ground_truth_vals)
-        assert mock_forward.call_count == 2
+    toks = model.tokenizer([text], return_tensors="pt", padding=True)
+    toks = toks.to(model.device)
+    hidden_states = model.model(**toks).last_hidden_state
+
+    mean_all = hidden_states.mean(dim=1).cpu()
+    mean_no_special = hidden_states[:, 1:-1, :].mean(dim=1).cpu()
+
+    output = model.embed_sequence(text).cpu()
+
+    assert torch.allclose(output, mean_no_special, atol=1e-5), \
+        "Output should exclude CLS/SEP tokens"
+    assert not torch.allclose(output, mean_all, atol=1e-5), \
+        "Output should differ from mean including special tokens"
+
+
+def test_rnabert_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
+
+    out = model.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
+
+    loss = out.sum()
+    loss.backward()
+
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
+
+    assert has_grad, "No gradients flowed to model parameters"
