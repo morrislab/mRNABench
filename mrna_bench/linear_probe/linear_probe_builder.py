@@ -77,6 +77,12 @@ class LinearProbeBuilder:
         # Set default values
         self.target_col = "target"
 
+        # TODO: this should be determined based on dataset metadata
+        d_name = getattr(self.dataset, "dataset_name", "")
+        d_name = d_name.lower() if isinstance(d_name, str) else ""
+
+        self.is_vep = "vep" in d_name or "variant" in d_name
+
     def fetch_embedding_by_model_instance(
         self,
         model: EmbeddingModel,
@@ -252,5 +258,6 @@ class LinearProbeBuilder:
             self.splitter,
             self.evaluator,
             self.eval_all_splits,
-            self.persister
+            self.persister,
+            self.is_vep,
         )
