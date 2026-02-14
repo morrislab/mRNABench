@@ -9,6 +9,8 @@ from .enformer import Enformer
 from .ernierna import ERNIERNA
 from .evo1 import Evo1
 from .evo2 import Evo2
+from .generanno import GENERanno
+from .generator import GENERator
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
 from .mrnabert import mRNABERT
@@ -41,6 +43,8 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "ERNIE-RNA": ERNIERNA,
     "Evo1": Evo1,
     "Evo2": Evo2,
+    "GENERanno": GENERanno,
+    "GENERator": GENERator,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
     "mRNABERT": mRNABERT,
@@ -98,6 +102,20 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "evo2_40b_base",
         "evo2_7b_base",
         "evo2_1b_base"
+    ],
+    "GENERanno": [
+        "prokaryote-0.5b-base",
+        "prokaryote-0.5b-cds-annotator",
+        "eukaryote-0.5b-base",
+        "eukaryote-1.2b-cds-annotator-preview"
+    ],
+    "GENERator": [
+        "eukaryote-1.2b-base",
+        "eukaryote-3b-base",
+        "v2-eukaryote-1.2b-base",
+        "v2-eukaryote-3b-base",
+        "v2-prokaryote-1.2b-base",
+        "v2-prokaryote-3b-base"
     ],
     "Helix-mRNA": ["helix-mrna"],
     "HyenaDNA": [
