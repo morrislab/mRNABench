@@ -56,12 +56,12 @@ class Evo2(EmbeddingModel):
 
         try:
             old_hf_cache = set_model_cache_var()
-            from evo2 import Evo2
+            from evo2 import Evo2 as Evo2Model
         except ImportError:
             revert_model_cache_var(old_hf_cache)
             raise ImportError("Evo2 must be installed to use this model.")
 
-        self.model = Evo2(model_version)
+        self.model = Evo2Model(model_version)
         self.tokenizer = self.model.tokenizer.tokenize
 
         # we will only take the middle and last layer output for simplicity
@@ -70,6 +70,15 @@ class Evo2(EmbeddingModel):
             'norm'
         ]
 
+        # NOTE:
+        # - https://github.com/ArcInstitute/evo2/issues/160
+        # - https://github.com/ArcInstitute/evo2/issues/172
+        # While non-base 7B+ versions of Evo2 can theoretically handle
+        # sequences >=262K nts, we find that getting embeddings for sequences
+        # longer than 75K nt can be problematic for embedding on a single GPU
+        # (see issue details). If this is encountered, we manually reduce the
+        # max length. Long-term, the solution is to use multi-GPU inference
+        # for these very long sequences, but this isn't currently implemented.
         if model_version in ["evo2_40b", "evo2_7b"]:
             self.max_length = 1_000_000
 
