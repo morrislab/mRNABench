@@ -92,7 +92,7 @@ class Borzoi(EmbeddingModel):
             # initialize empty model that will be filled
             # deals with transformers changes (past v4.51)
             # Sol: https://github.com/huggingface/transformers/issues/28972
-            model_i = Borzoi(cfg).to_empty(device="cpu")
+            model_i = Borzoi(cfg)
 
             pretrained_model_i = Borzoi.from_pretrained(
                 f"johahi/{version}",
@@ -102,7 +102,7 @@ class Borzoi(EmbeddingModel):
             # assign weights from pretrained model
             model_i.load_state_dict(
                 pretrained_model_i.state_dict(),
-                assign=True,
+                strict=True
             )
 
             model_i = model_i.to(device=device, dtype=self.dtype).eval()
