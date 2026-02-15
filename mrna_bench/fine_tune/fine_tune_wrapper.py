@@ -39,7 +39,6 @@ class FineTuneWrapper(nn.Module):
         self.backbone = model
         self.task_head = task_head.to(model.device)
         self.device = model.device
-        self._lora_applied = False
 
     def apply_lora(
         self,
@@ -85,8 +84,24 @@ class FineTuneWrapper(nn.Module):
             use_rslora=True,
         )
 
+        if isinstance(self.backbone.model, nn.Identity):
+            raise NotImplementedError(
+                f"{type(self.backbone).__name__} does not support LoRA "
+                f"fine-tuning (backbone is nn.Identity)."
+            )
+
         self.backbone.model = get_peft_model(self.backbone.model, config)
-        self._lora_applied = True
+
+        trainable = sum(
+            p.requires_grad for p in self.backbone.model.parameters()
+        )
+        if trainable == 0:
+            raise ValueError(
+                f"LoRA applied but no trainable parameters found. "
+                f"target_modules={target_modules} may not match any "
+                f"layers in {type(self.backbone).__name__}."
+            )
+
         self._disable_fast_attention()
 
     def _disable_fast_attention(self):

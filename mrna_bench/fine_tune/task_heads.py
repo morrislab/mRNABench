@@ -1,7 +1,10 @@
 from typing import Protocol, runtime_checkable
 
+import numpy as np
 import torch
 import torch.nn as nn
+from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import roc_auc_score
 
 
 @runtime_checkable
@@ -16,6 +19,20 @@ class TaskHeadProtocol(Protocol):
 
     def get_loss_fn(self) -> nn.Module:
         """Return appropriate loss function for the task."""
+        ...
+
+    def prepare_targets(self, targets: np.ndarray) -> torch.Tensor:
+        """Convert numpy targets to correctly-typed tensor."""
+        ...
+
+    def score(self, logits: torch.Tensor) -> torch.Tensor:
+        """Convert logits to probability scores for metric computation."""
+        ...
+
+    def compute_metrics(
+        self, logits: torch.Tensor, targets: torch.Tensor,
+    ) -> dict[str, float]:
+        """Compute task-appropriate metrics from logits and targets."""
         ...
 
 
@@ -103,8 +120,21 @@ class TaskHead(nn.Module):
         else:
             raise ValueError("Unknown task type: {}".format(self.task_type))
 
+    def prepare_targets(self, targets: np.ndarray) -> torch.Tensor:
+        """Convert numpy targets to correctly-typed tensor for loss computation.
+
+        Args:
+            targets: Raw numpy targets from dataloader.
+
+        Returns:
+            Tensor with correct dtype for the task's loss function.
+        """
+        if self.task_type == "classification":
+            return torch.from_numpy(targets).long()
+        return torch.from_numpy(targets).float()
+
     def predict(self, logits: torch.Tensor) -> torch.Tensor:
-        """Convert logits to predictions.
+        """Convert logits to discrete predictions.
 
         Args:
             logits: Raw output from forward pass.
@@ -120,3 +150,57 @@ class TaskHead(nn.Module):
             return torch.sigmoid(logits)
         else:
             raise ValueError("Unknown task type: {}".format(self.task_type))
+
+    def score(self, logits: torch.Tensor) -> torch.Tensor:
+        """Convert logits to probability scores for metric computation.
+
+        Args:
+            logits: Raw output from forward pass.
+
+        Returns:
+            Scores suitable for sklearn metrics (e.g. roc_auc_score).
+        """
+        if self.task_type == "regression":
+            return logits
+        elif self.task_type == "classification":
+            return torch.softmax(logits, dim=-1)
+        elif self.task_type == "multilabel":
+            return torch.sigmoid(logits)
+        else:
+            raise ValueError("Unknown task type: {}".format(self.task_type))
+
+    def compute_metrics(
+        self, logits: torch.Tensor, targets: torch.Tensor,
+    ) -> dict[str, float]:
+        """Compute task-appropriate evaluation metrics.
+
+        Args:
+            logits: Raw model output.
+            targets: Ground truth targets (already prepared via prepare_targets).
+
+        Returns:
+            Dictionary of metric name to value.
+        """
+        if self.task_type == "regression":
+            preds_np = logits.numpy().flatten()
+            targets_np = targets.numpy().flatten()
+            return {
+                "pearson_r": float(pearsonr(preds_np, targets_np)[0]),
+                "spearman_r": float(spearmanr(preds_np, targets_np)[0]),
+            }
+
+        scores_np = self.score(logits).numpy()
+        targets_np = targets.numpy()
+        try:
+            if self.task_type == "multilabel":
+                auroc = float(roc_auc_score(
+                    targets_np, scores_np, average="micro",
+                ))
+            else:
+                auroc = float(roc_auc_score(targets_np, scores_np))
+        except ValueError as e:
+            if "Only one class" in str(e):
+                auroc = float("nan")
+            else:
+                raise
+        return {"auroc": auroc}

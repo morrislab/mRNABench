@@ -64,6 +64,12 @@ class Evo1(EmbeddingModel):
         # need to return the embedding, not logits
         self.model.unembed = IdentityEmbedding()
 
+        # PEFT compatibility: config.to_dict is None, PEFT expects callable
+        # Provide method that returns config as dictionary
+        if hasattr(self.model, 'config') and not callable(getattr(self.model.config, 'to_dict', None)):
+            config_dict = dict(self.model.config)
+            self.model.config.to_dict = lambda: config_dict
+
         if model_version == "evo-1-131k-base":
             self.max_length = 131_072
 

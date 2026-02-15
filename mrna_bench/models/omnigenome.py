@@ -65,7 +65,7 @@ class OmniGenome(EmbeddingModel):
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             token_dropout=False,
-        ).to(device, dtype=torch.float16)
+        ).to(device)
 
     def _forward_chunks(
         self,

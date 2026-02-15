@@ -19,7 +19,8 @@ class Orthrus(EmbeddingModel):
     """
 
     default_version = "orthrus-large-6-track"
-    valid_versions = ["orthrus-large-6-track", "orthrus-base-4-track"]
+    valid_versions = ["orthrus-large-6-track", "orthrus-large-4-track"]
+
     lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
 
     @staticmethod
@@ -32,7 +33,7 @@ class Orthrus(EmbeddingModel):
 
         Args:
             model_version: Version of Orthrus to load. Valid values are: {
-                "orthrus-base-4-track",
+                "orthrus-large-4-track",
                 "orthrus-large-6-track"
             }
             device: PyTorch device to send model to.

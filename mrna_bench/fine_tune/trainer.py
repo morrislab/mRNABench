@@ -76,7 +76,7 @@ class FineTuneTrainer:
             lora_state = deepcopy(
                 get_peft_model_state_dict(self.wrapper.backbone.model)
             )
-        except (ImportError, AttributeError):
+        except ImportError:
             lora_state = deepcopy({
                 k: v for k, v in self.wrapper.backbone.model.state_dict().items()
                 if v.requires_grad
@@ -96,7 +96,7 @@ class FineTuneTrainer:
             set_peft_model_state_dict(
                 self.wrapper.backbone.model, state["lora"]
             )
-        except (ImportError, AttributeError):
+        except ImportError:
             self.wrapper.backbone.model.load_state_dict(
                 state["lora"], strict=False
             )
@@ -121,9 +121,10 @@ class FineTuneTrainer:
 
         for batch_idx, batch in enumerate(progress):
             target = batch["target"]
-            if isinstance(target, np.ndarray):
-                target = torch.from_numpy(target)
-            target = target.to(self.device).float()
+            if not isinstance(target, np.ndarray):
+                target = np.array(target)
+            target = self.wrapper.task_head.prepare_targets(target)
+            target = target.to(self.device)
 
             sequences = batch["sequence"]
             cds = batch.get("cds")
@@ -171,9 +172,10 @@ class FineTuneTrainer:
 
         for batch in tqdm(dataloader, desc="Evaluating"):
             target = batch["target"]
-            if isinstance(target, np.ndarray):
-                target = torch.from_numpy(target)
-            target = target.to(self.device).float()
+            if not isinstance(target, np.ndarray):
+                target = np.array(target)
+            target = self.wrapper.task_head.prepare_targets(target)
+            target = target.to(self.device)
 
             sequences = batch["sequence"]
             cds = batch.get("cds")
@@ -191,30 +193,9 @@ class FineTuneTrainer:
         targets = torch.cat(all_targets, dim=0)
 
         metrics = {"loss": avg_loss}
-
-        task_type = self.wrapper.task_head.task_type
-        if task_type == "regression":
-            from scipy.stats import pearsonr, spearmanr
-            preds_np = preds.numpy().flatten()
-            targets_np = targets.numpy().flatten()
-            metrics["pearson_r"] = float(pearsonr(preds_np, targets_np)[0])
-            metrics["spearman_r"] = float(spearmanr(preds_np, targets_np)[0])
-        elif task_type in ("classification", "multilabel"):
-            from sklearn.metrics import roc_auc_score
-            preds_np = torch.sigmoid(preds).numpy()
-            targets_np = targets.numpy()
-            try:
-                if task_type == "multilabel":
-                    metrics["auroc"] = float(roc_auc_score(
-                        targets_np, preds_np, average="micro"
-                    ))
-                else:
-                    metrics["auroc"] = float(roc_auc_score(
-                        targets_np, preds_np
-                    ))
-            except ValueError:
-                metrics["auroc"] = float("nan")
-
+        metrics.update(
+            self.wrapper.task_head.compute_metrics(preds, targets)
+        )
         return metrics
 
     def fit(

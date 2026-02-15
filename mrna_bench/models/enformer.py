@@ -29,6 +29,8 @@ class Enformer(EmbeddingModel):
     default_version = "enformer-official-rough"
     valid_versions = ["enformer-official-rough"]
 
+    lora_target_modules = ["to_q", "to_k", "to_v", "to_out"]
+
     prediction_window = 114_688  # embedding is of the center 114688 bases
     max_length = 196_608  # can take sequences up to 196608 bases
     bin_size = 128  # embedding is in 128 base bins

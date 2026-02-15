@@ -74,6 +74,16 @@ class Evo2(EmbeddingModel):
 
         revert_model_cache_var(old_hf_cache)
 
+    def set_inference_mode(self):
+        """Set model to inference mode with gradients disabled."""
+        self.model.model.eval()
+        torch.set_grad_enabled(False)
+
+    def set_train_mode(self):
+        """Set model to training mode with gradients enabled."""
+        self.model.model.train()
+        torch.set_grad_enabled(True)
+
     def embed_sequence(
         self,
         sequence: str,
