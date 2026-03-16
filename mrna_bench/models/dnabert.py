@@ -45,21 +45,22 @@ class DNABERT2(EmbeddingModel):
             raise ValueError("Only dnabert2 model version available.")
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "quietflamingo/dnabert2-no-flashattention",
+            f"czl/dnabert2",
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
 
-        config = BertConfig.from_pretrained(
-            "quietflamingo/dnabert2-no-flashattention",
+        self.config = BertConfig.from_pretrained(
+            "czl/dnabert2",
             cache_dir=get_model_weights_path()
         )
 
         self.model = AutoModel.from_pretrained(
-            "quietflamingo/dnabert2-no-flashattention",
+            "czl/dnabert2",
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
-            config=config
+            config=self.config,
+            add_pooling_layer=False
         ).to(self.device)
 
         # Reset AutoModel mapping to use default BertConfig for scenarios
