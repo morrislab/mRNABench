@@ -1,15 +1,18 @@
 from pathlib import Path
+from collections.abc import Callable
+from typing import List
+from functools import partial
 
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
+import h5py
 
 import torch
 
 from mrna_bench.models import EmbeddingModel
 from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.embedder.embedder_utils import get_embedding_filepath
-from sklearn.preprocessing import StandardScaler
 
 
 class DatasetEmbedder:
@@ -26,7 +29,9 @@ class DatasetEmbedder:
         model: EmbeddingModel,
         dataset: BenchmarkDataset,
         d_chunk_ind: int = 0,
-        d_num_chunks: int = 0
+        d_num_chunks: int = 0,
+        agg_fn: Callable = partial(torch.mean, dim=1),
+        ragged_out: bool = False
     ):
         """Initialize DatasetEmbedder.
 
@@ -35,6 +40,9 @@ class DatasetEmbedder:
             dataset: Dataset to embed.
             d_chunk_ind: Current dataset chunk to be processed.
             d_num_chunks: Total number of chunks to divide dataset into.
+            agg_fn: Aggregation function to apply to sequence embeddings.
+            ragged_out: Whether the model produces ragged output under agg_fn.
+
         """
         self.model = model
         self.dataset = dataset
@@ -42,6 +50,9 @@ class DatasetEmbedder:
 
         self.d_chunk_ind = d_chunk_ind
         self.d_num_chunks = d_num_chunks
+
+        self.agg_fn = agg_fn
+        self.ragged_out = ragged_out
 
         if self.d_num_chunks == 0:
             self.d_chunk_size = len(self.data_df)
@@ -63,11 +74,13 @@ class DatasetEmbedder:
         chunk_df = self.data_df.iloc[s:e]
         return chunk_df
 
-    def embed_dataset(self) -> torch.Tensor:
+    def embed_dataset(self) -> List[torch.Tensor]:
         """Compute embeddings for current dataset chunk.
 
         Returns:
             Embeddings for current dataset chunk in original order.
+            - pooled: (1, H)
+            - unpooled: (1, L_i, H)
         """
         dataset_chunk = self.get_dataset_chunk()
 
@@ -77,16 +90,19 @@ class DatasetEmbedder:
                 embedding = self.model.embed_sequence_sixtrack(
                     row["sequence"],
                     row["cds"].astype(np.int32),
-                    row["splice"].astype(np.int32)
+                    row["splice"].astype(np.int32),
+                    self.agg_fn
                 )
             else:
-                embedding = self.model.embed_sequence(row["sequence"])
+                embedding = self.model.embed_sequence(
+                    row["sequence"],
+                    self.agg_fn
+                )
             dataset_embeddings.append(embedding)
 
-        embeddings = torch.cat(dataset_embeddings, dim=0)
-        return embeddings
+        return dataset_embeddings
 
-    def persist_embeddings(self, embeddings: torch.Tensor):
+    def persist_embeddings(self, embeddings: List[torch.Tensor]):
         """Persist embeddings at global data storage location.
 
         Args:
@@ -100,8 +116,24 @@ class DatasetEmbedder:
             self.d_num_chunks
         )
 
-        np_embeddings = embeddings.float().detach().cpu().numpy()
-        np.savez_compressed(out_path, embedding=np_embeddings)
+        embeddings = [emb.detach().cpu() for emb in embeddings]
+
+        if self.ragged_out:
+            with h5py.File(out_path + ".h5", "w") as f:
+                grp = f.create_group("embeddings")
+                for i, emb in enumerate(embeddings):
+                    grp.create_dataset(
+                        str(i),
+                        data=emb.squeeze(0).half().numpy(),  # remove batch dim
+                        shuffle=True,
+                        compression="gzip",
+                    )
+        else:
+            embeddings_tensor = torch.cat(embeddings, dim=0)
+            np.savez_compressed(
+                out_path + ".npz",
+                embedding=embeddings_tensor.numpy()
+            )
 
     def merge_embeddings(self):
         """Merge persisted processed dataset chunks into single file.
@@ -112,26 +144,32 @@ class DatasetEmbedder:
         processed_files_paths = []
         processed_chunk_inds = []
 
-        glob_pattern = "{}_{}_*.npz".format(
+        base = "{}_{}_".format(
             self.dataset.dataset_name,
             self.model.short_name
         )
 
+        glob_patterns = [
+            base + "*.npz",
+            base + "*.h5"
+        ]
+
         # Check that all chunks are processed
-        for file in Path(self.dataset.embedding_dir).glob(glob_pattern):
-            if not file.is_file():
-                continue
+        for glob_pattern in glob_patterns:
+            for file in Path(self.dataset.embedding_dir).glob(glob_pattern):
+                if not file.is_file():
+                    continue
 
-            file_name_arr = file.stem.split("_")
-            if len(file_name_arr) < 3:
-                continue  # merged file, skip
+                file_name_arr = file.stem.split("_")
+                if len(file_name_arr) < 3:
+                    continue  # merged file, skip
 
-            start, end = map(int, file_name_arr[2].split("-"))
-            if end != self.d_num_chunks:
-                continue
+                start, end = map(int, file_name_arr[2].split("-"))
+                if end != self.d_num_chunks:
+                    continue
 
-            processed_chunk_inds.append(start)
-            processed_files_paths.append(file)
+                processed_chunk_inds.append(start)
+                processed_files_paths.append(file)
 
         if len(set(all_chunks) - set(processed_chunk_inds)) > 0:
             return
@@ -143,6 +181,59 @@ class DatasetEmbedder:
             key=lambda x: int(Path(x).stem.split("_")[-1].split("-")[0])
         )
 
+        suffixes = set([file.suffix for file in processed_files_paths])
+        if len(suffixes) != 1:
+            raise ValueError(
+                "Inconsistent file types found when merging embeddings."
+            )
+
+        suffix = suffixes.pop()
+
+        if suffix == ".h5":
+            self._merge_h5(processed_files_paths)
+        elif suffix == ".npz":
+            self._merge_npz(processed_files_paths)
+        else:
+            raise ValueError(
+                f"Unsupported file type {suffix} found when merging "
+                "embeddings."
+            )
+
+    def _merge_h5(self, processed_files_paths):
+        """Merge .h5 embedding files.
+
+        Args:
+            processed_files_paths: List of file paths to merge.
+        """
+        out_fn = get_embedding_filepath(
+            self.dataset.embedding_dir,
+            self.model.short_name,
+            self.dataset.dataset_name
+        ) + ".h5"
+
+        with h5py.File(out_fn, "w") as out_f:
+            out_grp = out_f.create_group("embeddings")
+
+            idx = 0
+            for file_path in processed_files_paths:
+                with h5py.File(file_path, "r") as f:
+                    for _, emb in f["embeddings"].items():
+                        out_grp.create_dataset(
+                            str(idx),
+                            data=emb[:],
+                            compression="gzip"
+                        )
+                        idx += 1
+
+        for file in processed_files_paths:
+            Path(file).unlink()
+
+    def _merge_npz(self, processed_files_paths):
+        """Merge .npz embedding files.
+
+        Args:
+            processed_files_paths: List of file paths to merge.
+        """
         embeddings = []
         for file_path in processed_files_paths:
             embedding_chunk = np.load(file_path)["embedding"]
@@ -154,7 +245,7 @@ class DatasetEmbedder:
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name
-        )
+        ) + ".npz"
 
         np.savez_compressed(out_fn, embedding=all_embeddings)
 
@@ -211,71 +302,3 @@ class DatasetEmbedder:
             model=model,
             dataset=dataset,
         )
-
-
-class KmerDatasetEmbedder(DatasetEmbedder):
-    """Embeds sequences associated with dataset using specified embedder.
-
-    This class is built to split the sequences in a dataset into chunks of
-    sequences which can then be processed in parallel. This is denoted d_chunk,
-    whereas s_chunk denotes the sequence chunking that occur within each model
-    to handle sequences that exceed model maximum length.
-
-    This class specifically handles the naive Kmer embedding model.
-    """
-
-    def __init__(
-        self,
-        model: EmbeddingModel,
-        dataset: BenchmarkDataset,
-        d_chunk_ind: int = 0,
-        d_num_chunks: int = 0
-    ):
-        """Initialize KmerDatasetEmbedder.
-
-        Args:
-            model: Model used to embed sequences.
-            dataset: Dataset to embed.
-            d_chunk_ind: Current dataset chunk to be processed.
-            d_num_chunks: Total number of chunks to divide dataset into.
-        """
-        super().__init__(model, dataset, d_chunk_ind, d_num_chunks)
-
-    def embed_dataset(self) -> torch.Tensor:
-        """Compute embeddings for current dataset chunk.
-
-        Returns:
-            Embeddings for current dataset chunk in original order.
-        """
-        embeddings = super().embed_dataset()
-
-        # Desparsify the embeddings
-        embeddings = self.desparsify_embeddings_and_scale(embeddings)
-
-        return embeddings
-
-    def desparsify_embeddings_and_scale(
-        self,
-        embeddings: torch.Tensor,
-    ) -> torch.Tensor:
-        """Remove rows with 0s across all columns and scales the embeddings.
-
-        Args:
-            embeddings: Embeddings to desparsify.
-
-        Returns:
-            Desparsified embeddings.
-        """
-        # Remove rows with 0s across all columns
-        non_zero_cols = torch.any(embeddings != 0, dim=0)
-        desparsified_embeddings = embeddings[:, non_zero_cols]
-
-        # Scale the embeddings
-        desparsified_and_scaled_embeddings = torch.tensor((
-            StandardScaler()
-            .fit_transform(
-                desparsified_embeddings
-            )
-        ), dtype=torch.float32)
-
-        return desparsified_and_scaled_embeddings
