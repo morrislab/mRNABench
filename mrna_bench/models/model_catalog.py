@@ -96,12 +96,13 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "evo-1-131k-base"
     ],
     "Evo2": [
-        "evo2_40b",
-        "evo2_7b_262k",
-        "evo2_7b",
-        "evo2_40b_base",
+        "evo2_1b_base",
         "evo2_7b_base",
-        "evo2_1b_base"
+        "evo2_7b",
+        "evo2_7b_262k",
+        "evo2_20b",
+        "evo2_40b_base",
+        "evo2_40b"
     ],
     "GENERanno": [
         "prokaryote-0.5b-base",
@@ -111,19 +112,19 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
     ],
     "GENERator": [
         "eukaryote-1.2b-base",
-        "eukaryote-3b-base",
         "v2-eukaryote-1.2b-base",
-        "v2-eukaryote-3b-base",
         "v2-prokaryote-1.2b-base",
+        "eukaryote-3b-base",
+        "v2-eukaryote-3b-base",
         "v2-prokaryote-3b-base"
     ],
     "Helix-mRNA": ["helix-mrna"],
     "HyenaDNA": [
-        "hyenadna-large-1m-seqlen-hf",
-        "hyenadna-medium-450k-seqlen-hf",
-        "hyenadna-medium-160k-seqlen-hf",
+        "hyenadna-tiny-16k-seqlen-d128-hf",
         "hyenadna-small-32k-seqlen-hf",
-        "hyenadna-tiny-16k-seqlen-d128-hf"
+        "hyenadna-medium-160k-seqlen-hf",
+        "hyenadna-medium-450k-seqlen-hf",
+        "hyenadna-large-1m-seqlen-hf"
     ],
     "mRNABERT": ["mRNABERT"],
     "NaiveBaseline": [
@@ -134,20 +135,20 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "naive-mamba"
     ],
     "NucleotideTransformer": [
-        "2.5b-multi-species",
-        "2.5b-1000g",
-        "500m-human-ref",
-        "500m-1000g",
         "v2-50m-multi-species",
         "v2-100m-multi-species",
         "v2-250m-multi-species",
-        "v2-500m-multi-species"
+        "v2-500m-multi-species",
+        "500m-human-ref",
+        "500m-1000g",
+        "2.5b-multi-species",
+        "2.5b-1000g"
     ],
     "NucleotideTransformerV3": [
         "v3_8M_pre",
         "v3_100M_pre",
-        "v3_650M_pre",
         "v3_100M_post",
+        "v3_650M_pre",
         "v3_650M_post"
     ],
     "OmniGenome": [
@@ -155,8 +156,8 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
         "omnigenome-186m"
     ],
     "Orthrus": [
-        "orthrus-large-6-track",
-        "orthrus-base-4-track"
+        "orthrus-base-4-track",
+        "orthrus-large-6-track"
     ],
     "Plant-RNAFM": ["plant_rnafm"],
     "RiNALMo": [
@@ -169,9 +170,9 @@ MODEL_VERSION_MAP: dict[str, list[str]] = {
     "RNA-FM": ["rna-fm", "mrna-fm"],
     "RNA-MSM": ["rnamsm"],
     "SpliceBERT": [
-        "SpliceBERT.1024nt",
         "SpliceBERT-human.510nt",
-        "SpliceBERT.510nt"
+        "SpliceBERT.510nt",
+        "SpliceBERT.1024nt",
     ],
     "3UTRBERT": [
         "utrbert-3mer",

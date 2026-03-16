@@ -25,12 +25,13 @@ class Evo2(EmbeddingModel):
 
     max_length = 8_192
     version_to_middle_layer = {
-        "evo2_40b": "blocks.25.pre_norm",
-        "evo2_7b": "blocks.16.pre_norm",
-        "evo2_7b_262k": "blocks.16.pre_norm",
-        "evo2_40b_base": "blocks.25.pre_norm",
-        "evo2_7b_base": "blocks.16.pre_norm",
-        "evo2_1b_base": "blocks.12.pre_norm",
+        "evo2_40b": "blocks.25.mlp.l3",
+        "evo2_20b": "blocks.12.mlp.l3",
+        "evo2_7b": "blocks.16.mlp.l3",
+        "evo2_7b_262k": "blocks.16.mlp.l3",
+        "evo2_40b_base": "blocks.25.mlp.l3",
+        "evo2_7b_base": "blocks.16.mlp.l3",
+        "evo2_1b_base": "blocks.12.mlp.l3",
     }
 
     @staticmethod
@@ -44,6 +45,7 @@ class Evo2(EmbeddingModel):
         Args:
             model_version: Version of model used. Valid versions: {
                 "evo2_40b",
+                "evo2_20b",
                 "evo2_7b",
                 "evo2_7b_262k",
                 "evo2_40b_base",

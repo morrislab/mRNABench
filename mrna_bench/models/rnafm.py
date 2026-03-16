@@ -93,12 +93,13 @@ class RNAFM(EmbeddingModel):
         for i, chunk in enumerate(chunks):
             _, _, tokens = self.batch_converter([("", chunk)])
 
-            if i == 0:
-                tokens = tokens[:, :-1]
-            elif i == len(chunks) - 1:
-                tokens = tokens[:, 1:]
-            else:
-                tokens = tokens[:, 1:-1]
+            if len(chunks) != 1:
+                if i == 0:
+                    tokens = tokens[:, :-1]
+                elif i == len(chunks) - 1:
+                    tokens = tokens[:, 1:]
+                else:
+                    tokens = tokens[:, 1:-1]
 
             model_output = self.model(tokens.to(self.device), repr_layers=[12])
             embedded_chunk = model_output["representations"][12]
@@ -145,12 +146,14 @@ class RNAFM(EmbeddingModel):
         for i, chunk in enumerate(chunks):
             _, _, tokens = self.batch_converter([("", chunk)])
 
-            if i == 0:
-                tokens = tokens[:, :-1]
-            elif i == len(chunks) - 1:
-                tokens = tokens[:, 1:]
-            else:
-                tokens = tokens[:, 1:-1]
+
+            if len(chunks) != 1:
+                if i == 0:
+                    tokens = tokens[:, :-1]
+                elif i == len(chunks) - 1:
+                    tokens = tokens[:, 1:]
+                else:
+                    tokens = tokens[:, 1:-1]
 
             model_output = self.model(tokens.to(self.device), repr_layers=[12])
             embedded_chunk = model_output["representations"][12]
