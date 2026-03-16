@@ -9,7 +9,7 @@ authors = [
     { name = "Phil Fradkin", email = "phil.fradkin@gmail.com" },
     { name = "Divya Koyyalagunta", email = "dko4001@med.cornell.edu" }
 ]
-requires-python = ">= 3.10"
+requires-python = ">= 3.12"
 license = { file = "LICENSE" }  # Include a LICENSE file in your repo
 keywords = ["mrna", "genomic foundation model", "benchmark"]
 classifiers = [
@@ -27,7 +27,8 @@ dependencies = [
     "pyarrow==20.0.0",
     "datasets>2.15.0",
     "fastparquet",
-    "openpyxl"
+    "openpyxl",
+    "h5py",
 ]
 
 [project.urls]
@@ -44,7 +45,7 @@ base_models = [
     "accelerate==1.8.1",
     "multimolecule==0.0.8",
     "evo-model==0.4",
-    "evo2==0.4.0",
+    "evo2==0.5.0",
     "borzoi-pytorch==0.4.2",
     "enformer-pytorch==0.8.10",
     "ViennaRNA==2.7.0"

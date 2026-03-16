@@ -38,7 +38,7 @@ pip install mrna-bench
 > [!IMPORTANT]
 > **Requirements:** PyTorch 2.7.1 and CUDA 12.6 are required for base models installation.
 
-The inference-capable version of mRNABench that can generate embeddings using almost all models (except Helix mRNA) can be installed as shown below.
+The inference-capable version of mRNABench that can generate embeddings using all models can be installed as shown below.
 
 ```bash
 conda create --name mrna_bench python=3.12
@@ -57,13 +57,10 @@ conda create --name mrna_bench python=3.12
 conda activate mrna_bench
 
 conda install -c nvidia cuda-nvcc cuda-cudart-dev # might be needed depending on system
-conda install -c conda-forge pytorch=2.7.1 mamba-ssm=2.2.5 flash-attn-layer-norm=2.7.4 transformer-engine-torch=2.5.0
+conda install -c conda-forge pytorch=2.7.1 mamba-ssm=2.2.5 flash-attn-layer-norm=2.7.4 transformer-engine-torch=2.5.0 numpy=2.2.6
 
 pip install mrna-bench[base_models]
 ```
-
-Inference with other models will require the installation of the model's
-dependencies first, which are usually listed on the model's GitHub page (see below).
 
 ### Post-install
 > [!IMPORTANT]
@@ -79,7 +76,7 @@ mb.update_model_weights_path(path_to_dir_to_store_weights)
 ```
 
 ### Evo2
-Evo2 requires more complicated installation instructions, and can only be run on H100s. See [Evo2 Setup](#evo2-setup).
+Evo2 can only be run on H100s. See [Evo2 Setup](#evo2-setup).
 
 ### Dev Mode
 Dev mode allows generation of datasets from scratch and includes access to the RNA-Fazal localization dataset. See [Dev Mode Setup](#dev-mode-setup).
@@ -247,23 +244,10 @@ If you use mRNABench in your research, please cite:
 The original sources for each dataset and model should be cited if used, and can be found above. A substantial number of model implementations use the the `multimolecule` package: https://huggingface.co/multimolecule; citation information can be found on their HuggingFace.
 
 
-## Evo2 Setup
-Inference using Evo2 requires installing the following in its own environment. Note: There may be an issue where the evo_40b models, when downloaded, have their merged checkpoints stored one directory above the HuggingFace hub cache. You may need to manually move the checkpoint into its corresponding snapshot directory: `/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/`
+## Evo2
+Note: There may be an issue where the evo_40b models, when downloaded, have their merged checkpoints stored one directory above the HuggingFace hub cache. You may need to manually move the checkpoint into its corresponding snapshot directory: `/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/`
 
 **Hardware Requirements:** Evo2 can only be run on H100 GPUs.
-
-```bash
-conda create --name evo_bench -c conda-forge python=3.11 gxx=12.2.0 -y
-conda activate evo_bench
-
-pip install torch==2.6.0+cu124 --index-url https://download.pytorch.org/whl/cu124
-pip install vtx==1.0.4
-pip install evo2==0.2.0
-pip install flash-attn==2.7.4.post1
-
-cd path/to/mRNA/bench
-pip install -e .
-```
 
 ## Dev Mode Setup
 Dev mode requires additional dependencies for generating datasets from scratch and accessing certain datasets.
