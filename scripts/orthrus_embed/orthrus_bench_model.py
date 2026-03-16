@@ -4,8 +4,8 @@ import numpy as np
 from mrna_bench.models import EmbeddingModel
 from collections.abc import Callable
 from mrna_bench.datasets.dataset_utils import str_to_ohe
+from functools import partial
 from orthrus_src import load_model
-from orthrus_src import mean_unpadded
 
 class Orthrus(EmbeddingModel):
 
@@ -38,49 +38,37 @@ class Orthrus(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        overlap: int = 0,
-        agg_fn: Callable | None = None
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using four track Orthrus.
 
         Args:
             sequence: Sequence to embed.
-            overlap: Unused.
             agg_fn: Currently unused.
 
         Returns:
             Orthrus representation of sequence.
         """
-        if overlap != 0:
-            raise ValueError("Orthrus does not chunk sequence.")
-
-        if agg_fn is not None:
-            raise NotImplementedError(
-                "Inference currently does not support alternative aggregation."
-            )
+        if self.is_sixtrack:
+            raise ValueError((
+                "Currently loaded model is six track."
+                "Use embed_sequence_sixtrack instead."
+            ))
 
         ohe_sequence = torch.from_numpy(str_to_ohe(sequence)).to(self.device, dtype=torch.float32)
         model_input_tt = ohe_sequence.unsqueeze(0)
 
-        lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
+        embedding = self.model(model_input_tt, channel_last=True)
 
-        embedding = self.model.representation(
-            model_input_tt,
-            lengths,
-            channel_last=True
-        )
-
-        return embedding
+        aggregated_embedding = agg_fn(embedding)
+        return aggregated_embedding
 
     def embed_sequence_sixtrack(
         self,
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        overlap: int = 0,
-        agg_fn: Callable | None = None,
-        subset_start: int | None = None,
-        subset_end: int | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=1)
     ) -> torch.Tensor:
         """Embed sequence using six track Orthrus.
 
@@ -91,20 +79,11 @@ class Orthrus(EmbeddingModel):
             sequence: Sequence to embed.
             cds: CDS track for sequence to embed.
             splice: Splice site track for sequence to embed.
-            overlap: Unused.
             agg_fn: Currently unused.
 
         Returns:
             Orthrus representation of sequence.
         """
-        if overlap != 0:
-            raise ValueError("Orthrus does not chunk sequence.")
-
-        if agg_fn is not None:
-            raise NotImplementedError(
-                "Inference currently does not support alternative aggregation."
-            )
-
         ohe_sequence = str_to_ohe(sequence)
 
         model_input = np.hstack((
@@ -116,20 +95,7 @@ class Orthrus(EmbeddingModel):
         model_input_tt = torch.Tensor(model_input).to(self.device)
         model_input_tt = model_input_tt.unsqueeze(0)
 
-        lengths = torch.Tensor([model_input_tt.shape[1]]).to(self.device)
+        embedding = self.model(model_input_tt, channel_last=True)
 
-        if subset_start is not None:
-            pre_mean = self.model.forward(model_input_tt, channel_last=True)
-
-            pre_mean = pre_mean[:, subset_start:subset_end, :]
-
-            embedding = mean_unpadded(pre_mean, lengths)
-
-        else:
-            embedding = self.model.representation(
-                model_input_tt,
-                lengths,
-                channel_last=True
-            )
-
-        return embedding
+        aggregated_embedding = agg_fn(embedding)
+        return aggregated_embedding

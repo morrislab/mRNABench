@@ -19,8 +19,7 @@ args = parser.parse_args()
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    print("Embedding model:", args.model_version, args.checkpoint)
-    print("Dataset:", args.dataset_name)
+    print("Orthrus", args.model_version, args.checkpoint, args.dataset_name)
 
     model = Orthrus(
         model_version = args.model_version,

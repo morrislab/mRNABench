@@ -33,7 +33,7 @@ if __name__ == "__main__":
     prober = (
         LinearProbeBuilder(dataset_name=args.dataset_name)
         .fetch_embedding_by_model_name(args.model_short_name)
-        .build_splitter(args.split_type, species="human", eval_all_splits=True)
+        .build_splitter(args.split_type, species=dataset.species, eval_all_splits=True)
         .build_evaluator(args.task)
         .set_target(args.target)
         .use_persister()
@@ -52,3 +52,4 @@ if __name__ == "__main__":
 
         print("Running linear probe for seed:", seed)
         metrics = prober.run_linear_probe(seed, persist=True)
+        print("Finished")

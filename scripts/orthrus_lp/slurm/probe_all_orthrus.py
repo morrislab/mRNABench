@@ -5,7 +5,6 @@ from pathlib import Path
 import argparse
 import mrna_bench as mb
 from mrna_bench.datasets.dataset_catalog import DATASET_INFO
-from mrna_bench.models.model_catalog import MODEL_VERSION_MAP, MODEL_CATALOG
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
 
 split_types = list(SPLIT_CATALOG.keys())
@@ -88,9 +87,6 @@ if __name__ == "__main__":
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
-        if 'vep' in dataset_name or 'utr' in dataset_name:
-            continue
-
         target_cols = dataset_info["target_col"]
 
         lp_res_folder = mb.load_dataset(dataset_name).dataset_path + "/lp_results"
@@ -112,18 +108,14 @@ if __name__ == "__main__":
 
                     if args.canonical_split:
                         valid_split_types = [DATASET_INFO[dataset_name]["split_type"]]
+                    elif "mrl-sample" in dataset_name:
+                        valid_split_types = ["default", "hard-kmer", "kmer"]
+                    elif "mrl-hl-lbkwk" in dataset_name:
+                        valid_split_types = ["default"]
                     else:
-                        if "mrl-sample" in dataset_name:
-                            valid_split_types = ["default", "hard-kmer", "kmer"]
-                        elif "mrl-hl-lbkwk" in dataset_name:
-                            valid_split_types = ["default"]
-                        else:
-                            valid_split_types = split_types
+                        valid_split_types = split_types
 
                     for split_type in valid_split_types:
-
-                        if split_type == 'hard-kmer' and 'lncrna' in dataset_name:
-                            continue
 
                         # print("\t\tSplit type: ", split_type)
 
