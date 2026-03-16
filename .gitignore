@@ -2,6 +2,10 @@ mrna_bench/config.yaml
 scripts/embedding/slurm/logs/
 scripts/linear_probe/slurm/logs/
 
+*.ipynb
+experiments/
+notebooks/
+logs/
 .vscode/
 
 # Byte-compiled / optimized / DLL files
