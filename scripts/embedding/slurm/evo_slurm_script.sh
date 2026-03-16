@@ -5,9 +5,9 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --constraint=h100
-#SBATCH --ntasks-per-node=4
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=2
+#SBATCH --mem-per-cpu=32GB
 #SBATCH --time=02:00:00
 #SBATCH --output=./logs/evo_embed.%A.out
 #SBATCH --error=./logs/evo_embed.%A.err

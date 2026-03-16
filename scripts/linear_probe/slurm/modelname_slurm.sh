@@ -4,17 +4,24 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --time=4:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem=300G
+#SBATCH --time=5:00:00
 #SBATCH --output=./logs/linear_probe.%A.out
 #SBATCH --error=./logs/linear_probe.%A.err
 
 source [path/to/conda.sh]
 conda activate [path/to/env]
 
+export OMP_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+export NUMEXPR_NUM_THREADS=4
+
 # set default value for force_recompute
 force_recompute="False"
+combo=""
+seeds="[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -24,6 +31,8 @@ while [[ "$#" -gt 0 ]]; do
         --task) task="$2"; shift ;;
         --target) target="$2"; shift ;;
         --split_type) split_type="$2"; shift ;;
+        --combo) combo="$2"; shift ;;
+        --seeds) seeds="$2"; shift ;;
         --force_recompute) force_recompute="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -39,6 +48,8 @@ if [ "$force_recompute" == "True" ]; then
     --task "$task" \
     --target "$target" \
     --split_type "$split_type" \
+    --combo "$combo" \
+    --seeds "$seeds" \
     --force_recompute
 else
     python ../by_modelname.py \
@@ -47,5 +58,7 @@ else
     --dataset_name "$dataset_name" \
     --task "$task" \
     --target "$target" \
-    --split_type "$split_type"
+    --split_type "$split_type" \
+    --combo "$combo" \
+    --seeds "$seeds"
 fi

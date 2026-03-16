@@ -3,14 +3,19 @@
 #SBATCH --partition=cpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
-#SBATCH --time=2:00:00
+#SBATCH --cpus-per-task=4
+#SBATCH --mem-per-cpu=32GB
+#SBATCH --time=6:00:00
 #SBATCH --output=./logs/orthrus_lp.%A.out
 #SBATCH --error=./logs/orthrus_lp.%A.err
 
 # set default value for force_recompute
 force_recompute="False"
+
+export OMP_NUM_THREADS=4
+export MKL_NUM_THREADS=4
+export OPENBLAS_NUM_THREADS=4
+export NUMEXPR_NUM_THREADS=4
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
