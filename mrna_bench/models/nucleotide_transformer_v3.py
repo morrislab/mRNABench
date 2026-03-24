@@ -199,6 +199,10 @@ class NucleotideTransformerV3(EmbeddingModel):
     ) -> list[torch.Tensor]:
         """Embed sequences using NucleotideTransformerV3.
 
+        Each sequence is processed in its own forward pass to avoid the
+        U-Net's convolutional avg_pool layers producing context-dependent
+        outputs when sequences of different lengths are padded together.
+
         Args:
             sequences: List of sequences to embed.
             cds: Unused.
@@ -207,9 +211,9 @@ class NucleotideTransformerV3(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 256) for `v3_8M_pre`
-            - default (mean): (1, 768) for `v3_100M_pre/post`
-            - default (mean): (1, 1536) for `v3_650M_pre/post`
+            - default (mean): (256,) for `v3_8M_pre`
+            - default (mean): (768,) for `v3_100M_pre/post`
+            - default (mean): (1536,) for `v3_650M_pre/post`
         """
         _, _ = cds, splice
 
@@ -223,9 +227,12 @@ class NucleotideTransformerV3(EmbeddingModel):
                 " Use the `set_species` method to change the species."
             ))
 
-        return self._embed_with_chunking(
-            sequences=sequences,
-            max_chunk_length=self.max_length - 2,
-            embed_fn=self._forward_chunks,
-            agg_fn=agg_fn,
-        )
+        return [
+            self._embed_with_chunking(
+                sequences=[seq],
+                max_chunk_length=self.max_length,
+                embed_fn=self._forward_chunks,
+                agg_fn=agg_fn,
+            )[0]
+            for seq in sequences
+        ]
