@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 from functools import partial
 
 import math
@@ -30,25 +30,26 @@ class MixerModel(nn.Module):
             from mamba_ssm.modules.block import Block
         except ImportError:
             try:
-                from mamba_ssm.modules.mamba_simple import Mamba, Block
+                from mamba_ssm.modules.mamba_simple import Block, Mamba
             except ImportError:
                 raise ImportError(
-                    "Install base_models optional "
-                    "dependency to use NaiveMamba."
+                    "Install base_models optional dependency to use NaiveMamba."
                 )
 
-        HAS_MLP = "mlp_cls" in Block.__init__.__code__.co_varnames
+        # Feature detection for mamba-ssm version compatibility
+        has_mlp = "mlp_cls" in Block.__init__.__code__.co_varnames
+
         self.embedding = nn.Linear(input_dim, d_model)
 
         blocks = []
         for i in range(n_layer):
             mix_cls = partial(Mamba, layer_idx=i)
-
-            if HAS_MLP:
+            if has_mlp:
+                # mamba-ssm >= 2.0: requires mlp_cls
                 block = Block(d_model, mix_cls, mlp_cls=nn.Identity)
             else:
+                # mamba-ssm < 2.0: only mixer_cls
                 block = Block(d_model, mix_cls)
-
             block.layer_idx = i
             blocks.append(block)
         self.layers = nn.ModuleList(blocks)
@@ -109,10 +110,8 @@ class MixerModel(nn.Module):
 class NaiveMamba(EmbeddingModel):
     """Naive Mamba which uses Mamba random initialization without training."""
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    default_version = "naive-mamba"
+    valid_versions = ["naive-mamba"]
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize NaiveMamba model.
@@ -124,8 +123,6 @@ class NaiveMamba(EmbeddingModel):
         _ = model_version
         super().__init__("naive-mamba", device)
 
-        self.is_sixtrack = True
-
         torch.random.manual_seed(0)
         np.random.seed(0)
         self.model = MixerModel(
@@ -134,57 +131,61 @@ class NaiveMamba(EmbeddingModel):
             input_dim=6,
         ).to(device)
 
-    def embed_sequence(
+    def embed(
         self,
-        sequence: str,
-        agg_fn: Callable | None = None
-    ) -> torch.Tensor:
-        """Embed sequence using four track Naive Mamba.
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
+        """Embed sequences using NaiveMamba.
+
+        NaiveMamba requires 6-track input (sequence + CDS + splice).
 
         Args:
-            sequence: Sequence to embed.
-            agg_fn: Currently unused.
+            sequences: List of sequences to embed.
+            cds: List of CDS tracks for sequences (required).
+            splice: List of splice site tracks for sequences (required).
+            agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Naive Mamba representation of sequence.
+            Embeddings with item shape depending on agg_fn.
+             - default (mean): (1, 64)
         """
-        _, _ = sequence, agg_fn
-        raise NotImplementedError("Four track not yet supported.")
+        if cds is None or splice is None:
+            raise ValueError("NaiveMamba requires cds and splice tracks.")
 
-    def embed_sequence_sixtrack(
-        self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
-        agg_fn: Callable | None = None,
-    ) -> torch.Tensor:
-        """Embed sequence using six track Naive Mamba.
+        batch_inputs = []
+        lengths = []
+        for seq, c, s in zip(sequences, cds, splice):
+            ohe_sequence = str_to_ohe(seq)
+            model_input = np.hstack((
+                ohe_sequence,
+                c.reshape(-1, 1),
+                s.reshape(-1, 1)
+            ))
+            batch_inputs.append(model_input)
+            lengths.append(len(seq))
 
-        Args:
-            sequence: Sequence to embed.
-            cds: CDS track for sequence to embed.
-            splice: Splice site track for sequence to embed.
-            agg_fn: Currently unused.
+        max_len = max(lengths)
+        padded_inputs = []
+        for inp in batch_inputs:
+            if inp.shape[0] < max_len:
+                padding = np.zeros((max_len - inp.shape[0], 6))
+                inp = np.vstack((inp, padding))
+            padded_inputs.append(inp)
 
-        Returns:
-            Naive Mamba representation of sequence.
-        """
-        if agg_fn is not None:
-            raise NotImplementedError(
-                "Inference currently does not support alternative aggregation."
-            )
+        batch_tensor = torch.tensor(
+            np.stack(padded_inputs),
+            dtype=torch.float32,
+            device=self.device
+        ).transpose(1, 2)
 
-        ohe_sequence = str_to_ohe(sequence)
+        hidden_states = self.model(batch_tensor)
 
-        model_input = np.hstack((
-            ohe_sequence,
-            cds.reshape(-1, 1),
-            splice.reshape(-1, 1)
-        ))
-        model_input_tt = torch.Tensor(model_input).to(self.device).T
-        model_input_tt = model_input_tt.unsqueeze(0)
+        embeddings = []
+        for i, length in enumerate(lengths):
+            seq_hidden = hidden_states[i, :length, :]
+            embeddings.append(agg_fn(seq_hidden))
 
-        hidden_states = self.model(model_input_tt)
-        embedding = torch.mean(hidden_states, dim=1)
-
-        return embedding
+        return embeddings

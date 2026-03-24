@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from functools import partial
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -15,8 +16,23 @@ class HyenaDNA(EmbeddingModel):
     resolution. Owing to its state-space backbone, it has an ultra long
     context window.
 
+    Note: HyenaDNA uses convolution-based Hyena operators which cannot mask
+    padding tokens like attention-based models. Therefore, batched inference
+    with variable-length sequences produces different embeddings than
+    single-sequence inference. This implementation uses single-sequence
+    processing for consistency.
+
     Link: https://github.com/HazyResearch/hyena-dna
     """
+
+    default_version = "hyenadna-medium-450k-seqlen-hf"
+    valid_versions = [
+        "hyenadna-large-1m-seqlen-hf",
+        "hyenadna-medium-450k-seqlen-hf",
+        "hyenadna-medium-160k-seqlen-hf",
+        "hyenadna-small-32k-seqlen-hf",
+        "hyenadna-tiny-16k-seqlen-d128-hf",
+    ]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -82,34 +98,72 @@ class HyenaDNA(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
-        """Embed sequence using HyenaDNA.
+        """Embed a single sequence using HyenaDNA.
 
         Args:
             sequence: Sequence to embed.
-            agg_fn: Method used to aggregate across sequence dimension.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            HyenaDNA representation of sequence.
+            HyenaDNA embedding with shape (1, hidden_dim).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length)
+        _, _ = cds, splice
 
+        chunks = self.chunk_sequence(sequence, self.max_length)
         embedding_chunks = []
 
-        with torch.inference_mode():
-            for c in chunks:
-                inputs = self.tokenizer(c, return_tensors="pt")["input_ids"]
-                inputs = inputs.to(self.device)
+        for chunk in chunks:
+            toks = self.tokenizer(
+                chunk,
+                return_tensors="pt",
+            ).to(self.device)
 
-                hidden_states = self.model(inputs)[0]
-                embedding_chunks.append(hidden_states)
+            hidden_states = self.model(toks["input_ids"])[0]
 
-            hidden_states = torch.cat(embedding_chunks, dim=1)
+            # Exclude EOS token at end (last position)
+            seq_hidden = hidden_states[0, :-1, :]
+            chunk_embedding = agg_fn(seq_hidden, dim=0)
+            embedding_chunks.append(chunk_embedding)
 
-        embedding_mean = agg_fn(hidden_states)
-        return embedding_mean
+        # Aggregate across chunks
+        if len(embedding_chunks) == 1:
+            return embedding_chunks[0].unsqueeze(0).float()
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for HyenaDNA.")
+        all_chunks = torch.stack(embedding_chunks, dim=0)
+        return agg_fn(all_chunks, dim=0).unsqueeze(0).float()
+
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using HyenaDNA.
+
+        Processes sequences one at a time due to HyenaDNA's architectural
+        limitation with padding (convolutions cannot mask padding tokens).
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            HyenaDNA embeddings with shape (batch_size, hidden_dim).
+        """
+        _, _ = cds, splice
+
+        all_embeddings = []
+        for sequence in sequences:
+            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
+            all_embeddings.append(embedding)
+
+        return torch.cat(all_embeddings, dim=0)

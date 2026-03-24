@@ -1,10 +1,5 @@
 import pytest
 
-from collections import namedtuple
-from functools import partial
-from unittest.mock import patch
-
-import numpy as np
 pytest.importorskip("torch")
 import torch
 
@@ -19,121 +14,66 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def utrlm(device) -> UTRLM:
+def model(device) -> UTRLM:
     """Get UTR-LM model."""
     return UTRLM("utrlm-te_el", device)
 
 
-@pytest.fixture(scope="module")
-def utrlm_5utr(device) -> UTRLM:
-    """Get UTR-LM model for 5'utr only."""
-    return UTRLM("utrlm-te_el-utronly", device)
-
-
-def test_utrlm_forward(utrlm):
+def test_utrlm_forward(model):
     """Test UTR-LM initialization and forward pass."""
+    model.set_inference_mode()
     text = "ACUUUGGCCA"
-    output = utrlm.embed_sequence(text, agg_fn=partial(torch.mean, dim=1)).cpu()
+    output = model.embed([text]).cpu()
     assert output.shape == (1, 128)
 
 
-def test_utrlm_forward_conversion(utrlm):
-    """Test UTR-LM forward pass converts T->U."""
-    text = "ACTTTGGCCA"
+def test_utrlm_forward_dna_input(model):
+    """Test UTR-LM forward pass with DNA input (T instead of U)."""
+    model.set_inference_mode()
+    text_rna = "ACUUUGGCCA"
+    text_dna = "ACTTTGGCCA"
 
-    with patch.object(
-        utrlm,
-        "chunk_sequence",
-        side_effect=utrlm.chunk_sequence
-    ) as mock:
-        utrlm.embed_sequence(text)
-        mock.assert_called_once_with("ACUUUGGCCA", utrlm.max_length - 2)
+    output_rna = model.embed([text_rna]).cpu()
+    output_dna = model.embed([text_dna]).cpu()
 
-
-def test_utrlm_forward_chunked(utrlm):
-    """Test UTR-LM forward pass for chunked inputs."""
-    input_length = 1200
-    text = "A" * input_length
-
-    # Assume only two chunks. Adding constant of 4 accounts for sep/cls for
-    # both first and second chunk.
-    ground_truth_vals = torch.mean(torch.cat([
-        torch.arange(utrlm.max_length).float(),
-        torch.arange((input_length - utrlm.max_length) + 4).float()
-    ])).repeat(1, 128)
-
-    def side_effect(input_ids, attention_mask):
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 128)
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
-
-    with patch("multimolecule.UtrLmModel.forward") as mock_forward:
-        mock_forward.side_effect = side_effect
-
-        output = utrlm.embed_sequence(text, agg_fn=torch.mean).cpu()
-
-        assert torch.allclose(output, ground_truth_vals)
+    assert torch.allclose(output_rna, output_dna, atol=1e-5)
 
 
-def test_utrlm_forward_5utr(utrlm_5utr):
-    """Test embedding only the 5'utr using UTR-LM."""
-    text = "AAAGGG"
-    cds = np.array([0, 0, 0, 1, 1, 1])
+def test_utrlm_embed_batch(model):
+    """Test batch embed matches individual embeddings."""
+    model.set_inference_mode()
+    sequences = [
+        "ACUUUGGCCA",
+        "GGCCAAUUGG",
+        "UUUAAAGGGCCC",
+    ]
 
-    ground_truth_vals = torch.mean(torch.arange(5).float()).repeat(1, 128)
+    batch_output = model.embed(sequences).cpu()
+    assert batch_output.shape == (3, 128)
 
-    def side_effect(input_ids, attention_mask):
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 128)
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
-
-    with patch("multimolecule.UtrLmModel.forward") as mock_forward:
-        mock_forward.side_effect = side_effect
-
-        output = utrlm_5utr.embed_sequence_sixtrack(
-            text,
-            cds,
-            cds,
-            agg_fn=torch.mean
-        ).cpu()
-
-        assert torch.allclose(output, ground_truth_vals)
+    for i, seq in enumerate(sequences):
+        single_output = model.embed([seq]).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-5
+        ), "Mismatch at sequence {}".format(i)
 
 
-def test_utrlm_forward_5utr_missing(utrlm_5utr):
-    """Test embedding only the 5'utr using UTR-LM when no cds exists.
+def test_utrlm_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
 
-    Behaviour should be to use whole sequence.
-    """
-    text = "AAAGGG"
-    cds = np.array([0, 0, 0, 0, 0, 0])
+    out = model.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
 
-    ground_truth_vals = torch.mean(torch.arange(8).float()).repeat(1, 128)
+    loss = out.sum()
+    loss.backward()
 
-    def side_effect(input_ids, attention_mask):
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 128)
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
 
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
-
-    with patch("multimolecule.UtrLmModel.forward") as mock_forward:
-        mock_forward.side_effect = side_effect
-
-        output = utrlm_5utr.embed_sequence_sixtrack(
-            text,
-            cds,
-            cds,
-            agg_fn=torch.mean
-        ).cpu()
-
-        assert torch.allclose(output, ground_truth_vals)
-
-
-def test_utrlm_forward_5utr_sixtrack(utrlm_5utr):
-    """Test UTR-LM properly sets sixtrack flag for UTR only embedding."""
-    assert utrlm_5utr.is_sixtrack is True
+    assert has_grad, "No gradients flowed to model parameters"

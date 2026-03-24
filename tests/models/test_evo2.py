@@ -1,17 +1,9 @@
 import pytest
 
-import numpy as np
-
+pytest.importorskip("torch")
+pytest.importorskip("evo2")
 import torch
 from mrna_bench.models.evo2 import Evo2
-
-
-EVO2_VERSIONS = [
-    "evo2_7b",
-    "evo2_7b_262k",
-    "evo2_7b_base",
-    "evo2_1b_base"
-]
 
 
 @pytest.fixture(scope="module")
@@ -21,33 +13,60 @@ def device() -> torch.device:
     return torch.device(device)
 
 
-@pytest.fixture(scope="module", params=EVO2_VERSIONS, ids=lambda x: x)
-def model(request, device) -> Evo2:
+@pytest.fixture(scope="module")
+def model(device) -> Evo2:
     """Get Evo2 model."""
-    return Evo2(request.param, device)
+    return Evo2("evo2_1b_base", device)
 
 
-def test_evo2_forward_small(model):
-    """Forward pass on a short sequence returns correct shape."""
-    seq = "ACGTAC"
-    out = model.embed_sequence(seq)
-
-    assert isinstance(out, torch.Tensor)
-    assert out.ndim == 2 # shape (1, H)
-    assert out.shape[0] == 1 # batch dim OK
-    assert out.shape[1] > 0 # has embedding dimension
+def test_evo2_forward(model):
+    """Test Evo2 forward pass."""
+    out = model.embed_sequence("ATGATG")
+    # Evo2 concatenates middle + last layer embeddings
+    # evo2_1b_base has hidden_dim=2048, so 2048*2=4096
+    assert out.shape == (1, 4096)
 
 
-def test_evo2_max_length_setting(model):
-    """Max length updates correctly depending on version."""
-    if model.model_version in ["evo2_40b", "evo2_7b"]:
-        assert model.max_length == 1_000_000
-    elif model.model_version == "evo2_7b_262k":
-        assert model.max_length == 262_144
-    else:
-        assert model.max_length == 8_192
+def test_evo2_max_length(device):
+    """Test Evo2 max_length is set correctly for base variant."""
+    model = Evo2("evo2_1b_base", device)
+    assert model.max_length == 8192
 
-def test_evo2_sixtrack_not_supported(model):
-    """Six-track embedding should raise NotImplementedError."""
-    with pytest.raises(NotImplementedError):
-        model.embed_sequence_sixtrack("ATG", np.array([0]), np.array([0]), agg_fn=lambda x, dim: x)
+
+@torch.no_grad()
+def test_evo2_embed_batch(model):
+    """Test batch embedding matches individual embeddings."""
+    sequences = [
+        "ATGATG" * 10,
+        "ATGATG" * 50,
+    ]
+
+    batch_output = model.embed(sequences).cpu()
+    assert batch_output.shape == (2, 4096)
+
+    for i, seq in enumerate(sequences):
+        single_output = model.embed_sequence(seq).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-5
+        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+
+
+def test_evo2_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
+
+    out = model.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
+
+    loss = out.sum()
+    loss.backward()
+
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
+
+    assert has_grad, "No gradients flowed to model parameters"

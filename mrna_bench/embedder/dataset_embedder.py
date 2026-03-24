@@ -11,7 +11,7 @@ import h5py
 import torch
 
 from mrna_bench.models import EmbeddingModel
-from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.datasets import BenchmarkDataset, DatasetMetadata
 from mrna_bench.embedder.embedder_utils import get_embedding_filepath
 
 
@@ -83,21 +83,16 @@ class DatasetEmbedder:
             - unpooled: (1, L_i, H)
         """
         dataset_chunk = self.get_dataset_chunk()
+        self.model.set_inference_mode()
 
         dataset_embeddings = []
         for _, row in tqdm(dataset_chunk.iterrows(), total=len(dataset_chunk)):
-            if self.model.is_sixtrack:
-                embedding = self.model.embed_sequence_sixtrack(
-                    row["sequence"],
-                    row["cds"].astype(np.int32),
-                    row["splice"].astype(np.int32),
-                    self.agg_fn
-                )
-            else:
-                embedding = self.model.embed_sequence(
-                    row["sequence"],
-                    self.agg_fn
-                )
+            embedding = self.model.embed(
+                [row["sequence"]],
+                cds=[row["cds"].astype(np.int32)],
+                splice=[row["splice"].astype(np.int32)],
+                agg_fn=self.agg_fn
+            )
             dataset_embeddings.append(embedding)
 
         return dataset_embeddings
@@ -285,12 +280,21 @@ class DatasetEmbedder:
 
         # Create a minimal BenchmarkDataset instance
         class MinimalBenchmarkDataset(BenchmarkDataset):
-            def __init__(self, data_df):
+            METADATA = DatasetMetadata(
+                dataset_name="custom",
+                species="custom",
+                task=["regression"],
+                target_col=["target"],
+                default_split_type="default",
+                benchmark_set="extended"
+            )
+
+            def __init__(self, data_df: pd.DataFrame):
                 self.data_df = data_df
                 self.dataset_name = "custom"
                 self.dataset_path = "custom"
                 self.embedding_dir = "custom"
-                self.species = "custom"  # Required for homology splitter
+                self.metadata = self.METADATA
 
             def _get_data_from_raw(self) -> pd.DataFrame:
                 """Abstract method - not used for custom datasets."""

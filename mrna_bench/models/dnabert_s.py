@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from functools import partial
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -11,7 +12,7 @@ class DNABERTS(EmbeddingModel):
     """Inference wrapper for DNABERT-S.
 
     DNABERT-S is a transformer-based DNA foundation model that builds on
-    DNABERT-S to produce species-aware embeddings for genomic sequences.
+    DNABERT-2 to produce species-aware embeddings for genomic sequences.
     It is trained using a contrastive learning objective which encourages
     grouping of DNA sequences from the same species and discourages grouping
     of sequences from different species. DNABERT-S is trained using microbial
@@ -20,10 +21,8 @@ class DNABERTS(EmbeddingModel):
     Link: https://github.com/MAGICS-LAB/DNABERT_S
     """
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    default_version = "dnabert-s"
+    valid_versions = ["dnabert-s"]
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize DNABERT-S inference wrapper.
@@ -41,9 +40,6 @@ class DNABERTS(EmbeddingModel):
                 "Install base_models optional_dependency to use DNABERT-S."
             )
 
-        if model_version != "dnabert-s":
-            raise ValueError("Only dnabert-s model version available.")
-
         self.tokenizer = AutoTokenizer.from_pretrained(
             "quietflamingo/dnaberts-no-flashattention",
             trust_remote_code=True,
@@ -56,27 +52,48 @@ class DNABERTS(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(self.device)
 
-    def embed_sequence(
+    def embed(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
-        """Embed sequence using DNABERT-S.
+        """Embed sequences using DNABERT-S.
+
+        ALiBi positional encoding allows for arbitrary sequence lengths.
 
         Args:
-            sequence: Sequence to embed.
-            agg_fn: Method used to aggregate across sequence dimension.
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            DNABERT-S representation of sequence with shape (1 x 768).
+            Embeddings with shape (batch_size, 768).
         """
-        inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
-        inputs = inputs.to(self.device)
-        hidden_states = self.model(inputs)[0]
+        _, _ = cds, splice
 
-        embedding_mean = agg_fn(hidden_states)
-        return embedding_mean
+        toks = self.tokenizer(
+            sequences,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for DNABERT-S.")
+        hidden_states = self.model(**toks)[0]
+
+        # Build pooling mask excluding CLS (pos 0) and SEP (last real pos)
+        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
+
+        # Apply masked aggregation per sequence
+        embeddings = []
+        for i in range(hidden_states.size(0)):
+            mask = pooling_mask[i].bool()
+            masked_hidden = hidden_states[i][mask]
+            embeddings.append(agg_fn(masked_hidden))
+
+        return torch.stack(embeddings, dim=0)

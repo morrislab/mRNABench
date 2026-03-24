@@ -8,7 +8,7 @@ from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
-class HelixmRNAWrapper(EmbeddingModel):
+class HelixmRNA(EmbeddingModel):
     """Inference wrapper for Helix-mRNA.
 
     Helix-mRNA is a RNA foundation model trained using a Mamba2 and transformer
@@ -18,17 +18,20 @@ class HelixmRNAWrapper(EmbeddingModel):
     Link: https://github.com/helicalAI/helical
     """
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    default_version = "helix-mrna"
+    valid_versions = ["helix-mrna"]
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+    ):
         """Initialize Helix-mRNA model.
 
         Args:
             model_version: Must be "helix-mrna".
             device: PyTorch device to send model to.
+            batch_size: Batch size for inference.
         """
         super().__init__(model_version, device)
 
@@ -47,77 +50,45 @@ class HelixmRNAWrapper(EmbeddingModel):
             "Taykhoom/Helix-mRNA-Wrapper",
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
-        ).to(self.device).eval()
+        ).to(self.device)
 
-        self.is_sixtrack = True
+        self.max_length = self.tokenizer.model_max_length
 
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed sequence using Helix-mRNA.
+        chunks: list[str]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of sequence chunks.
 
         Args:
-            sequence: Sequence to embed.
-            agg_fn: Method used to aggregate across sequence dimension.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            Helix-mRNA representation of sequence with shape (1 x 256).
+            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
+            padding and special tokens (CLS/SEP).
         """
-        sequence = self.convert_dna_to_rna(sequence)
-
-        inputs = self.tokenizer(
-            sequence,
+        toks = self.tokenizer(
+            chunks,
             return_tensors="pt",
             truncation=True,
             padding="longest",
-            max_length=self.tokenizer.model_max_length,
+            max_length=self.max_length,
             return_special_tokens_mask=True,
         ).to(self.device)
 
-        special_tokens_mask = inputs["special_tokens_mask"]
+        special_tokens_mask = toks["special_tokens_mask"]
         attention_mask = 1 - special_tokens_mask
 
-        embedding = self.model(
-            input_ids=inputs["input_ids"],
+        hidden_states = self.model(
+            input_ids=toks["input_ids"],
             attention_mask=attention_mask,
         ).last_hidden_state
 
-        return agg_fn(embedding)
+        pooling_mask = attention_mask.clone()
 
-    def embed_sequence_sixtrack(
-        self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
-        agg_fn: Callable = partial(torch.mean, dim=1),
-    ) -> torch.Tensor:
-        """Embed sequence using Helix-mRNA.
+        return hidden_states, pooling_mask
 
-        Expects binary encoded tracks denoting the beginning of each codon
-        in the CDS and the 5' ends of each splice site.
-
-        Converts sequence to Helix-mRNA vocabulary by inserting an 'E' token
-        at the start of every codon.
-
-        Args:
-            sequence: Sequence to embed.
-            cds: CDS track for sequence to embed.
-            splice: Unused.
-            agg_fn: Method used to aggregate across sequence dimension.
-
-        Returns:
-            Helix-mRNA representation of sequence with shape (1 x 256).
-        """
-        _ = splice  # Unused
-
-        modified_sequence = self.tokenize_cds(sequence, cds)
-        embedding = self.embed_sequence(modified_sequence, agg_fn=agg_fn)
-
-        return embedding
-
-    def tokenize_cds(self, sequence: str, cds: np.ndarray) -> str:
+    def _tokenize_cds(self, sequence: str, cds: np.ndarray) -> str:
         """Convert sequence to Helix-mRNA vocab by inserting 'E' tokens."""
         modified_sequence = ""
         for i in range(len(sequence)):
@@ -127,6 +98,41 @@ class HelixmRNAWrapper(EmbeddingModel):
 
         return modified_sequence
 
-    def convert_dna_to_rna(self, sequence: str) -> str:
-        """Convert DNA sequence to RNA sequence."""
-        return sequence.upper().replace("T", "U")
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> torch.Tensor:
+        """Batch embed sequences using Helix-mRNA.
+
+        If cds is provided, inserts 'E' tokens at the start of each codon
+        to use Helix-mRNA's codon-aware vocabulary.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: List of binary encodings of first nucleotide of each codon.
+            splice: Unused.
+            agg_fn: Method used to aggregate across sequence dimension.
+
+        Returns:
+            Embeddings with item shape depending on agg_fn.
+             - default (mean): (1, 256)
+        """
+        _ = splice  # Unused
+
+        if cds is not None:
+            sequences = [
+                self._tokenize_cds(seq, c).upper().replace("T", "U")
+                for seq, c in zip(sequences, cds)
+            ]
+        else:
+            sequences = [s.upper().replace("T", "U") for s in sequences]
+
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 1, # Account for SEP token
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

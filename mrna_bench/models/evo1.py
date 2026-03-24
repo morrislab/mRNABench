@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from functools import partial
 
+import numpy as np
 import torch
 from torch import nn
 
@@ -16,16 +17,21 @@ class Evo1(EmbeddingModel):
     byte level resolution. Owing to its StripedHyena backbone, it has a near
     linear scaling of compute and memory relative to its context window.
 
+    Note: StripedHyena's convolutions don't fully isolate sequences in batched
+    mode even with padding mask. This implementation uses single-sequence
+    processing for consistency.
 
     Link: https://github.com/evo-design/evo
     """
 
-    max_length = 8_192
+    default_version = "evo-1.5-8k-base"
+    valid_versions = [
+        "evo-1.5-8k-base",
+        "evo-1-8k-base",
+        "evo-1-131k-base",
+    ]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    max_length = 8_192
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize Evo1.
@@ -49,6 +55,7 @@ class Evo1(EmbeddingModel):
 
         evo_model = Evo(model_version)
         self.model = evo_model.model.to(device)
+        self._char_tokenizer = evo_model.tokenizer
         self.tokenizer = evo_model.tokenizer.tokenize
 
         class IdentityEmbedding(nn.Module):
@@ -58,6 +65,12 @@ class Evo1(EmbeddingModel):
         # need to return the embedding, not logits
         self.model.unembed = IdentityEmbedding()
 
+        # PEFT compatibility: config.to_dict is None, PEFT expects callable
+        # Provide method that returns config as dictionary
+        if hasattr(self.model, 'config') and not callable(getattr(self.model.config, 'to_dict', None)):
+            config_dict = dict(self.model.config)
+            self.model.config.to_dict = lambda: config_dict
+
         if model_version == "evo-1-131k-base":
             self.max_length = 131_072
 
@@ -66,40 +79,68 @@ class Evo1(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
-        """Embed sequence using Evo1.
+        """Embed a single sequence using Evo1.
 
         Args:
-            sequence: Sequence to be embedded.
+            sequence: Sequence to embed.
+            cds: Unused.
+            splice: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Evo1 embedding of sequence with shape (1 x H).
+            Evo1 embedding with shape (1, 4096).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length)
+        _, _ = cds, splice
 
+        chunks = self.chunk_sequence(sequence, self.max_length)
         embedding_chunks = []
 
-        with torch.inference_mode():
+        for chunk in chunks:
+            input_ids = torch.tensor(
+                self.tokenizer(chunk),
+                dtype=torch.int,
+            ).unsqueeze(0).to(self.device)
 
-            for i, chunk in enumerate(chunks):
+            embeddings, _ = self.model(input_ids)
+            chunk_embedding = agg_fn(embeddings[0], dim=0)
+            embedding_chunks.append(chunk_embedding)
 
-                input_ids = torch.tensor(
-                    self.tokenizer(chunk),
-                    dtype=torch.int
-                ).unsqueeze(0).to(self.device)
+        if len(embedding_chunks) == 1:
+            return embedding_chunks[0].unsqueeze(0).float()
 
-                # (batch, length, embed dim)
-                embeddings, _ = self.model(input_ids)
+        all_chunks = torch.stack(embedding_chunks, dim=0)
+        return agg_fn(all_chunks).unsqueeze(0).float()
 
-                embedding_chunks.append(embeddings)
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> torch.Tensor:
+        """Embed sequences using Evo1.
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+        Processes sequences one at a time due to StripedHyena's architectural
+        limitation with padding (convolutions don't fully isolate sequences).
 
-        aggregate_embedding = agg_fn(embedding)
-        return aggregate_embedding
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not possible with Evo1.")
+        Returns:
+            Evo1 embeddings with shape (batch_size, 4096).
+        """
+        _, _ = cds, splice
+
+        all_embeddings = []
+        for sequence in sequences:
+            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
+            all_embeddings.append(embedding)
+
+        return torch.cat(all_embeddings, dim=0)

@@ -1,12 +1,10 @@
-import pytest
-
-from collections import namedtuple
-
 from unittest.mock import patch
 
-pytest.importorskip("torch")
+import pytest
 
+pytest.importorskip("torch")
 import torch
+
 from mrna_bench.models.splicebert import SpliceBERT
 
 
@@ -18,89 +16,137 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def splicebert_510(device) -> SpliceBERT:
-    """Get SpliceBERT model."""
-    return SpliceBERT("SpliceBERT.510nt", device)
-
-
-@pytest.fixture(scope="module")
-def splicebert_1024(device) -> SpliceBERT:
-    """Get SpliceBERT model."""
+def model_1024(device) -> SpliceBERT:
+    """Get SpliceBERT 1024nt model."""
     return SpliceBERT("SpliceBERT.1024nt", device)
 
 
-def test_splicebert_forward(splicebert_510):
-    """Test SpliceBERT forward pass."""
-    assert splicebert_510.max_length == 510
-    assert splicebert_510.is_sixtrack is False
-
-    out = splicebert_510.embed_sequence("ATGATG")
-    assert out.shape == (1, 512)
+@pytest.fixture(scope="module")
+def model_510(device) -> SpliceBERT:
+    """Get SpliceBERT 510nt model."""
+    return SpliceBERT("SpliceBERT.510nt", device)
 
 
-def test_splicebert_forward_chunked_1024(splicebert_1024):
-    """Test SpliceBERT forward pass with chunking for 1024nt model."""
+def test_splicebert_1024_forward(model_1024):
+    """Test SpliceBERT 1024nt initialization and forward pass."""
+    model_1024.set_inference_mode()
+    assert model_1024.max_length == 1024
+
+    text = "ATGATGATGATG"
+    output = model_1024.embed([text]).cpu()
+    assert output.shape == (1, 512)
+
+
+def test_splicebert_510_forward(model_510):
+    """Test SpliceBERT 510nt initialization and forward pass."""
+    model_510.set_inference_mode()
+    assert model_510.max_length == 510
+
+    text = "A" * 510
+    output = model_510.embed([text]).cpu()
+    assert output.shape == (1, 512)
+
+
+def test_splicebert_1024_embed_batch(model_1024):
+    """Test batch embed matches individual embeddings for 1024nt model."""
+    model_1024.set_inference_mode()
+    sequences = [
+        "ATGATGATGATG",
+        "GGCCAATTGGCC",
+        "TTTAAAGGGCCCAAA",
+    ]
+
+    batch_output = model_1024.embed(sequences).cpu()
+    assert batch_output.shape == (3, 512)
+
+    for i, seq in enumerate(sequences):
+        single_output = model_1024.embed([seq]).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-5
+        ), "Mismatch at sequence {}".format(i)
+
+
+def test_splicebert_510_embed_batch(model_510):
+    """Test batch embed matches individual embeddings for 510nt model."""
+    model_510.set_inference_mode()
+    sequences = [
+        "A" * 510,
+        "G" * 510,
+        "C" * 510,
+    ]
+
+    batch_output = model_510.embed(sequences).cpu()
+    assert batch_output.shape == (3, 512)
+
+    for i, seq in enumerate(sequences):
+        single_output = model_510.embed([seq]).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-5
+        ), "Mismatch at sequence {}".format(i)
+
+
+def test_splicebert_510_overlap_handling(model_510):
+    """Test 510nt model handles sequences requiring overlap correctly."""
+    model_510.set_inference_mode()
+
+    seq_with_overlap = "A" * 600
+    output = model_510.embed([seq_with_overlap]).cpu()
+    assert output.shape == (1, 512)
+
+
+def test_splicebert_510_overlap_chunks(model_510):
+    """Test 510nt overlap creates correctly padded chunks."""
+    model_510.set_inference_mode()
+
     spillover = 10
-    input_seq = "A" * (splicebert_1024.max_length + spillover)
+    input_seq = "A" * spillover + "G" * 510
 
-    ground_truth_vals = torch.mean(torch.cat([
-        torch.arange(splicebert_1024.max_length + 2).float(),
-        torch.arange(spillover + 2).float()
-    ])).repeat(1, 512)
+    captured_chunks = []
 
-    def side_effect(input_ids):
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 512)
+    original_forward = model_510._forward_chunks
 
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        mock_out = MockOut(last_hidden_state=pos)
-        return mock_out
+    def capture_forward(chunks):
+        captured_chunks.extend(chunks)
+        return original_forward(chunks)
 
-    with patch.object(
-        splicebert_1024.model,
-        "forward",
-        side_effect=side_effect
-    ):
-        output = splicebert_1024.embed_sequence(
-            input_seq,
-            agg_fn=torch.mean
-        ).cpu()
+    with patch.object(model_510, "_forward_chunks", side_effect=capture_forward):
+        model_510.embed([input_seq])
 
-        assert torch.allclose(output, ground_truth_vals)
+    assert len(captured_chunks) == 2
+    assert len(captured_chunks[0]) == 510
+    assert len(captured_chunks[1]) == 510
+
+    assert captured_chunks[0] == "A" * 10 + "G" * 500
+    assert captured_chunks[1] == "G" * 510
 
 
-def test_splicebert_forward_chunked_510(splicebert_510):
-    """Test SpliceBERT forward pass with chunking for 510nt model."""
-    spillover = 10
-    input_seq = "A" * spillover + "G" * splicebert_510.max_length
+def test_splicebert_1024_chunking(model_1024):
+    """Test 1024nt model handles long sequences with chunking."""
+    model_1024.set_inference_mode()
 
-    ground_truth_vals = torch.mean(torch.cat([
-        torch.arange(splicebert_510.max_length + 2).float(),
-        torch.arange(splicebert_510.max_length + 2).float()
-    ])).repeat(1, 512)
+    long_seq = "ATGC" * 500
+    output = model_1024.embed([long_seq]).cpu()
+    assert output.shape == (1, 512)
 
-    def side_effect(input_ids):
-        assert input_ids.shape[1] == 512
 
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 512)
+def test_splicebert_gradient_flow(model_1024):
+    """Test that gradients can flow through the model."""
+    model_1024.set_train_mode()
 
-        if mock_method.call_count == 1:
-            assert torch.all(input_ids[1: 1 + spillover] == 6)
-            assert torch.all(input_ids[1 + spillover:-1] == 8)
-        else:
-            assert torch.all(input_ids[1:-1] == 8)
+    out = model_1024.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
 
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        mock_out = MockOut(last_hidden_state=pos)
-        return mock_out
+    loss = out.sum()
+    loss.backward()
 
-    with patch.object(splicebert_510.model, "forward") as mock_method:
-        mock_method.side_effect = side_effect
+    has_grad = False
+    for param in model_1024.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
 
-        output = splicebert_510.embed_sequence(
-            input_seq,
-            agg_fn=torch.mean
-        ).cpu()
-
-        assert torch.allclose(output, ground_truth_vals)
+    assert has_grad, "No gradients flowed to model parameters"

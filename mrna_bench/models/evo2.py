@@ -1,6 +1,7 @@
 from collections.abc import Callable
 from functools import partial
 
+import numpy as np
 import torch
 
 from mrna_bench import set_model_cache_var, revert_model_cache_var
@@ -23,21 +24,25 @@ class Evo2(EmbeddingModel):
     Link: https://github.com/ArcInstitute/evo2
     """
 
+    default_version = "evo2_7b"
+    valid_versions = [
+        "evo2_1b_base",
+        "evo2_7b_base",
+        "evo2_7b",
+        "evo2_20b",
+        "evo2_40b_base",
+        "evo2_40b",
+    ]
+
     max_length = 8_192
     version_to_middle_layer = {
-        "evo2_40b": "blocks.25.mlp.l3",
-        "evo2_20b": "blocks.12.mlp.l3",
-        "evo2_7b": "blocks.16.mlp.l3",
-        "evo2_7b_262k": "blocks.16.mlp.l3",
-        "evo2_40b_base": "blocks.25.mlp.l3",
-        "evo2_7b_base": "blocks.16.mlp.l3",
-        "evo2_1b_base": "blocks.12.mlp.l3",
+        "evo2_1b_base": "blocks.12.pre_norm"
+        "evo2_7b_base": "blocks.16.pre_norm",
+        "evo2_7b": "blocks.16.pre_norm",
+        "evo2_20b": "blocks.12.pre_norm",
+        "evo2_40b_base": "blocks.25.pre_norm",
+        "evo2_40b": "blocks.25.pre_norm",
     }
-
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version.replace("_", "-")
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize Evo2.
@@ -89,58 +94,82 @@ class Evo2(EmbeddingModel):
 
         revert_model_cache_var(old_hf_cache)
 
+    def set_inference_mode(self):
+        """Set model to inference mode with gradients disabled."""
+        self.model.model.eval()
+        torch.set_grad_enabled(False)
+
+    def set_train_mode(self):
+        """Set model to training mode with gradients enabled."""
+        self.model.model.train()
+        torch.set_grad_enabled(True)
+
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
-        """Embed sequence using Evo2.
+        """Embed a single sequence using Evo2.
 
         Args:
-            sequence: Sequence to be embedded.
+            sequence: Sequence to embed.
+            cds: Unused.
+            splice: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Evo2 embedding of sequence with shape (1 x H).
+            Embedding with shape (1, hidden_dim * num_layers).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length)
+        _, _ = cds, splice
 
+        chunks = self.chunk_sequence(sequence, self.max_length)
         embedding_chunks = []
 
-        with torch.inference_mode():
+        for chunk in chunks:
+            input_ids = torch.tensor(
+                self.tokenizer(chunk),
+                dtype=torch.int
+            ).unsqueeze(0).to(self.device)
 
-            for i, chunk in enumerate(chunks):
-
-                input_ids = torch.tensor(
-                    self.tokenizer(chunk),
-                    dtype=torch.int
-                ).unsqueeze(0).to(self.device)
-
-                _, embeddings = self.model(
-                    input_ids=input_ids,
-                    return_embeddings=True,
-                    layer_names=self.embedding_layers
-                )
-
-                embedding_chunks.append(embeddings)
+            _, embeddings = self.model(
+                input_ids=input_ids,
+                return_embeddings=True,
+                layer_names=self.embedding_layers
+            )
+            embedding_chunks.append(embeddings)
 
         aggregate_embeddings = []
-
-        # embedding is of type bfloat16, need to convert to float32
-        # since numpy does not support bfloat16
         for layer_name in sorted(self.embedding_layers):
-            n_chunks = len(embedding_chunks)
-            layer_chunks = [
-                embedding_chunks[i][layer_name] for i in range(n_chunks)
-            ]
-            agg_chunks = agg_fn(torch.cat(layer_chunks, dim=1))
-            aggregate_embeddings.append(agg_chunks.float().cpu())
+            layer_chunks = [chunk[layer_name] for chunk in embedding_chunks]
+            agg_chunks = agg_fn(torch.cat(layer_chunks, dim=1), dim=1)
+            aggregate_embeddings.append(agg_chunks.float())
 
-        # concatenate the embeddings across the layers
-        aggregate_embedding = torch.cat(aggregate_embeddings, dim=1)
+        return torch.cat(aggregate_embeddings, dim=1)
 
-        return aggregate_embedding
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using Evo2.
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not possible with Evo2.")
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            Evo2 embeddings with shape (batch_size, hidden_dim * num_layers).
+        """
+        _, _ = cds, splice
+
+        all_embeddings = []
+        for sequence in sequences:
+            all_embeddings.append(self.embed_sequence(sequence, agg_fn=agg_fn))
+
+        return torch.cat(all_embeddings, dim=0)

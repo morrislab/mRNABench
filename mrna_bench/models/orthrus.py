@@ -1,4 +1,4 @@
-from typing import Callable
+from collections.abc import Callable
 from functools import partial
 
 import numpy as np
@@ -19,6 +19,11 @@ class Orthrus(EmbeddingModel):
     Link: https://github.com/bowang-lab/Orthrus
     """
 
+    default_version = "orthrus-large-6-track"
+    valid_versions = ["orthrus-large-6-track", "orthrus-large-4-track"]
+
+    lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
+
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
@@ -29,7 +34,7 @@ class Orthrus(EmbeddingModel):
 
         Args:
             model_version: Version of Orthrus to load. Valid values are: {
-                "orthrus-base-4-track",
+                "orthrus-large-4-track",
                 "orthrus-large-6-track"
             }
             device: PyTorch device to send model to.
@@ -50,70 +55,125 @@ class Orthrus(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        self.is_sixtrack = model_version == "orthrus-large-6-track"
         self.model = model.to(device)
 
-    def embed_sequence(
+    def embed(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
-        """Embed sequence using four track Orthrus.
+        """Embed sequences using Orthrus.
+
+        Routes to 4-track or 6-track embedding based on model version.
+        - orthrus-base-4-track: Uses sequence only (ignores cds/splice)
+        - orthrus-large-6-track: Requires cds and splice tracks
 
         Args:
-            sequence: Sequence to embed.
-            agg_fn: Currently unused.
+            sequences: List of sequences to embed.
+            cds: List of CDS tracks (required for 6-track model).
+            splice: List of splice site tracks (required for 6-track model).
+            agg_fn: Unused (Orthrus uses internal pooling).
 
         Returns:
-            Orthrus representation of sequence.
+            Orthrus embeddings with shape (batch_size, hidden_dim).
         """
-        if self.is_sixtrack:
-            raise ValueError((
-                "Currently loaded model is six track."
-                "Use embed_sequence_sixtrack instead."
+        _ = agg_fn
+
+        if self.model_version == "orthrus-large-6-track":
+            if cds is None or splice is None:
+                raise ValueError(
+                    "Orthrus 6-track model requires cds and splice tracks."
+                )
+            return self._embed_sixtrack(sequences, cds, splice)
+        else:
+            return self._embed_fourtrack(sequences)
+
+    def _embed_fourtrack(self, sequences: list[str]) -> torch.Tensor:
+        """Embed sequences using 4-track Orthrus.
+
+        Args:
+            sequences: List of sequences to embed.
+
+        Returns:
+            Orthrus embeddings with shape (batch_size, hidden_dim).
+        """
+        batch_inputs = []
+        lengths = []
+
+        for seq in sequences:
+            ohe_sequence = self.model.seq_to_oh(seq)
+            batch_inputs.append(ohe_sequence)
+            lengths.append(len(seq))
+
+        max_len = max(lengths)
+        padded_inputs = []
+        for inp in batch_inputs:
+            if inp.shape[0] < max_len:
+                padding = torch.zeros((max_len - inp.shape[0], 4))
+                inp = torch.vstack((inp, padding))
+            padded_inputs.append(inp)
+
+        batch_tensor = torch.stack(padded_inputs, dim=0).to(self.device)
+        lengths_tensor = torch.tensor(lengths, dtype=torch.float32).to(self.device)
+
+        embeddings = self.model.representation(
+            batch_tensor,
+            lengths_tensor,
+            channel_last=True
+        )
+
+        return embeddings
+
+    def _embed_sixtrack(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray],
+        splice: list[np.ndarray],
+    ) -> torch.Tensor:
+        """Embed sequences using 6-track Orthrus.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: List of CDS tracks for sequences.
+            splice: List of splice site tracks for sequences.
+
+        Returns:
+            Orthrus embeddings with shape (batch_size, hidden_dim).
+        """
+        batch_inputs = []
+        lengths = []
+
+        for seq, c, s in zip(sequences, cds, splice):
+            ohe_sequence = self.model.seq_to_oh(seq).numpy()
+            model_input = np.hstack((
+                ohe_sequence,
+                c.reshape(-1, 1),
+                s.reshape(-1, 1)
             ))
+            batch_inputs.append(model_input)
+            lengths.append(len(seq))
 
-        ohe_sequence = self.model.seq_to_oh(sequence).to(self.device)
-        model_input_tt = ohe_sequence.unsqueeze(0)
+        max_len = max(lengths)
+        padded_inputs = []
+        for inp in batch_inputs:
+            if inp.shape[0] < max_len:
+                padding = np.zeros((max_len - inp.shape[0], 6))
+                inp = np.vstack((inp, padding))
+            padded_inputs.append(inp)
 
-        embedding = self.model(model_input_tt, channel_last=True)
+        batch_tensor = torch.tensor(
+            np.stack(padded_inputs),
+            dtype=torch.float32,
+            device=self.device
+        )
+        lengths_tensor = torch.tensor(lengths, dtype=torch.float32).to(self.device)
 
-        aggregated_embedding = agg_fn(embedding)
-        return aggregated_embedding
+        embeddings = self.model.representation(
+            batch_tensor,
+            lengths_tensor,
+            channel_last=True
+        )
 
-    def embed_sequence_sixtrack(
-        self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed sequence using six track Orthrus.
-
-        Expects binary encoded tracks denoting the beginning of each codon
-        in the CDS and the 5' ends of each splice site.
-
-        Args:
-            sequence: Sequence to embed.
-            cds: CDS track for sequence to embed.
-            splice: Splice site track for sequence to embed.
-            agg_fn: Currently unused.
-
-        Returns:
-            Orthrus representation of sequence.
-        """
-        ohe_sequence = self.model.seq_to_oh(sequence).numpy()
-
-        model_input = np.hstack((
-            ohe_sequence,
-            cds.reshape(-1, 1),
-            splice.reshape(-1, 1)
-        ))
-
-        model_input_tt = torch.Tensor(model_input).to(self.device)
-        model_input_tt = model_input_tt.unsqueeze(0)
-
-        embedding = self.model(model_input_tt, channel_last=True)
-
-        aggregated_embedding = agg_fn(embedding)
-        return aggregated_embedding
+        return embeddings

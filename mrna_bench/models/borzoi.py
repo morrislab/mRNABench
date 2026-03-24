@@ -2,6 +2,7 @@ from collections.abc import Callable
 from functools import partial
 import math
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -25,14 +26,23 @@ class Borzoi(EmbeddingModel):
     Link: https://github.com/johahi/borzoi-pytorch
     """
 
+    default_version = "flashzoi"
+    valid_versions = [
+        "borzoi-replicate-0",
+        "borzoi-replicate-1",
+        "borzoi-replicate-2",
+        "borzoi-replicate-3",
+        "flashzoi-replicate-0",
+        "flashzoi-replicate-1",
+        "flashzoi-replicate-2",
+        "flashzoi-replicate-3",
+        "borzoi",
+        "flashzoi",
+    ]
+
     max_length = 524_288
     min_length = 196_608
     bin_size = 32  # embedding is in 32 base bins
-
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version.replace("_", "-")
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize Borzoi.
@@ -105,18 +115,17 @@ class Borzoi(EmbeddingModel):
                 strict=True
             )
 
-            model_i = model_i.to(device=device, dtype=self.dtype).eval()
+            model_i = model_i.to(device=device, dtype=self.dtype)
 
             # Avoid cropping as we handle padding ourselves per chunk
             model_i.crop = torch.nn.Identity()
 
             self.models.append(model_i)
 
-    @torch.inference_mode()
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
         """Embed sequence using Borzoi, excluding padded regions.
 
@@ -172,11 +181,37 @@ class Borzoi(EmbeddingModel):
 
             embedding_chunks.append(embedding.permute(0, 2, 1))
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+        embedding = torch.cat(embedding_chunks, dim=1).squeeze(0)
 
-        aggregate_embedding = agg_fn(embedding)
+        aggregate_embedding = agg_fn(embedding).unsqueeze(0)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not possible with Borzoi.")
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0),
+    ) -> torch.Tensor:
+        """Embed sequences using Borzoi.
+
+        Processes sequences one at a time due to memory constraints
+        at 500k+ bp sequence lengths.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            Borzoi embeddings with shape (batch_size, embedding_dim).
+        """
+        _, _ = cds, splice
+
+        all_embeddings = []
+        for sequence in sequences:
+            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
+            all_embeddings.append(embedding)
+
+        return torch.cat(all_embeddings, dim=0)

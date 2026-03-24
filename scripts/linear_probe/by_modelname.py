@@ -1,14 +1,12 @@
 """Run linear probing for dataset using embeddings from given model."""
 
 import argparse
-import os
 
 import numpy as np
 import mrna_bench as mb
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
 from mrna_bench.embedder import get_embedding_filepath
 from mrna_bench.models import MODEL_CATALOG
-from mrna_bench.datasets.dataset_catalog import DATASET_INFO
 
 
 # NAIVE BASELINE FEATURES
@@ -56,7 +54,6 @@ if __name__ == "__main__":
     print("Seeds:", args.seeds, flush=True)
 
     dataset = mb.load_dataset(args.dataset_name)
-    lp_res_path = dataset.dataset_path + "/lp_results"
 
 
     if args.model_name == "NaiveBaseline":
@@ -108,8 +105,7 @@ if __name__ == "__main__":
             seeds = eval(args.seeds)
 
             for seed in seeds:
-                out_fn = prober.persister.get_output_filename(seed)
-                if os.path.exists(lp_res_path) and out_fn in os.listdir(lp_res_path) and not args.force_recompute:
+                if not args.force_recompute and prober.persister.result_exists(seed):
                     print("Results already computed for seed:", seed, flush=True)
                     continue
 
@@ -131,8 +127,7 @@ if __name__ == "__main__":
         seeds = eval(args.seeds)
 
         for seed in seeds:
-            out_fn = prober.persister.get_output_filename(seed)
-            if os.path.exists(lp_res_path) and out_fn in os.listdir(lp_res_path) and not args.force_recompute:
+            if not args.force_recompute and prober.persister.result_exists(seed):
                 print("Results already computed for seed:", seed, flush=True)
                 continue
 

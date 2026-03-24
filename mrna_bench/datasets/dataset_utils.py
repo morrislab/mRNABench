@@ -8,7 +8,7 @@ import numpy as np
 
 def ohe_to_str(
     ohe: np.ndarray,
-    nucs: list[str] = ["A", "C", "G", "T", "N"]
+    nucs: list[str] = ["A", "C", "G", "T", "N"],
 ) -> list[str]:
     """Convert OHE sequence to string representation.
 
@@ -27,7 +27,7 @@ def ohe_to_str(
 
 def str_to_ohe(
     sequence: str,
-    nucs: list[str] = ["A", "C", "G", "T"]
+    nucs: list[str] = ["A", "C", "G", "T"],
 ) -> np.ndarray:
     """Convert sequence to OHE. Represents "N" as all zeros.
 
@@ -82,11 +82,13 @@ def create_cds_track(transcript: "Transcript") -> np.ndarray:
     # set every third position to 1
     cds_track[0::3] = 1
     # concat with zeros of utr3 and utr5
-    full_track = np.concatenate([
-        np.zeros(len_utr5, dtype=np.int8),
-        cds_track,
-        np.zeros(len_utr3, dtype=np.int8)
-    ])
+    full_track = np.concatenate(
+        [
+            np.zeros(len_utr5, dtype=np.int8),
+            cds_track,
+            np.zeros(len_utr3, dtype=np.int8)
+        ]
+    )
     return full_track
 
 
@@ -111,7 +113,7 @@ def create_splice_track(transcript: "Transcript") -> np.ndarray:
     cumulative_len = 0
     for exon in transcript.exons:
         cumulative_len += len(exon)
-        splicing_track[cumulative_len - 1:cumulative_len] = 1
+        splicing_track[cumulative_len - 1 : cumulative_len] = 1
 
     return splicing_track
 
@@ -133,7 +135,7 @@ def create_sequence(transcript: "Transcript", genome: "Genome") -> str:
 def get_top_n_priority_transcripts(
     gene: "Gene",
     genome: "Genome",
-    n: int = 3
+    n: int = 3,
 ) -> list["Transcript"]:
     """Get up to N priority transcripts for a gene.
 

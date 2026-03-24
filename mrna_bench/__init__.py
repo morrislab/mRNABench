@@ -7,6 +7,15 @@ from mrna_bench.utils import (
     set_model_cache_var,
     revert_model_cache_var
 )
+from mrna_bench.fine_tune import (
+    FineTuneWrapper,
+    TaskHead,
+    TaskHeadProtocol,
+    FineTuneTrainer,
+    TrainerConfig,
+    SequenceDataset,
+    create_dataloaders,
+)
 
 __all__ = [
     "load_model",
@@ -17,4 +26,11 @@ __all__ = [
     "update_model_weights_path",
     "set_model_cache_var",
     "revert_model_cache_var",
+    "FineTuneWrapper",
+    "TaskHead",
+    "TaskHeadProtocol",
+    "FineTuneTrainer",
+    "TrainerConfig",
+    "SequenceDataset",
+    "create_dataloaders",
 ]

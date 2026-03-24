@@ -3,7 +3,7 @@
 <div align="center">
 
 [![PyPI version](https://badge.fury.io/py/mrna-bench.svg)](https://badge.fury.io/py/mrna-bench)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![bioRxiv](https://img.shields.io/badge/bioRxiv-2025.07.05.662870-b31b1b.svg)](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)
 
@@ -36,30 +36,22 @@ pip install mrna-bench
 
 ### Base Models
 > [!IMPORTANT]
-> **Requirements:** PyTorch 2.7.1 and CUDA 12.6 are required for base models installation.
+> **Requirements:** PyTorch 2.7.1 with CUDA 12.6 is required for base models installation.
 
-The inference-capable version of mRNABench that can generate embeddings using all models can be installed as shown below.
+The inference-capable version of mRNABench can generate embeddings using all catalogued models including Evo2, Orthrus, and MultiMolecule models.
 
 ```bash
 conda create --name mrna_bench python=3.12
 conda activate mrna_bench
 
-pip install torch==2.7.1 --index-url https://download.pytorch.org/whl/cu126
-pip install psutil
-
-pip install mrna-bench[base_models] --no-build-isolation
+pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.7.1
+pip install -e .[base_models]
 ```
 
-If you are using a system with an older version of GLIBC (less than 2.32), you may need to install some many of dependencies via conda:
-
+After installation, disable FP8 for Evo2 (required for GPUs older than H100):
 ```bash
-conda create --name mrna_bench python=3.12
-conda activate mrna_bench
-
-conda install -c nvidia cuda-nvcc cuda-cudart-dev # might be needed depending on system
-conda install -c conda-forge pytorch=2.7.1 mamba-ssm=2.2.5 flash-attn-layer-norm=2.7.4 transformer-engine-torch=2.5.0 numpy=2.2.6
-
-pip install mrna-bench[base_models]
+# Edit: <env>/lib/python3.12/site-packages/evo2/configs/evo2-7b-1m.yml
+# Change line 52: use_fp8_input_projections: False
 ```
 
 ### Post-install
@@ -76,7 +68,7 @@ mb.update_model_weights_path(path_to_dir_to_store_weights)
 ```
 
 ### Evo2
-Evo2 can only be run on H100s. See [Evo2 Setup](#evo2-setup).
+Evo2 is included in the base_models installation and works on GPUs with compute capability ≥ 7.0 (with FP8 disabled for older GPUs).
 
 ### Dev Mode
 Dev mode allows generation of datasets from scratch and includes access to the RNA-Fazal localization dataset. See [Dev Mode Setup](#dev-mode-setup).
@@ -111,15 +103,26 @@ embeddings = embeddings.detach().cpu().numpy()
 
 prober = (LinearProbeBuilder(dataset)
     .fetch_embedding_by_embedding_instance("orthrus-large-6", embeddings)
-    .build_splitter("homology", species="human", eval_all_splits=False)
-    .build_evaluator("multilabel")
-    .set_target("target")
     .build()
 )
 
 metrics = prober.run_linear_probe(2541)
 print(metrics)
 ```
+`LinearProbeBuilder` now uses dataset metadata defaults for task, target,
+and split strategy. You only need to set these explicitly when you want to
+override defaults, for example:
+
+```python
+prober = (LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance("orthrus-large-6", embeddings)
+    .build_splitter("homology", species="human", eval_all_splits=True)
+    .build_evaluator("multilabel")
+    .set_target("target")
+    .build()
+)
+```
+
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
 
 ## Model Catalog
@@ -244,18 +247,28 @@ If you use mRNABench in your research, please cite:
 The original sources for each dataset and model should be cited if used, and can be found above. A substantial number of model implementations use the the `multimolecule` package: https://huggingface.co/multimolecule; citation information can be found on their HuggingFace.
 
 
-## Evo2
-Note: There may be an issue where the evo_40b models, when downloaded, have their merged checkpoints stored one directory above the HuggingFace hub cache. You may need to manually move the checkpoint into its corresponding snapshot directory: `/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/`
+## Evo2 Setup
+Evo2 is included in the `base_models` installation (see above) and works on most modern GPUs.
 
-**Hardware Requirements:** Evo2 can only be run on H100 GPUs.
+**Hardware Requirements:**
+- **Recommended:** NVIDIA GPUs with compute capability ≥ 8.0 (A100, H100)
+- **Minimum:** NVIDIA GPUs with compute capability ≥ 7.0 (V100, A10) with FP8 disabled
+
+For GPUs older than H100, disable FP8 after installation:
+```bash
+# Edit: <env>/lib/python3.12/site-packages/evo2/configs/evo2-7b-1m.yml
+# Change line 52: use_fp8_input_projections: False
+```
+
+**Note:** If the `evo2_40b` model checkpoint is stored outside the HuggingFace cache, manually move it to: `/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/`
 
 ## Dev Mode Setup
 Dev mode requires additional dependencies for generating datasets from scratch and accessing certain datasets.
 
 ```bash
-conda create --name mrna_bench_dev python=3.10
+conda create --name mrna_bench_dev python=3.12
 conda activate mrna_bench_dev
 
-pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install mrna-bench[base_models, dev]
+pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.7.1
+pip install -e .[base_models,dev]
 ```

@@ -23,12 +23,33 @@ def borzoi(device) -> Borzoi:
 
 def test_borzoi_forward(borzoi):
     """Test Borzoi forward pass."""
-    assert borzoi.is_sixtrack is False
-
     text = "ACGT" * 50000
     output = borzoi.embed_sequence(text)
     assert output.shape[0] == 1
     assert output.shape[1] == 1536
+
+
+def test_borzoi_embed_batch(borzoi):
+    """Test batch embed matches individual embeddings."""
+    # Note: Borzoi uses self.models (list) not self.model, so we set eval manually
+    for m in borzoi.models:
+        m.eval()
+    torch.set_grad_enabled(False)
+    sequences = [
+        "ACGT" * 50000,
+        "ACGT" * 60000,
+    ]
+
+    batch_output = borzoi.embed(sequences).cpu()
+    assert batch_output.shape == (2, 1536)
+
+    for i, seq in enumerate(sequences):
+        single_output = borzoi.embed_sequence(seq).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-4
+        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
 
 
 def test_borzoi_padding_logic(borzoi):

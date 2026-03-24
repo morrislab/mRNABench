@@ -1,6 +1,7 @@
-from typing import Callable
+from collections.abc import Callable
 from functools import partial
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -24,12 +25,10 @@ class RNAMSM(EmbeddingModel):
     affect the performance of the model.
     """
 
-    max_length = 1024
+    default_version = "rnamsm"
+    valid_versions = ["rnamsm"]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    max_length = 1024
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize RNA-MSM.
@@ -57,38 +56,58 @@ class RNAMSM(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        self.is_sixtrack = False
-
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed sequence using RNA-MSM.
+        chunks: list[str],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Run forward pass on sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
+            chunks: List of sequence chunks to embed.
+
+        Returns:
+            Tuple of (hidden_states, pooling_mask) tensors.
+        """
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
+
+        hidden_states = self.model(**toks).last_hidden_state
+
+        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
+
+        return hidden_states, pooling_mask
+
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> torch.Tensor:
+        """Embed sequences using RNA-MSM.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            RNA-MSM embedding of sequence with shape (1 x 768).
+            RNA-MSM embeddings with shape (batch_size, 768).
         """
-        sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
 
-        embedding_chunks = []
-
-        for chunk in chunks:
-            toks = self.tokenizer(chunk, return_tensors="pt").to(self.device)
-
-            cls_output = self.model(**toks).last_hidden_state
-            embedding_chunks.append(cls_output)
-
-        embedding = torch.cat(embedding_chunks, dim=1)
-
-        aggregate_embedding = agg_fn(embedding)
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not implemented for RNA-MSM."""
-        raise NotImplementedError("RNA-MSM does not support sixtrack mode.")
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 2,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

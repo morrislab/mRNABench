@@ -16,33 +16,27 @@ class UTRLM(EmbeddingModel):
 
     Link: https://github.com/a96123155/UTR-LM
 
-    This wrapper uses the multimoleule implementation of UTR-LM:
+    This wrapper uses the multimolecule implementation of UTR-LM:
     https://multimolecule.danling.org/models/utrlm/
 
     It is unclear from the manuscript what the max token input is, so the value
     from multimolecule's version is used (accounting for cls/sep tokens).
-
-    This model also offers the ability to predict solely on the 5'UTR,
-    which is in-distribution for the model training data. This can be specified
-    by adding '-utr' to the end of the model version.
     """
 
-    max_length = 1026
+    default_version = "utrlm-te_el"
+    valid_versions = [
+        "utrlm-te_el",
+        "utrlm-mrl",
+    ]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version.replace("_", "-")
+    max_length = 1026
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize UTR-LM inference wrapper.
 
         Args:
             model_version: Version of model to load. Valid versions: {
-                "utrlm-te_el",
-                "utrlm-mrl",
-                "utrlm-te_el-utronly",
-                "utrlm-mrl-utronly"
+                "utrlm-te_el", "utrlm-mrl"
             }
             device: PyTorch device to send model to.
         """
@@ -55,87 +49,68 @@ class UTRLM(EmbeddingModel):
                 "Install base_models optional dependency to use UTR-LM."
             )
 
-        if "-utronly" in model_version:
-            self.is_sixtrack = True
-        else:
-            self.is_sixtrack = False
-
         self.tokenizer = RnaTokenizer.from_pretrained(
-            "multimolecule/{}".format(model_version.replace("-utronly", "")),
+            "multimolecule/{}".format(model_version),
             cache_dir=get_model_weights_path()
         )
 
         self.model = UtrLmModel.from_pretrained(
-            "multimolecule/{}".format(model_version.replace("-utronly", "")),
+            "multimolecule/{}".format(model_version),
             cache_dir=get_model_weights_path()
         ).to(device)
 
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed sequence using UTR-LM.
+        chunks: list[str],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Run forward pass on sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
+            chunks: List of sequence chunks to embed.
+
+        Returns:
+            Tuple of (hidden_states, pooling_mask) tensors.
+        """
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
+
+        hidden_states = self.model(**toks).last_hidden_state
+
+        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
+
+        return hidden_states, pooling_mask
+
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> torch.Tensor:
+        """Embed sequences using UTR-LM.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            UTR-LM embedding of sequence with shape (1 x 128).
+            UTR-LM embeddings with shape (batch_size, 128).
         """
-        sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
 
-        embedding_chunks = []
-
-        for chunk in chunks:
-            toks = self.tokenizer(chunk, return_tensors="pt").to(self.device)
-
-            chunk_output = self.model(**toks).last_hidden_state
-
-            embedding_chunks.append(chunk_output)
-
-        embedding = torch.cat(embedding_chunks, dim=1)
-
-        aggregate_embedding = agg_fn(embedding)
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(
-        self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed ONLY the 5'UTR of a sequence using UTR-LM.
-
-        Args:
-            sequence: Sequence to embed.
-            cds: CDS track for sequence to embed.
-            splice: Unused.
-            agg_fn: Currently unused.
-
-        Returns:
-            UTR-LM representation of 5'UTR of the sequence.
-        """
-        _ = splice
-        five_utr_seq = self.get_fiveprime_utr(sequence, cds)
-
-        return self.embed_sequence(five_utr_seq, agg_fn)
-
-    def get_fiveprime_utr(self, sequence: str, cds: np.ndarray) -> str:
-        """Return the portion of a sequence corresponding to the 5'UTR.
-
-        If no CDS is detected or entire sequence is CDS, return orignal input.
-
-        Args:
-            sequence: Sequence to process.
-            cds: Binary array denoting CDS.
-
-        Returns:
-            Sequence's 5'UTR, or original sequence if UTR cannot be found.
-        """
-        if sum(cds) == 0 or len(sequence[:np.argmax(cds)]) == 0:
-            return sequence
-        return sequence[:np.argmax(cds)]
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 2,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

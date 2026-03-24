@@ -1,31 +1,48 @@
 import numpy as np
 import pandas as pd
 
-from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata,
+)
 from mrna_bench.datasets.dataset_utils import ohe_to_str
 from mrna_bench.utils import download_file
 
 
 RAW_URL = "https://zenodo.org/records/14708163/files/rna_hl_mouse.npz"
+HF_URL = (
+    "https://huggingface.co/datasets/morrislab/"
+    "rnahl-saluki-mouse/resolve/main/rnahl-saluki-mouse.parquet"
+)
 
 
 class RNAHalfLifeMouse(BenchmarkDataset):
     """RNA Halflife in Mouse Dataset."""
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="rnahl-mouse",
+        species="mouse",
+        task=["regression"],
+        target_col=["target"],
+        default_split_type="homology",
+        benchmark_set="core",
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+    ):
         """Initialize RNAHalfLifeMouse dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            dataset_name="rnahl-mouse",
-            species="mouse",
-            force_redownload=force_redownload,
-            hf_url=(
-                "https://huggingface.co/datasets/morrislab/"
-                "rnahl-saluki-mouse/resolve/main/rnahl-saluki-mouse.parquet"
-            )
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=HF_URL,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
@@ -36,6 +53,7 @@ class RNAHalfLifeMouse(BenchmarkDataset):
         """
         try:
             import genome_kit as gk
+
             mm_genes = gk.Genome("gencode.vM31").genes
         except ImportError:
             print("GenomeKit is required for raw processing. See README.")
@@ -49,16 +67,18 @@ class RNAHalfLifeMouse(BenchmarkDataset):
         print("Processing raw data...")
         seq_str = ohe_to_str(X[:, :, :4])
         lens = [len(s) for s in seq_str]
-        cds = [X[i, :lens[i], 4] for i in range(len(X))]
-        splice = [X[i, :lens[i], 5] for i in range(len(X))]
+        cds = [X[i, : lens[i], 4] for i in range(len(X))]
+        splice = [X[i, : lens[i], 5] for i in range(len(X))]
 
-        df = pd.DataFrame({
-            "gene": data["genes"],
-            "sequence": seq_str,
-            "cds": cds,
-            "splice": splice,
-            "target": [y for y in data["y"]]
-        })
+        df = pd.DataFrame(
+            {
+                "gene": data["genes"],
+                "sequence": seq_str,
+                "cds": cds,
+                "splice": splice,
+                "target": [y for y in data["y"]],
+            }
+        )
 
         # Some sequences have no gene name, making the current chromosome
         # lookup impossible. We remove those sequences, but these could be

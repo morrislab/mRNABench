@@ -9,7 +9,10 @@ import tarfile
 import numpy as np
 import pandas as pd
 
-from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata,
+)
 from mrna_bench.utils import download_file
 
 
@@ -23,7 +26,7 @@ EXP_ACCESSIONS = {
     "mcherry_unmod_1": "GSM3130441",
     "mcherry_unmod_2": "GSM3130442",
     "designed_library": "GSM3130443",
-    "varying_length_25to100": "GSM4084997"
+    "varying_length_25to100": "GSM4084997",
 }
 
 M_URL = "https://www.ncbi.nlm.nih.gov/geo/download/?acc=GSE114002&format=file"
@@ -65,8 +68,8 @@ MCHERRY_CDS = (
 ).upper()
 
 KOZAK_RULES = {
-    "strong": [['A', 'G'], ['C', 'A'], ['C', 'G', 'A']],
-    "weak": [['T'], ['G'], ['T', 'C']],
+    "strong": [["A", "G"], ["C", "A"], ["C", "G", "A"]],
+    "weak": [["T"], ["G"], ["T", "C"]],
 }
 
 
@@ -91,30 +94,28 @@ class MRLSample(BenchmarkDataset):
 
     def __init__(
         self,
-        dataset_name: str,
-        force_redownload: bool = False,
-        hf_url: str | None = None
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+        hf_url: str = "",
     ):
         """Initialize MRLSample dataset.
 
         Args:
-            dataset_name: Dataset name formatted mrl-sample-{experiment_name}
-                where experiment_name is in: {
-                    "egfp",
-                    "mcherry",
-                    "designed",
-                    "varying"
-                }.
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
             hf_url: URL to download the dataset from Hugging Face.
         """
         if type(self) is MRLSample:
             raise TypeError("MRLSample is an abstract class.")
 
-        self.exp_target = dataset_name.split("-")[-1]
+        self.exp_target = self.METADATA.dataset_name.split("-")[-1]
         assert self.exp_target in ["egfp", "mcherry", "designed", "varying"]
 
-        super().__init__(dataset_name, "synthetic", force_redownload, hf_url)
+        super().__init__(
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url=hf_url,
+        )
 
     def _download_raw_data(self):
         """Download raw data from source."""
@@ -122,7 +123,7 @@ class MRLSample(BenchmarkDataset):
 
         dlflag = self.raw_data_dir + "/downloaded"
 
-        if os.path.exists(dlflag) and not self.force_redownload:
+        if os.path.exists(dlflag) and not self.force_rebuild_raw:
             files = pathlib.Path(self.raw_data_dir).glob("*.csv")
             self.raw_data_files = [str(file.absolute()) for file in files]
             return
@@ -186,9 +187,13 @@ class MRLSample(BenchmarkDataset):
                 main_df = main_df.join(df, how="inner")
 
         # Takes mean between replicates
-        out_df = main_df.T.groupby(
-            main_df.columns.str.split('_').str[:-1].str.join('_')
-        ).mean().T
+        out_df = (
+            main_df.T.groupby(
+                main_df.columns.str.split("_").str[:-1].str.join("_")
+            )
+            .mean()
+            .T
+        )
 
         out_df.reset_index(inplace=True)
 
@@ -255,19 +260,37 @@ class MRLSample(BenchmarkDataset):
 class MRLSampleEGFP(MRLSample):
     """Concrete class for MRL Sample for egfp experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-egfp",
+        species="synthetic",
+        task=["regression"],
+        target_col=[
+            "target_mrl_egfp_m1pseudo",
+            "target_mrl_egfp_pseudo",
+            "target_mrl_egfp_unmod",
+        ],
+        default_split_type="default",
+        benchmark_set="core",
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+    ):
         """Initialize MRLSampleEGFP dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-egfp",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-egfp.parquet"
-            )
+            ),
         )
 
     def _process_raw_data(self) -> pd.DataFrame:
@@ -282,19 +305,18 @@ class MRLSampleEGFP(MRLSample):
         df = super()._process_raw_data()
 
         # Extract utr sequence
-        df['utr'] = df.apply(
-            lambda x: x['sequence'][len(PRIMER_SEQ):-len(EGFP_CDS)],
-            axis=1
+        df["utr"] = df.apply(
+            lambda x: x["sequence"][len(PRIMER_SEQ) : -len(EGFP_CDS)], axis=1
         )
 
         # Classify each utr as having an upstream start codon, and whether
         # that start codon is out-of-frame
-        df[['u_start', 'u_oof_start']] = df['utr'].apply(
+        df[["u_start", "u_oof_start"]] = df["utr"].apply(
             lambda x: pd.Series(self._has_upstream_start(x))
         )
 
         # Classify the strength of the Kozak prefix in each utr
-        df['kozak_quality'] = df['utr'].apply(self._kozak_quality)
+        df["kozak_quality"] = df["utr"].apply(self._kozak_quality)
 
         df.drop(columns=["utr"], inplace=True)
 
@@ -314,7 +336,7 @@ class MRLSampleEGFP(MRLSample):
         # Find all start codon positions
         atg_positions = []
         for i in range(len(utr) - 2):
-            if utr[i:i + 3].upper() == START_CODON:
+            if utr[i : i + 3].upper() == START_CODON:
                 atg_positions.append(i)
 
         has_upstream_start = len(atg_positions) > 0
@@ -346,8 +368,9 @@ class MRLSampleEGFP(MRLSample):
         def matches(rule):
             return all(
                 base in matching_bases
-                for base, matching_bases in
-                zip(kozak_prefix, KOZAK_RULES[rule])
+                for base, matching_bases in zip(
+                    kozak_prefix, KOZAK_RULES[rule]
+                )
             )
 
         strong = matches("strong")
@@ -363,55 +386,97 @@ class MRLSampleEGFP(MRLSample):
 class MRLSampleMCherry(MRLSample):
     """Concrete class for MRL Sample for mCherry experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-mcherry",
+        species="synthetic",
+        task=["regression"],
+        target_col=["target_mrl_mcherry"],
+        default_split_type="default",
+        benchmark_set="core",
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+    ):
         """Initialize MRLSampleMCherry dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-mcherry",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-mcherry.parquet"
-            )
+            ),
         )
 
 
 class MRLSampleDesigned(MRLSample):
     """Concrete class for MRL Sample for designed experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-designed",
+        species="synthetic",
+        task=["regression"],
+        target_col=["target_mrl_designed"],
+        default_split_type="default",
+        benchmark_set="core",
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+    ):
         """Initialize MRLSampleDesigned dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-designed",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-designed.parquet"
-            )
+            ),
         )
 
 
 class MRLSampleVarying(MRLSample):
     """Concrete class for MRL Sample for varying length experiments."""
 
-    def __init__(self, force_redownload=False):
+    METADATA = DatasetMetadata(
+        dataset_name="mrl-sample-varying",
+        species="synthetic",
+        task=["regression"],
+        target_col=["target_mrl_varying_length"],
+        default_split_type="default",
+        benchmark_set="core",
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+    ):
         """Initialize MRLSampleVarying dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            "mrl-sample-varying",
-            force_redownload,
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
             hf_url=(
                 "https://huggingface.co/datasets/morrislab/"
                 "mrl-sample/resolve/main/mrl-sample-varying.parquet"
-            )
+            ),
         )
