@@ -283,6 +283,7 @@ class VEPTraitGymMendelian(VEPTraitGym):
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",
+        vep=True,
     )
 
     def __init__(
@@ -316,6 +317,7 @@ class VEPTraitGymComplex(VEPTraitGym):
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",
+        vep=True,
     )
 
     def __init__(

@@ -50,6 +50,7 @@ class UTRVariantsBohnUTR5(UTRVariantsBohn):
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",
+        vep=True,
     )
 
     def __init__(
@@ -84,6 +85,7 @@ class UTRVariantsBohnUTR3(UTRVariantsBohn):
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",
+        vep=True,
     )
 
     def __init__(

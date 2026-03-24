@@ -287,6 +287,7 @@ class eCLIPBindingK562(eCLIPBinding):
         target_col=ECLIP_K562_TOP_RBPS_LIST,
         default_split_type="homology",
         benchmark_set="core",
+        vep=False,
     )
 
     def __init__(
@@ -320,6 +321,7 @@ class eCLIPBindingHepG2(eCLIPBinding):
         target_col=ECLIP_HEPG2_TOP_RBPS_LIST,
         default_split_type="homology",
         benchmark_set="core",
+        vep=False,
     )
 
     def __init__(

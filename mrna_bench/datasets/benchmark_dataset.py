@@ -29,6 +29,7 @@ class DatasetMetadata:
     target_col: list[str]
     default_split_type: str
     benchmark_set: str
+    vep: bool
 
     def __post_init__(self):
         """Post-initialization checks."""

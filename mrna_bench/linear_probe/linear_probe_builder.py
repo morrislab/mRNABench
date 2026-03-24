@@ -81,6 +81,7 @@ class LinearProbeBuilder:
         self.target_col = self._resolve_default_target_col(metadata)
         self.task = self._resolve_default_task(metadata)
         self.split_type = self._resolve_default_split_type(metadata)
+        self.is_vep = self._resolve_default_vep(metadata)
         self.eval_all_splits = False
 
         self.model_short_name: str | None = None
@@ -116,6 +117,14 @@ class LinearProbeBuilder:
                 return split_type
         return "default"
 
+    @staticmethod
+    def _resolve_default_vep(metadata: object | None) -> bool:
+        if metadata is not None:
+            vep = getattr(metadata, "vep", None)
+            if isinstance(vep, bool):
+                return vep
+        return False
+
     def _build_default_splitter(self, metadata: object | None):
         split_args = {}
         if self.split_type == "homology" and metadata is not None:
@@ -127,12 +136,6 @@ class LinearProbeBuilder:
             self._DEFAULT_SPLIT_RATIOS,
             **split_args
         )
-
-        # TODO: this should be determined based on dataset metadata
-        d_name = getattr(self.dataset, "dataset_name", "")
-        d_name = d_name.lower() if isinstance(d_name, str) else ""
-
-        self.is_vep = "vep" in d_name or "variant" in d_name
 
     def fetch_embedding_by_model_instance(
         self,
@@ -317,6 +320,7 @@ class LinearProbeBuilder:
         return {
             "dataset_name": self.dataset.dataset_name,
             "task": self.task,
+            "vep": self.is_vep,
             "target_col": self.target_col,
             "split_type": self.split_type,
             "eval_all_splits": self.eval_all_splits,
@@ -352,6 +356,7 @@ class LinearProbeBuilder:
                 self.split_type
             )
 
+        assert self.embeddings is not None
         return LinearProbe(
             self.data_df,
             self.embeddings,

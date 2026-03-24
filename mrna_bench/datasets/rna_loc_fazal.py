@@ -35,6 +35,7 @@ class RNALocalizationFazal(BenchmarkDataset):
         target_col=["target"],
         default_split_type="homology",
         benchmark_set="core",
+        vep=False,
     )
 
     def __init__(
