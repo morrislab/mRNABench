@@ -2,6 +2,7 @@ from collections.abc import Callable
 from functools import partial
 
 import torch
+import numpy as np
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
@@ -24,6 +25,16 @@ class GENERator(EmbeddingModel):
 
     Link: https://github.com/GenerTeam/GENERator
     """
+
+    default_version = "v2-eukaryote-3b-base"
+    valid_versions = [
+        "eukaryote-1.2b-base",
+        "v2-eukaryote-1.2b-base",
+        "v2-prokaryote-1.2b-base",
+        "eukaryote-3b-base",
+        "v2-eukaryote-3b-base",
+        "v2-prokaryote-3b-base",
+    ]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -56,6 +67,7 @@ class GENERator(EmbeddingModel):
         self.tokenizer = AutoTokenizer.from_pretrained(
             "GenerTeam/GENERator-{}".format(model_version),
             trust_remote_code=True,
+            clean_up_tokenization_spaces=True,
             cache_dir=get_model_weights_path()
         )
 
@@ -72,70 +84,67 @@ class GENERator(EmbeddingModel):
         if self.tokenizer.pad_token is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
-        config = self.model.config
-        self.max_length = config.max_position_embeddings
+        self.max_length = 98_304  # based on technical report
 
-    def right_pad_sequence(self, sequence: str,) -> str:
-        """Right pad sequence to be multiple of 6 in length."""
-        padding_length = (6 - (len(sequence) % 6)) % 6
-        return sequence + ("A" * padding_length)
-
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed sequence using GENERator.
+        chunks: list[str]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            GENERator embedding of sequence with shape (1 x H).
-            H is:
-                2048 for 1.2b models
-                3072 for 3b models
+            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
+            padding and special tokens (CLS/SEP).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
+        toks = self.tokenizer(
+            chunks,
+            add_special_tokens=True,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=self.max_length,
+            return_special_tokens_mask=True
+        ).to(self.device)
 
-        embedding_chunks = []
+        special_tokens_mask = toks.pop("special_tokens_mask")
 
-        with torch.inference_mode():
-            for i, chunk in enumerate(chunks):
+        hidden_states = self.model(
+            **toks,
+            output_hidden_states=True
+        ).hidden_states[-1]
 
-                # GENERator needs input sequence length to be multiple of 6
-                chunk = self.right_pad_sequence(chunk)
+        pooling_mask = 1 - special_tokens_mask
 
-                inputs = self.tokenizer(
-                    chunk,
-                    add_special_tokens=True,
-                    return_tensors="pt",
-                    padding=True,
-                    truncation=True,
-                    max_length=self.max_length,
-                ).to(self.device)
+        return hidden_states, pooling_mask
 
-                if len(chunks) != 1:
-                    if i == 0:
-                        inputs = {k: v[:, :-1] for k, v in inputs.items()}
-                    elif i == len(chunks) - 1:
-                        inputs = {k: v[:, 1:] for k, v in inputs.items()}
-                    else:
-                        inputs = {k: v[:, 1:-1] for k, v in inputs.items()}
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
+        """Embed sequences using GENERator.
 
-                model_out = self.model(
-                    **inputs,
-                    output_hidden_states=True
-                ).hidden_states[-1]
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
 
-                embedding_chunks.append(model_out)
+        Returns:
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 2048) for 1.2b models
+            - default (mean): (1, 3072) for 3b models
+        """
+        _, _ = cds, splice
 
-        embedding = torch.cat(embedding_chunks, dim=1)
-
-        aggregate_embedding = agg_fn(embedding)
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for GENERator.")
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 2,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

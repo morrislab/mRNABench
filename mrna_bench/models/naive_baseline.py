@@ -93,7 +93,7 @@ class NaiveBaseline(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using NaiveBaseline.
 
         Args:
@@ -108,11 +108,11 @@ class NaiveBaseline(EmbeddingModel):
         _, _, _ = cds, splice, agg_fn
 
         embeddings = []
-        for sequence in sequences:
-            embedding = compute_kmer_gc_features(sequence, self.kmer_vectorizer)
+        for seq in sequences:
+            embedding = compute_kmer_gc_features(seq, self.kmer_vectorizer)
             embeddings.append(embedding)
 
-        return torch.stack(embeddings, dim=0)
+        return embeddings
 
 
 class NaiveBaselineSixTrack(EmbeddingModel):
@@ -152,7 +152,7 @@ class NaiveBaselineSixTrack(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using NaiveBaselineSixTrack.
 
         Args:
@@ -162,12 +162,15 @@ class NaiveBaselineSixTrack(EmbeddingModel):
             agg_fn: Unused.
 
         Returns:
-            NaiveBaselineSixTrack embeddings with shape (batch_size, num_features).
+            Embeddings with item shape depending on agg_fn.
+             - default (mean): (1, n_features)
         """
         _ = agg_fn
 
         if cds is None or splice is None:
-            raise ValueError("NaiveBaselineSixTrack requires cds and splice tracks.")
+            raise ValueError(
+                "NaiveBaselineSixTrack requires cds and splice tracks."
+            )
 
         embeddings = []
         for i, sequence in enumerate(sequences):
@@ -178,7 +181,10 @@ class NaiveBaselineSixTrack(EmbeddingModel):
 
             cds_positions = np.where(cds[i] == 1)[0]
             if cds_positions.size == 0:
-                cds_length = torch.tensor(0.0, dtype=torch.float32).unsqueeze(0)
+                cds_length = torch.tensor(
+                    0.0,
+                    dtype=torch.float32
+                ).unsqueeze(0)
             else:
                 cds_end = cds_positions[-1] + 3
                 cds_start = cds_positions[0]
@@ -192,7 +198,10 @@ class NaiveBaselineSixTrack(EmbeddingModel):
                 dtype=torch.float32
             ).unsqueeze(0)
 
-            embedding = torch.cat((base_features, cds_length, exon_count), dim=0)
+            embedding = torch.cat(
+                (base_features, cds_length, exon_count),
+                dim=0
+            )
             embeddings.append(embedding)
 
-        return torch.stack(embeddings, dim=0)
+        return embeddings

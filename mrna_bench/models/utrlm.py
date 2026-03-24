@@ -51,6 +51,7 @@ class UTRLM(EmbeddingModel):
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version),
+            extra_special_tokens={},
             cache_dir=get_model_weights_path()
         )
 
@@ -93,7 +94,7 @@ class UTRLM(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using UTR-LM.
 
         Args:
@@ -103,7 +104,8 @@ class UTRLM(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            UTR-LM embeddings with shape (batch_size, 128).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 128)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

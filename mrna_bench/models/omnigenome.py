@@ -101,7 +101,7 @@ class OmniGenome(EmbeddingModel):
     def _embed_single_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
         """Embed a single sequence with chunking support.
 
@@ -110,7 +110,7 @@ class OmniGenome(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Embedding with shape (1, hidden_dim).
+            Tensor representing the embedded sequence.
         """
         chunks = self.chunk_sequence(sequence, self.max_length - 2)
 
@@ -122,15 +122,15 @@ class OmniGenome(EmbeddingModel):
             all_hidden.append(hidden[mask])
 
         combined_hidden = torch.cat(all_hidden, dim=0)
-        return agg_fn(combined_hidden, dim=0).unsqueeze(0)
+        return agg_fn(combined_hidden)
 
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Embed sequences using OmniGenome.
 
         Note: OmniGenome processes sequences individually due to architectural
@@ -144,7 +144,9 @@ class OmniGenome(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Embeddings with shape (batch_size, 480 or 720).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 480) for `omnigenome-52m`
+            - default (mean): (1, 768) for `omnigenome-186m`
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]
@@ -154,4 +156,4 @@ class OmniGenome(EmbeddingModel):
             embedding = self._embed_single_sequence(sequence, agg_fn=agg_fn)
             all_embeddings.append(embedding)
 
-        return torch.cat(all_embeddings, dim=0)
+        return all_embeddings

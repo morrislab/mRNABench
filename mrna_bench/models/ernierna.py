@@ -25,7 +25,10 @@ class ERNIERNA(EmbeddingModel):
     """
 
     default_version = "ernierna"
-    valid_versions = ["ernierna", "ernierna-ss"]
+    valid_versions = [
+        "ernierna",
+        "ernierna-ss"
+    ]
 
     max_length = 1022  # 1024 - 2 for CLS/SEP
 
@@ -48,6 +51,7 @@ class ERNIERNA(EmbeddingModel):
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version),
+            extra_special_tokens={},
             cache_dir=get_model_weights_path()
         )
 
@@ -92,7 +96,7 @@ class ERNIERNA(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using ERNIE-RNA.
 
         Args:
@@ -102,7 +106,9 @@ class ERNIERNA(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Embeddings with shape (batch_size, 768).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 768) for `ernierna`
+            - default (mean): (1, 768) for `ernierna-ss`
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

@@ -60,7 +60,9 @@ class Enformer(EmbeddingModel):
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
         """Embed sequence using Enformer, excluding padded regions.
 
@@ -69,8 +71,10 @@ class Enformer(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Tensor of shape (1, embedding_dim) representing embedded sequence.
+            Tensor representing embedded sequence.
         """
+        _, _ = cds, splice
+
         def center_padding(seq: str, length: int) -> tuple[str, int]:
             """Center pad sequence to a given length."""
             padding_left = (length - len(seq)) // 2
@@ -116,7 +120,7 @@ class Enformer(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using Enformer.
 
         Processes sequences one at a time due to memory constraints
@@ -129,13 +133,15 @@ class Enformer(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Enformer embeddings with shape (batch_size, embedding_dim).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 3072)
+
         """
         _, _ = cds, splice
 
         all_embeddings = []
         for sequence in sequences:
             embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding)
+            all_embeddings.append(embedding.squeeze(0))
 
-        return torch.cat(all_embeddings, dim=0)
+        return all_embeddings

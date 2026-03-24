@@ -4,6 +4,7 @@ from functools import partial
 import numpy as np
 import torch
 
+from mrna_bench.datasets.dataset_utils import str_to_ohe
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
@@ -63,99 +64,127 @@ class Orthrus(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using Orthrus.
 
         Routes to 4-track or 6-track embedding based on model version.
-        - orthrus-base-4-track: Uses sequence only (ignores cds/splice)
+        - orthrus-large-4-track: Uses sequence only (ignores cds/splice)
         - orthrus-large-6-track: Requires cds and splice tracks
 
         Args:
             sequences: List of sequences to embed.
             cds: List of CDS tracks (required for 6-track model).
             splice: List of splice site tracks (required for 6-track model).
-            agg_fn: Unused (Orthrus uses internal pooling).
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
             Orthrus embeddings with shape (batch_size, hidden_dim).
         """
-        _ = agg_fn
-
         if self.model_version == "orthrus-large-6-track":
             if cds is None or splice is None:
                 raise ValueError(
                     "Orthrus 6-track model requires cds and splice tracks."
                 )
-            return self._embed_sixtrack(sequences, cds, splice)
+            return self._embed_sixtrack(sequences, cds, splice, agg_fn)
         else:
-            return self._embed_fourtrack(sequences)
+            return self._embed_fourtrack(sequences, agg_fn)
 
-    def _embed_fourtrack(self, sequences: list[str]) -> torch.Tensor:
+    def _embed_fourtrack(
+        self,
+        sequences: list[str],
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Embed sequences using 4-track Orthrus.
 
         Args:
             sequences: List of sequences to embed.
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Orthrus embeddings with shape (batch_size, hidden_dim).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 512)
         """
         batch_inputs = []
-        lengths = []
+        raw_lengths: list[int] = []
 
         for seq in sequences:
-            ohe_sequence = self.model.seq_to_oh(seq)
+            ohe_sequence = torch.from_numpy(
+                str_to_ohe(seq),
+            ).float().to(self.device)
             batch_inputs.append(ohe_sequence)
-            lengths.append(len(seq))
+            raw_lengths.append(len(seq))
 
-        max_len = max(lengths)
+        lengths = torch.tensor(
+            raw_lengths,
+            device=self.device,
+            dtype=torch.float32
+        )
+
+        max_len = int(max(lengths))
         padded_inputs = []
         for inp in batch_inputs:
             if inp.shape[0] < max_len:
-                padding = torch.zeros((max_len - inp.shape[0], 4))
+                padding = torch.zeros(
+                    (max_len - inp.shape[0], 4),
+                    device=self.device
+                )
                 inp = torch.vstack((inp, padding))
             padded_inputs.append(inp)
 
         batch_tensor = torch.stack(padded_inputs, dim=0).to(self.device)
-        lengths_tensor = torch.tensor(lengths, dtype=torch.float32).to(self.device)
+        hidden_states = self.model.forward(batch_tensor, channel_last=True)
 
-        embeddings = self.model.representation(
-            batch_tensor,
-            lengths_tensor,
-            channel_last=True
-        )
+        pooling_mask = torch.arange(
+            max_len,
+            device=self.device
+        ) < lengths[:, None]
 
-        return embeddings
+        seq_embeddings = []
+        for i in range(len(sequences)):
+            seq_hidden = hidden_states[i][pooling_mask[i]]
+            seq_embeddings.append(agg_fn(seq_hidden))
+
+        return seq_embeddings
 
     def _embed_sixtrack(
         self,
         sequences: list[str],
         cds: list[np.ndarray],
         splice: list[np.ndarray],
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Embed sequences using 6-track Orthrus.
 
         Args:
             sequences: List of sequences to embed.
             cds: List of CDS tracks for sequences.
             splice: List of splice site tracks for sequences.
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Orthrus embeddings with shape (batch_size, hidden_dim).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 512)
         """
         batch_inputs = []
-        lengths = []
+        raw_lengths: list[int] = []
 
         for seq, c, s in zip(sequences, cds, splice):
-            ohe_sequence = self.model.seq_to_oh(seq).numpy()
+            ohe_sequence = str_to_ohe(seq)
             model_input = np.hstack((
                 ohe_sequence,
                 c.reshape(-1, 1),
                 s.reshape(-1, 1)
             ))
             batch_inputs.append(model_input)
-            lengths.append(len(seq))
+            raw_lengths.append(len(seq))
 
-        max_len = max(lengths)
+        lengths = torch.tensor(
+            raw_lengths,
+            device=self.device,
+            dtype=torch.float32
+        )
+
+        max_len = int(max(lengths))
         padded_inputs = []
         for inp in batch_inputs:
             if inp.shape[0] < max_len:
@@ -168,12 +197,17 @@ class Orthrus(EmbeddingModel):
             dtype=torch.float32,
             device=self.device
         )
-        lengths_tensor = torch.tensor(lengths, dtype=torch.float32).to(self.device)
 
-        embeddings = self.model.representation(
-            batch_tensor,
-            lengths_tensor,
-            channel_last=True
-        )
+        hidden_states = self.model.forward(batch_tensor, channel_last=True)
 
-        return embeddings
+        pooling_mask = torch.arange(
+            max_len,
+            device=self.device
+        ) < lengths[:, None]
+
+        seq_embeddings = []
+        for i in range(len(sequences)):
+            seq_hidden = hidden_states[i][pooling_mask[i]]
+            seq_embeddings.append(agg_fn(seq_hidden))
+
+        return seq_embeddings

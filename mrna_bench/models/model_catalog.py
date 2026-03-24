@@ -11,7 +11,7 @@ from .evo1 import Evo1
 from .evo2 import Evo2
 from .generanno import GENERanno
 from .generator import GENERator
-from .helix_mrna import HelixmRNAWrapper
+from .helix_mrna import HelixmRNA
 from .hyenadna import HyenaDNA
 from .mrnabert import mRNABERT
 from .naive_baseline import NaiveBaseline, NaiveBaselineSixTrack
@@ -46,7 +46,7 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "Evo2": Evo2,
     "GENERanno": GENERanno,
     "GENERator": GENERator,
-    "Helix-mRNA": HelixmRNAWrapper,
+    "Helix-mRNA": HelixmRNA,
     "HyenaDNA": HyenaDNA,
     "mRNABERT": mRNABERT,
     "mRNA-FM": MRNAFM,

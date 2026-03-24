@@ -2,6 +2,7 @@ from collections.abc import Callable
 from functools import partial
 
 import torch
+import numpy as np
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models.embedding_model import EmbeddingModel
@@ -19,10 +20,13 @@ class AIDORNA(EmbeddingModel):
 
     max_length = 1024
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version.replace("_", "-")
+    default_version = "aido_rna_650m_cds"
+    valid_versions = [
+        "aido_rna_650m",
+        "aido_rna_650m_cds",
+        "aido_rna_1b600m",
+        "aido_rna_1b600m_cds"
+    ]
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize AIDO.RNA.
@@ -48,6 +52,7 @@ class AIDORNA(EmbeddingModel):
         self.tokenizer = AutoTokenizer.from_pretrained(
             "Taykhoom/AIDO-RNA-Wrapper",
             trust_remote_code=True,
+            clean_up_tokenization_spaces=True,
             cache_dir=get_model_weights_path(),
         )
 
@@ -58,57 +63,62 @@ class AIDORNA(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         ).to(device)
 
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed sequence using AIDO.RNA.
+        chunks: list[str]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            AIDO.RNA embedding of sequence with shape (1 x H).
-            H is:
-                1280 for 650M model
-                2048 for 1.6B model
+            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
+            padding and special tokens (CLS/SEP).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            add_special_tokens=True,
+            padding=True,
+        ).to(self.device)
 
-        embedding_chunks = []
+        hidden_states = self.model(**toks).last_hidden_state
+        pooling_mask = toks["attention_mask"].clone()
 
-        for i, chunk in enumerate(chunks):
-            batch = self.tokenizer(
-                chunk,
-                add_special_tokens=True,
-                return_tensors="pt"
-            ).to(self.device)
+        # Exclude special tokens (CLS at pos 0, SEP at last real pos)
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
 
-            t_keys = ["input_ids", "attention_mask"]
+        return hidden_states, pooling_mask
 
-            # Strip start and stop tokens from all but first and last chunk
-            # if only one chunk, do nothing
-            if len(chunks) != 1:
-                if i == 0:
-                    for k in t_keys:
-                        batch[k] = batch[k][:, :-1]
-                elif i == len(chunks) - 1:
-                    for k in t_keys:
-                        batch[k] = batch[k][:, 1:]
-                else:
-                    for k in t_keys:
-                        batch[k] = batch[k][:, 1:-1]
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
+        """Embed sequences using AIDO.RNA.
 
-            embedded_chunk = self.model(**batch).last_hidden_state
-            embedding_chunks.append(embedded_chunk)
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+        Returns:
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 1280) for 650M model
+            - default (mean): (1, 2048) for 1.6B model
+        """
+        _, _ = cds, splice
 
-        aggregate_embedding = agg_fn(embedding)
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not possible with AIDO.RNA.")
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 2,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

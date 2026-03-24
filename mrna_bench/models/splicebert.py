@@ -80,7 +80,10 @@ class SpliceBERT(EmbeddingModel):
             os.remove(dl_path)
 
         model_path = os.path.join(models_parent_dir, model_version)
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            model_path,
+            clean_up_tokenization_spaces=True,
+        )
         self.model = AutoModel.from_pretrained(model_path).to(device)
 
         self.max_length = int(model_version.split(".")[1].replace("nt", ""))

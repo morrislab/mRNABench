@@ -90,7 +90,7 @@ class CodonBERT(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using CodonBERT.
 
         Args:
@@ -100,7 +100,8 @@ class CodonBERT(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Embeddings with shape (batch_size, 768).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 768)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

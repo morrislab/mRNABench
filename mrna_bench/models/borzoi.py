@@ -122,9 +122,23 @@ class Borzoi(EmbeddingModel):
 
             self.models.append(model_i)
 
+    def set_inference_mode(self) -> None:
+        """Set all Borzoi replicate models to inference mode."""
+        for m in self.models:
+            m.eval()
+        torch.set_grad_enabled(False)
+
+    def set_train_mode(self) -> None:
+        """Set all Borzoi replicate models to training mode."""
+        for m in self.models:
+            m.train()
+        torch.set_grad_enabled(True)
+
     def embed_sequence(
         self,
         sequence: str,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
         """Embed sequence using Borzoi, excluding padded regions.
@@ -134,8 +148,10 @@ class Borzoi(EmbeddingModel):
             agg_fn: Aggregation function to apply across sequence bins.
 
         Returns:
-            Aggregate embedding tensor of shape (1, embedding_dim).
+            Tensor representing embedded sequence.
         """
+        _, _ = cds, splice
+
         def center_padding(seq: str, length: int) -> tuple[str, int]:
             """Center pad sequence to a given length."""
             padding_left = (length - len(seq)) // 2
@@ -192,7 +208,7 @@ class Borzoi(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0),
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using Borzoi.
 
         Processes sequences one at a time due to memory constraints
@@ -205,13 +221,14 @@ class Borzoi(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Borzoi embeddings with shape (batch_size, embedding_dim).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 1536)
         """
         _, _ = cds, splice
 
         all_embeddings = []
         for sequence in sequences:
             embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding)
+            all_embeddings.append(embedding.squeeze(0))
 
-        return torch.cat(all_embeddings, dim=0)
+        return all_embeddings

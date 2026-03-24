@@ -46,15 +46,16 @@ class RNAMSM(EmbeddingModel):
                 "Install base_models optional dependency to use RNA-MSM."
             )
 
+        self.tokenizer = RnaTokenizer.from_pretrained(
+            "multimolecule/{}".format(model_version),
+            extra_special_tokens={},
+            cache_dir=get_model_weights_path()
+        )
+
         self.model = RnaMsmModel.from_pretrained(
             "multimolecule/{}".format(model_version),
             cache_dir=get_model_weights_path()
         ).to(device)
-
-        self.tokenizer = RnaTokenizer.from_pretrained(
-            "multimolecule/{}".format(model_version),
-            cache_dir=get_model_weights_path()
-        )
 
     def _forward_chunks(
         self,
@@ -90,7 +91,7 @@ class RNAMSM(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using RNA-MSM.
 
         Args:
@@ -100,7 +101,8 @@ class RNAMSM(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            RNA-MSM embeddings with shape (batch_size, 768).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 768)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

@@ -33,7 +33,8 @@ class MixerModel(nn.Module):
                 from mamba_ssm.modules.mamba_simple import Block, Mamba
             except ImportError:
                 raise ImportError(
-                    "Install base_models optional dependency to use NaiveMamba."
+                    "Install base_models optional dependency "
+                    "to use NaiveMamba."
                 )
 
         # Feature detection for mamba-ssm version compatibility

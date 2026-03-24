@@ -55,6 +55,7 @@ class UTRBERT(EmbeddingModel):
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version),
+            extra_special_tokens={},
             cache_dir=get_model_weights_path()
         )
         self.model = UtrBertModel.from_pretrained(
@@ -97,7 +98,7 @@ class UTRBERT(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequence using only 3'UTR region using 3UTRBERT.
 
         Args:

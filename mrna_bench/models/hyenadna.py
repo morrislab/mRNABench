@@ -111,7 +111,7 @@ class HyenaDNA(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            HyenaDNA embedding with shape (1, hidden_dim).
+            Tensor representing embedded sequence.
         """
         _, _ = cds, splice
 
@@ -136,15 +136,15 @@ class HyenaDNA(EmbeddingModel):
             return embedding_chunks[0].unsqueeze(0).float()
 
         all_chunks = torch.stack(embedding_chunks, dim=0)
-        return agg_fn(all_chunks, dim=0).unsqueeze(0).float()
+        return agg_fn(all_chunks).unsqueeze(0).float()
 
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Embed sequences using HyenaDNA.
 
         Processes sequences one at a time due to HyenaDNA's architectural
@@ -157,13 +157,14 @@ class HyenaDNA(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            HyenaDNA embeddings with shape (batch_size, hidden_dim).
+            Embeddings with item shape depending on agg_fn.
+             - default (mean): (1, hidden_dim)
         """
         _, _ = cds, splice
 
         all_embeddings = []
         for sequence in sequences:
             embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding)
+            all_embeddings.append(embedding.squeeze(0))
 
-        return torch.cat(all_embeddings, dim=0)
+        return all_embeddings

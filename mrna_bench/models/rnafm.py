@@ -85,7 +85,7 @@ class RNAFM(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using RNA-FM.
 
         Args:
@@ -95,7 +95,8 @@ class RNAFM(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            RNA-FM embeddings with shape (batch_size, 640).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 640)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

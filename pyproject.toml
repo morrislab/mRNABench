@@ -21,8 +21,8 @@ dependencies = [
     "tqdm",
     "PyYAML",
     "scikit-learn",
-    "numpy<2.3.0",
-    "pandas", # 2.3.3
+    "numpy==2.4.3",
+    "pandas==3.0.1",
     "requests",
     "pyarrow==20.0.0",
     "datasets>2.15.0",
@@ -37,15 +37,15 @@ Repository = "https://github.com/morrislab/mRNABench"
 [project.optional-dependencies]
 base_models = [
     "torch==2.7.1",
-    "transformers==4.44.0",
+    "transformers==4.57.6",
     "transformer_engine[pytorch]==2.5.0",
     "flash-attn==2.7.4.post1",
     "mamba-ssm==2.2.5",
     "rna-fm==0.2.2",
     "accelerate==1.8.1",
-    "multimolecule==0.0.7",
+    "multimolecule==0.0.8",
     "protobuf",
-    "evo-model==0.4",
+    "evo-model==0.5",
     "evo2==0.5.0",
     "borzoi-pytorch==0.4.2",
     "enformer-pytorch==0.8.10",
@@ -84,4 +84,3 @@ ignore_missing_imports = true
 
 [tool.ruff]
 line-length = 79
-

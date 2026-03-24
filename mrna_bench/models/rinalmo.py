@@ -43,23 +43,48 @@ class RiNALMo(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            from multimolecule import RnaTokenizer, RiNALMoModel
+            from multimolecule import (
+                RnaTokenizer, RiNALMoModel, RiNALMoConfig
+            )
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use RiNALMo."
             )
 
         model_path = "multimolecule/{}".format(model_version)
+        weights_path = get_model_weights_path()
 
         self.tokenizer = RnaTokenizer.from_pretrained(
             model_path,
-            cache_dir=get_model_weights_path()
+            extra_special_tokens={},
+            cache_dir=weights_path
         )
 
-        self.model = RiNALMoModel.from_pretrained(
+        # Checkpoints are saved as RiNALMoForPreTraining with a 'model.'
+        # prefix; RiNALMoModel.from_pretrained doesn't strip it, so we
+        # load manually. Issue exists for multimolecule < 0.0.9
+        from huggingface_hub import hf_hub_download
+        import safetensors.torch as st
+
+        config = RiNALMoConfig.from_pretrained(
             model_path,
-            cache_dir=get_model_weights_path()
-        ).to(device)
+            cache_dir=weights_path
+        )
+        self.model = RiNALMoModel(config)
+
+        ckpt_path = hf_hub_download(
+            repo_id=model_path,
+            filename="model.safetensors",
+            cache_dir=weights_path,
+        )
+        ckpt = st.load_file(ckpt_path)
+        weights = {
+            k[len("model."):]: v for k, v in ckpt.items()
+            if k.startswith("model.")
+        }
+        self.model.load_state_dict(weights, strict=False)
+
+        self.model = self.model.to(device)
 
     def _forward_chunks(
         self,

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from functools import partial
 from typing import ClassVar, Protocol, runtime_checkable
 
 import numpy as np
@@ -19,7 +20,7 @@ class SupportsEmbedding(Protocol):
         cds: list[np.ndarray] | None,
         splice: list[np.ndarray] | None,
         agg_fn: Callable,
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences, optionally using cds/splice tracks."""
         ...
 
@@ -82,8 +83,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0),
+    ) -> list[torch.Tensor]:
         """Embed sequences, optionally using cds/splice tracks.
 
         Args:
@@ -102,7 +103,7 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         sequence: str,
         cds: np.ndarray | None = None,
         splice: np.ndarray | None = None,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable = partial(torch.mean, dim=0),
     ) -> torch.Tensor:
         """Legacy wrapper for embed with a single sequence.
 
@@ -117,7 +118,11 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         """
         cds_list = [cds] if cds is not None else None
         splice_list = [splice] if splice is not None else None
-        return self.embed([sequence], cds_list, splice_list, agg_fn)
+        embs = self.embed([sequence], cds_list, splice_list, agg_fn)
+        result = torch.stack(embs)
+        if result.dim() > 2:
+            result = result.squeeze(0)
+        return result
 
     def chunk_sequence(self, sequence: str, chunk_length: int) -> list[str]:
         """Split sequence into chunks of specified length with given overlap.
@@ -162,8 +167,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         sequences: list[str],
         max_chunk_length: int,
         embed_fn: Callable[[list[str]], tuple[torch.Tensor, torch.Tensor]],
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0),
+    ) -> list[torch.Tensor]:
         """Embed sequences with chunking and reassembly.
 
         Handles the common pattern of chunking long sequences, running a
@@ -202,8 +207,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
             mask = seq_mask.reshape(-1).bool()
 
             masked_hidden = hidden[mask]
-            seq_embeddings.append(agg_fn(masked_hidden, dim=0))
+            seq_embeddings.append(agg_fn(masked_hidden))
 
             chunk_ptr += num_chunks
 
-        return torch.stack(seq_embeddings, dim=0)
+        return seq_embeddings

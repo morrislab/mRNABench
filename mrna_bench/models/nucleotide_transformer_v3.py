@@ -1,7 +1,10 @@
 from collections.abc import Callable
+from typing import Optional
+import warnings
 from functools import partial
 
 import torch
+import numpy as np
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
@@ -27,6 +30,14 @@ class NucleotideTransformerV3(EmbeddingModel):
     """
 
     max_length = 1_000_064
+    default_version = "v3_650M_post"
+    valid_versions = [
+        "v3_8M_pre",
+        "v3_100M_pre",
+        "v3_650M_pre",
+        "v3_100M_post",
+        "v3_650M_post",
+    ]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -57,13 +68,19 @@ class NucleotideTransformerV3(EmbeddingModel):
             else:
                 from transformers import AutoModelForMaskedLM
 
-            from transformers import AutoTokenizer
+            from transformers import AutoTokenizer, AutoConfig
 
         except ImportError:
             raise ImportError((
                 "Install base_models optional dependency to use "
                 "NucleotideTransformerV3."
             ))
+
+        self.config = AutoConfig.from_pretrained(
+            "InstaDeepAI/NT{}".format(model_version),
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path()
+        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             "InstaDeepAI/NT{}".format(model_version),
@@ -74,20 +91,23 @@ class NucleotideTransformerV3(EmbeddingModel):
         if self.post_trained:
             self.model = AutoModel.from_pretrained(
                 "InstaDeepAI/NT{}".format(model_version),
+                config=self.config,
                 trust_remote_code=True,
                 cache_dir=get_model_weights_path(),
             ).to(self.device)
 
+            s_ids = self.config.species_to_token_id.keys()
+
             # a species token is required for post-trained models
             self.valid_species = [
-                species for species in
-                list(self.model.config.species_to_token_id.keys())
+                species for species in s_ids
                 if not species.startswith("<")
             ]
-            self.species_id = None
+            self.species_id: Optional[torch.Tensor] = None
         else:
             self.model = AutoModelForMaskedLM.from_pretrained(
                 "InstaDeepAI/NT{}".format(model_version),
+                config=self.config,
                 trust_remote_code=True,
                 cache_dir=get_model_weights_path(),
             ).to(self.device)
@@ -100,15 +120,16 @@ class NucleotideTransformerV3(EmbeddingModel):
                 supported by the model.
         """
         if not self.post_trained:
-            raise ValueError(
+            warnings.warn((
                 "Setting species is only supported for post-trained "
-                "NucleotideTransformerV3 models."
-            )
+                "NucleotideTransformerV3 models. Ignoring species input."
+            ))
+            return
 
-        if species == 'synthetic':
+        if species == "synthetic":
             species = 'human'
 
-            print((
+            warnings.warn((
                 "Warning: 'synthetic' species not directly supported by "
                 "NucleotideTransformerV3 post-trained models. Using 'human' "
                 "species token instead."
@@ -120,72 +141,91 @@ class NucleotideTransformerV3(EmbeddingModel):
                 f"{self.valid_species}"
             ))
 
-        self.species_id = self.model.encode_species(
+        self.species_id = self.model.encode_species(  # type: ignore[operator]
             [species]
         ).to(self.device)
 
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=1)
-    ) -> torch.Tensor:
-        """Embed sequence using NucleotideTransformerV3.
+        chunks: list[str]
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            NT embedding of sequence with shape (1 x H).
-            H is:
-                256 for v3_8M_pre
-                768 for v3_100M_pre/post
-                1536 for v3_650M_pre/post
+            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
+            padding tokens. NTV3 does not use special tokens like CLS/SEP.
         """
+        toks = self.tokenizer(
+            chunks,
+            add_special_tokens=False,
+            padding=True,
+            pad_to_multiple_of=128,
+            return_tensors="pt",
+            return_special_tokens_mask=True
+        ).to(self.device)
+
+        if self.post_trained:
+
+            assert self.species_id is not None
+
+            s_ids = self.species_id.expand(
+                len(chunks)
+            )
+
+            hidden_states = self.model(
+                species_ids=s_ids,
+                input_ids=toks["input_ids"],
+                output_hidden_states=True
+            ).hidden_states[-1]
+        else:
+            hidden_states = self.model(
+                input_ids=toks["input_ids"],
+                output_hidden_states=True
+            ).hidden_states[-1]
+
+        pooling_mask = 1 - toks["special_tokens_mask"]
+
+        return hidden_states, pooling_mask
+
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
+        """Embed sequences using NucleotideTransformerV3.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
+
+        Returns:
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 256) for `v3_8M_pre`
+            - default (mean): (1, 768) for `v3_100M_pre/post`
+            - default (mean): (1, 1536) for `v3_650M_pre/post`
+        """
+        _, _ = cds, splice
+
         if self.post_trained and self.species_id is None:
-            raise ValueError((
+
+            self.set_species("human")
+
+            warnings.warn((
                 "Species must be set for post-trained NucleotideTransformerV3 "
-                "models before embedding sequences. Use the `set_species` "
-                "method to set the species."
+                "models. Using default species_id for embedding ('human')."
+                " Use the `set_species` method to change the species."
             ))
 
-        chunks = self.chunk_sequence(sequence, self.max_length)
-
-        embedding_chunks = []
-
-        for _, chunk in enumerate(chunks):
-
-            # NTV3 needs input sequence length to be multiple of 128
-            input_ids = self.tokenizer(
-                chunk,
-                add_special_tokens=False,
-                padding=True,
-                pad_to_multiple_of=128,
-                return_tensors="pt"
-            )['input_ids'].to(self.device)
-
-            if self.post_trained:
-                model_out = self.model(
-                    species_ids=self.species_id,
-                    input_ids=input_ids,
-                    output_hidden_states=True
-                )
-            else:
-                model_out = self.model(
-                    input_ids=input_ids,
-                    output_hidden_states=True
-                )
-
-            # Remove padding tokens
-            model_out = model_out["hidden_states"][-1][:, :len(chunk), :]
-
-            embedding_chunks.append(model_out)
-
-        embedding = torch.cat(embedding_chunks, dim=1)
-
-        aggregate_embedding = agg_fn(embedding)
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for NTV3.")
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 2,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

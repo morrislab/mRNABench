@@ -43,6 +43,7 @@ class mRNABERT(EmbeddingModel):
         try:
             from transformers import AutoModel, AutoTokenizer
             from transformers.models.bert.configuration_bert import BertConfig
+            from transformers.models.bert.modeling_bert import BertModel
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use mRNABERT."
@@ -66,6 +67,17 @@ class mRNABERT(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device)
 
+        # The remote code registers a custom BertConfig subclass (with
+        # alibi_starting_size) as the AutoModel handler for BertConfig.
+        # Reset to the standard BertModel so that subsequent models that
+        # use plain AutoModel.from_pretrained on a BertConfig don't pick
+        # up the mRNABERT model class and fail on missing config fields.
+        AutoModel._model_mapping.register(
+            BertConfig,
+            (BertModel, BertModel),
+            exist_ok=True
+        )
+
     def embed(
         self,
         sequences: list[str],
@@ -73,10 +85,25 @@ class mRNABERT(EmbeddingModel):
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> list[torch.Tensor]:
-        """Not supported for mRNABERT without CDS track."""
-        raise NotImplementedError(
-            "mRNABERT requires CDS track. Use embed_sixtrack() instead."
-        )
+        """Batch embed sequences using mRNABERT.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: List of CDS tracks for sequences. If provided, will trigger
+                6-track embedding.
+            splice: List of splice tracks for sequences. Unused for mRNABERT.
+            agg_fn: Method used to aggregate across sequence dimension.
+
+        Returns:
+            Embeddings with item shape depending on agg_fn.
+             - default (mean): (1, 768)
+        """
+        if cds is not None:
+            return self.embed_sixtrack(sequences, cds, splice, agg_fn)
+        else:
+            raise ValueError(
+                "CDS tracks must be provided for mRNABERT embedding."
+            )
 
     def _forward_chunks_sixtrack(
         self,
@@ -111,8 +138,8 @@ class mRNABERT(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray],
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Batch embed sequences using mRNABERT with 6-track input.
 
         Expects binary encoded tracks denoting the beginning of each codon
@@ -125,7 +152,8 @@ class mRNABERT(EmbeddingModel):
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
-            mRNABERT embeddings with shape (batch_size, 768).
+            Embeddings with item shape depending on agg_fn.
+             - default (mean): (1, 768)
         """
         _ = splice  # Unused
 
@@ -152,18 +180,18 @@ class mRNABERT(EmbeddingModel):
             mask = seq_mask.reshape(-1).bool()
 
             masked_hidden = hidden[mask]
-            seq_embeddings.append(agg_fn(masked_hidden, dim=0))
+            seq_embeddings.append(agg_fn(masked_hidden))
 
             chunk_ptr += num_chunks
 
-        return torch.stack(seq_embeddings, dim=0)
+        return seq_embeddings
 
     def embed_sequence_sixtrack(
         self,
         sequence: str,
         cds: np.ndarray,
         splice: np.ndarray,
-        agg_fn: Callable = partial(torch.mean, dim=1)
+        agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> torch.Tensor:
         """Embed single sequence using mRNABERT with 6-track input.
 
@@ -176,9 +204,14 @@ class mRNABERT(EmbeddingModel):
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
-            mRNABERT embedding with shape (1, 768).
+            Tensor representing embedded sequence.
         """
-        return self.embed_sixtrack([sequence], [cds], [splice], agg_fn)
+        return self.embed_sixtrack(
+            [sequence],
+            [cds],
+            [splice],
+            agg_fn
+        )[0]
 
     def chunk_sequence_cds_aware(
         self,

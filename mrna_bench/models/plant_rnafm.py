@@ -36,11 +36,17 @@ class PlantRNAFM(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            from transformers import AutoModel, AutoTokenizer
+            from transformers import AutoModel, AutoTokenizer, AutoConfig
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use PlantRNAFM."
             )
+
+        self.config = AutoConfig.from_pretrained(
+            "yangheng/PlantRNA-FM",
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+        )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
             "yangheng/PlantRNA-FM",
@@ -48,10 +54,22 @@ class PlantRNAFM(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
+        # PlantRNA-FM's config sets mask_token_id=9, which is for Uracil, not
+        # the <mask> special token (id=23). EsmEmbeddings.forward() scales
+        # embeddings depending on the number of masked tokens in the input, so
+        # the token dropout scale factor varies with the number of U's in the
+        # input, producing different embeddings for the same sequence depending
+        # on whether you batch it or embed it alone.
+        # See: https://github.com/facebookresearch/esm/issues/267 for more on
+        # token dropout. See huggingface->transformers->modeling_esm.py L210
+        # for more about how mask_token_id is used in ESM's forward pass.
+        self.config.mask_token_id = self.tokenizer.mask_token_id
+
         self.model = AutoModel.from_pretrained(
             "yangheng/PlantRNA-FM",
             trust_remote_code=True,
-            cache_dir=get_model_weights_path()
+            config=self.config,
+            cache_dir=get_model_weights_path(),
         ).to(device)
 
     def _forward_chunks(
@@ -88,8 +106,8 @@ class PlantRNAFM(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Embed sequences using PlantRNAFM.
 
         Args:
@@ -99,7 +117,8 @@ class PlantRNAFM(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Embeddings with shape (batch_size, 480).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 480)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]
@@ -110,3 +129,16 @@ class PlantRNAFM(EmbeddingModel):
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
         )
+
+        # # PlantRNA-FM does not properly respect attention_mask, so padding
+        # # from longer sequences bleeds into shorter ones. Process each
+        # # sequence individually to avoid ragged-batch inconsistency.
+        # results = []
+        # for seq in sequences:
+        #     results.extend(self._embed_with_chunking(
+        #         sequences=[seq],
+        #         max_chunk_length=self.max_length - 2,
+        #         embed_fn=self._forward_chunks,
+        #         agg_fn=agg_fn,
+        #     ))
+        # return results

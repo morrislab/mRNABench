@@ -118,8 +118,8 @@ class NucleotideTransformer(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Embed sequences using NucleotideTransformer.
 
         Args:
@@ -129,7 +129,8 @@ class NucleotideTransformer(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            NT embeddings with shape (batch_size, H).
+            Embeddings with item shape depending on agg_fn.
+             - default (mean): (1, hidden_dim)
         """
         _, _ = cds, splice
 

@@ -1,6 +1,5 @@
 from pathlib import Path
 from collections.abc import Callable
-from typing import List
 from functools import partial
 
 import numpy as np
@@ -30,7 +29,7 @@ class DatasetEmbedder:
         dataset: BenchmarkDataset,
         d_chunk_ind: int = 0,
         d_num_chunks: int = 0,
-        agg_fn: Callable = partial(torch.mean, dim=1),
+        agg_fn: Callable = partial(torch.mean, dim=0),
         ragged_out: bool = False
     ):
         """Initialize DatasetEmbedder.
@@ -74,7 +73,7 @@ class DatasetEmbedder:
         chunk_df = self.data_df.iloc[s:e]
         return chunk_df
 
-    def embed_dataset(self) -> List[torch.Tensor]:
+    def embed_dataset(self) -> list[torch.Tensor]:
         """Compute embeddings for current dataset chunk.
 
         Returns:
@@ -93,11 +92,11 @@ class DatasetEmbedder:
                 splice=[row["splice"].astype(np.int32)],
                 agg_fn=self.agg_fn
             )
-            dataset_embeddings.append(embedding)
+            dataset_embeddings.extend(embedding)
 
         return dataset_embeddings
 
-    def persist_embeddings(self, embeddings: List[torch.Tensor]):
+    def persist_embeddings(self, embeddings: list[torch.Tensor]):
         """Persist embeddings at global data storage location.
 
         Args:
@@ -119,12 +118,12 @@ class DatasetEmbedder:
                 for i, emb in enumerate(embeddings):
                     grp.create_dataset(
                         str(i),
-                        data=emb.squeeze(0).half().numpy(),  # remove batch dim
+                        data=emb.numpy(),
                         shuffle=True,
                         compression="gzip",
                     )
         else:
-            embeddings_tensor = torch.cat(embeddings, dim=0)
+            embeddings_tensor = torch.stack(embeddings, dim=0)
             np.savez_compressed(
                 out_path + ".npz",
                 embedding=embeddings_tensor.numpy()
@@ -286,7 +285,8 @@ class DatasetEmbedder:
                 task=["regression"],
                 target_col=["target"],
                 default_split_type="default",
-                benchmark_set="extended"
+                benchmark_set="extended",
+                vep=False,
             )
 
             def __init__(self, data_df: pd.DataFrame):

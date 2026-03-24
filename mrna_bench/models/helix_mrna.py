@@ -104,7 +104,7 @@ class HelixmRNA(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Batch embed sequences using Helix-mRNA.
 
         If cds is provided, inserts 'E' tokens at the start of each codon
@@ -132,7 +132,7 @@ class HelixmRNA(EmbeddingModel):
 
         return self._embed_with_chunking(
             sequences=sequences,
-            max_chunk_length=self.max_length - 1, # Account for SEP token
+            max_chunk_length=self.max_length - 1,  # Account for SEP token
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
         )

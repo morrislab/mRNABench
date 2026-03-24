@@ -1,5 +1,6 @@
 from collections.abc import Callable
 import warnings
+from functools import partial
 
 import numpy as np
 import torch
@@ -113,8 +114,8 @@ class MRNAFM(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
+        agg_fn: Callable = partial(torch.mean, dim=0)
+    ) -> list[torch.Tensor]:
         """Embed sequences using mRNA-FM.
 
         Since mRNA-FM only accepts CDS, uses CDS track to extract CDS sequence
@@ -128,7 +129,8 @@ class MRNAFM(EmbeddingModel):
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            mRNA-FM embeddings with shape (batch_size, 1280).
+            Embeddings with item shape depending on agg_fn.
+                - default (mean): (batch_size, 1280)
         """
         _ = splice
 

@@ -41,8 +41,9 @@ class DNABERT2(EmbeddingModel):
             )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            f"czl/dnabert2",
+            "czl/dnabert2",
             trust_remote_code=True,
+            clean_up_tokenization_spaces=True,
             cache_dir=get_model_weights_path()
         )
 
@@ -73,7 +74,7 @@ class DNABERT2(EmbeddingModel):
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
+    ) -> list[torch.Tensor]:
         """Embed sequences using DNABERT2.
 
         ALiBi positional encoding allows for arbitrary sequence lengths.
@@ -85,7 +86,8 @@ class DNABERT2(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Embeddings with shape (batch_size, 768).
+            Embeddings with item shape depending on agg_fn.
+            - default (mean): (1, 768)
         """
         _, _ = cds, splice
 
@@ -111,4 +113,4 @@ class DNABERT2(EmbeddingModel):
             masked_hidden = hidden_states[i][mask]
             embeddings.append(agg_fn(masked_hidden))
 
-        return torch.stack(embeddings, dim=0)
+        return embeddings
