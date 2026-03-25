@@ -70,6 +70,11 @@ mb.update_model_weights_path(path_to_dir_to_store_weights)
 ### Evo2
 Evo2 is included in the base_models installation and works on GPUs with compute capability ≥ 7.0 (with FP8 disabled for older GPUs).
 
+**HPC / multi-CUDA environments:** On systems with multiple CUDA versions installed (common on HPC clusters), TransformerEngine's NVRTC JIT compiler may pick up CUDA headers from a system-wide installation (e.g. `/usr/local/cuda`) rather than the conda environment's bundled CUDA headers, causing a compilation error like `NVRTC_ERROR_COMPILATION`. mRNABench automatically detects this situation and sets `NVTE_CUDA_INCLUDE_DIR` to the conda env's CUDA headers at `$CONDA_PREFIX/targets/x86_64-linux/include/`. If you still encounter this error, you can override it manually:
+```bash
+export NVTE_CUDA_INCLUDE_DIR="$CONDA_PREFIX/targets/x86_64-linux/include"
+```
+
 ### Dev Mode
 Dev mode allows generation of datasets from scratch and includes access to the RNA-Fazal localization dataset. See [Dev Mode Setup](#dev-mode-setup).
 
@@ -84,7 +89,7 @@ dataset = mb.load_dataset("go-mf")
 data_df = dataset.data_df
 ```
 
-The mRNABench can also be used to test out common genomic foundation models:
+The mRNABench can also be used to test out common genomic foundation models. The recommended way to load a model is via `mb.load_model()`, which automatically sets the model to inference mode (`.eval()` + gradients disabled):
 ```python
 import torch
 
@@ -123,6 +128,13 @@ prober = (LinearProbeBuilder(dataset)
 )
 ```
 
+> [!NOTE]
+> If you instantiate a model class directly (without `mb.load_model()`), call `model.set_inference_mode()` before embedding to ensure deterministic outputs. Call `model.set_train_mode()` when you need gradients, e.g. for fine-tuning.
+> ```python
+> model = RiNALMo("rinalmo-giga", device)
+> model.set_inference_mode()  # required for reproducible embeddings
+> ```
+
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
 
 ## Model Catalog
@@ -133,9 +145,10 @@ The models supported by the `base_models` installation are catalogued below.
 | Model Name | Model Versions | Description | Citation |
 | :--------: | :------------- | ----------- | :------: |
 | **Orthrus** | `orthrus-large-6-track`<br>`orthrus-base-4-track` | Mamba-based RNA foundation model pre-trained using contrastive learning on 45M RNA transcripts to capture functional and evolutionary relationships. 6-track version incorporates CDS and splice site information. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
-| **RNA-FM** | `rna-fm`<br>`mrna-fm` | Transformer-based RNA foundation model pre-trained using MLM. RNA-FM trained on 23M ncRNA sequences, mRNA-FM trained on mRNA CDS regions using codon tokenizer. | [[Github]](https://github.com/ml4bio/RNA-FM) |
+| **RNA-FM** | `rna-fm` | Transformer-based RNA foundation model pre-trained using MLM on 23M ncRNA sequences. | [[Github]](https://github.com/ml4bio/RNA-FM) |
+| **mRNA-FM** | `mrna-fm` | Transformer-based RNA foundation model pre-trained on mRNA CDS regions using a codon tokenizer. CDS track is required. | [[Github]](https://github.com/ml4bio/RNA-FM) |
 | **SpliceBERT** | `SpliceBERT.1024nt`<br>`SpliceBERT-human.510nt`<br>`SpliceBERT.510nt` | Transformer-based RNA foundation model trained on 2M vertebrate mRNA sequences using MLM. Specialized for splice site prediction with human-only and context-length variants. | [[Github]](https://github.com/chenkenbio/SpliceBERT) |
-| **RiNALMo** | `rinalmo` | Transformer-based RNA foundation model trained on 36M ncRNA sequences using MLM with modern architectural improvements including RoPE, SwiGLU activations, and Flash Attention. | [[Github]](https://github.com/lbcb-sci/RiNALMo) |
+| **RiNALMo** | `rinalmo-micro`<br>`rinalmo-mega`<br>`rinalmo-giga` | Transformer-based RNA foundation model trained on 36M ncRNA sequences using MLM with modern architectural improvements including RoPE, SwiGLU activations, and Flash Attention. | [[Github]](https://github.com/lbcb-sci/RiNALMo) |
 | **UTR-LM** | `utrlm-te_el`<br>`utrlm-mrl`<br>`utrlm-*-utronly` | Transformer-based RNA foundation model specialized for 5'UTR sequences. Pre-trained on random and endogenous UTR sequences from various species. UTR-only variants automatically extract 5'UTRs. | [[Github]](https://github.com/a96123155/UTR-LM) |
 | **3UTRBERT** | `utrbert-3mer`<br>`utrbert-4mer`<br>`utrbert-5mer`<br>`utrbert-6mer`<br>`utrbert-*-utronly` | Transformer-based RNA foundation model specialized for 3'UTR regions. Uses k-mer tokenization (3-6mers) and trained on 100k 3'UTR sequences. UTR-only variants automatically extract 3'UTRs. | [[Github]](https://github.com/yangyn533/3UTRBERT) |
 | **RNA-MSM** | `rnamsm` | Structure-aware RNA foundation model trained using multiple sequence alignments from custom structure-based homology mapping across ~4000 RNA families. | [[Github]](https://github.com/yikunpku/RNA-MSM) |
@@ -144,17 +157,26 @@ The models supported by the `base_models` installation are catalogued below.
 | **RNABERT** | `rnabert` | Transformer-based RNA foundation model with dual training objectives combining MLM and structural alignment learning. Trained on 80k ncRNA sequences. | [[Github]](https://github.com/mana438/RNABERT) |
 | **CodonBERT** | `codonbert` | Transformer-based RNA foundation model trained on 10M+ mRNA sequences from mammals, bacteria, and viruses. Specialized for coding regions and mRNA properties. | [[Github]](https://github.com/Sanofi-Public/CodonBERT) |
 | **Helix-mRNA** | `helix-mrna` | Hybrid Mamba2/Transformer model trained on 26M diverse eukaryotic and viral mRNAs. Features CDS-aware tokenization with special tokens at codon boundaries. | [[Github]](https://github.com/helicalAI/helical) |
+| **mRNABERT** | `mRNABERT` | Transformer-based mRNA foundation model trained on 36M mRNA sequences using MLM with ALiBi positional embeddings and Flash Attention. Further pre-trained with contrastive learning to align CDS embeddings with protein embeddings from ProtT5-XL-UniRef50. | [[Github]](https://github.com/yyly6/mRNABERT) [[Paper]](https://www.nature.com/articles/s41467-025-65340-8) |
+| **AIDO.RNA** | `aido_rna_650m`<br>`aido_rna_650m_cds`<br>`aido_rna_1b600m`<br>`aido_rna_1b600m_cds` | Transformer-based RNA foundation model trained using MLM on 42M ncRNA sequences. CDS-adapted variants are available for protein-coding sequences. | [[Github]](https://github.com/genbio-ai/ModelGenerator) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.11.28.625345v1) |
+| **OmniGenome** | `omnigenome-52m`<br>`omnigenome-186m` | Transformer-based RNA foundation model pre-trained on plant RNA sequences from the OneKP initiative. Trained with three objectives: structure-contextualized masked token reconstruction (Str2Seq), sequence-to-structure prediction (Seq2Str), and MLM. Uses ViennaRNA-predicted secondary structures. | [[Github]](https://github.com/yangheng95/OmniGenBench) [[Paper]](https://arxiv.org/abs/2407.11242) |
+| **Plant-RNAFM** | `plant_rnafm` | Transformer-based RNA foundation model pre-trained on 25M RNA sequences from 1,124 plant species (1KP). Trained with MLM, RNA secondary structure prediction (ViennaRNA), and RNA region annotation prediction (CDS, 5'UTR, 3'UTR). | [[Github]](https://github.com/yangheng95/PlantRNA-FM) [[Paper]](https://www.nature.com/articles/s42256-024-00946-z) |
 
 ### DNA Foundation Models
 
 | Model Name | Model Versions | Description | Citation |
 | :--------: | :------------- | ----------- | :------: |
+| **Borzoi** | `borzoi-replicate-0`<br>`borzoi-replicate-1`<br>`borzoi-replicate-2`<br>`borzoi-replicate-3`<br>`flashzoi-replicate-0`<br>`flashzoi-replicate-1`<br>`flashzoi-replicate-2`<br>`flashzoi-replicate-3`<br>`borzoi`<br>`flashzoi` | Deep learning model predicting RNA-seq coverage from DNA sequence. Hybrid architecture (convolutions + self-attention + U-Net) trained on 524 kb genomic windows. Flashzoi variants use Flash Attention for efficiency. | [[Github]](https://github.com/calico/borzoi) [[Paper]](https://www.nature.com/articles/s41588-024-02053-6) |
+| **Enformer** | `enformer-official-rough` | Transformer-based model predicting functional genomic activity (RNA-seq, ATAC-seq, ChIP-seq) from 200 kb DNA windows. Combines convolutional stem with multi-head attention to capture long-range interactions. | [[Github]](https://github.com/lucidrains/enformer-pytorch) [[Paper]](https://www.nature.com/articles/s41592-021-01252-x) |
 | **DNABERT2** | `dnabert2` | Modern Transformer-based DNA foundation model with BPE tokenization and rotary positional encoding. Pre-trained using MLM on multi-species genomic datasets. | [[Github]](https://github.com/MAGICS-LAB/DNABERT_2) |
 | **DNABERT-S** | `dnabert-s` | Species-aware DNA foundation model trained with contrastive learning to encourage species grouping while discouraging cross-species associations. Covers microbial genomes including viruses, fungi, and bacteria. | [[Github]](https://github.com/MAGICS-LAB/DNABERT_S) |
 | **Nucleotide Transformer** | `2.5b-multi-species`<br>`2.5b-1000g`<br>`500m-human-ref`<br>`500m-1000g`<br>`v2-50m-multi-species`<br>`v2-100m-multi-species`<br>`v2-250m-multi-species`<br>`v2-500m-multi-species` | Transformer-based DNA foundation model family with 6-mer tokenization. Available in multiple sizes (50M-2.5B parameters) trained on various genomic datasets from human reference to multi-species collections. | [[Github]](https://github.com/instadeepai/nucleotide-transformer) |
 | **HyenaDNA** | `hyenadna-large-1m-seqlen-hf`<br>`hyenadna-medium-450k-seqlen-hf`<br>`hyenadna-medium-160k-seqlen-hf`<br>`hyenadna-small-32k-seqlen-hf`<br>`hyenadna-tiny-16k-seqlen-d128-hf` | Hyena-based DNA foundation model with near-linear scaling and ultra-long context capability. Pre-trained using next token prediction on human reference genome with various model sizes and sequence lengths. | [[Github]](https://github.com/HazyResearch/hyena-dna) |
 | **Evo1** | `evo-1.5-8k-base`<br>`evo-1-8k-base`<br>`evo-1-131k-base` | StripedHyena-based DNA foundation model trained autoregressively on OpenGenome dataset at single nucleotide, byte-level resolution. Offers near-linear scaling with ultra-long context variants up to 131k nucleotides. | [[Github]](https://github.com/evo-design/evo) |
 | **Evo2** | `evo2_40b`<br>`evo2_40b_base`<br>`evo2_7b`<br>`evo2_7b_base`<br>`evo2_1b_base` | Next-generation StripedHyena2-based DNA foundation model trained on OpenGenome2 dataset. Provides multi-layer embeddings with ultra-long context capability up to 1M nucleotides for large model variants. | [[Github]](https://github.com/evo-design/evo2) |
+| **NucleotideTransformerV3** | `v3_8M_pre`<br>`v3_100M_pre`<br>`v3_650M_pre`<br>`v3_100M_post`<br>`v3_650M_post` | Transformer/CNN U-Net DNA foundation model trained on OpenGenome2 with MLM at single-nucleotide resolution. Downsamples with convolutions, processes with a Transformer bottleneck, and upsamples — enabling ultra-long sequences up to 1 MB. Post-trained variants were further trained to predict 16K+ genomic tracks. | [[Github]](https://github.com/instadeepai/nucleotide-transformer) [[Paper]](https://www.biorxiv.org/content/10.64898/2025.12.22.695963v1) |
+| **GENERanno** | `prokaryote-0.5b-base`<br>`eukaryote-0.5b-base`<br>`prokaryote-0.5b-cds-annotator`<br>`eukaryote-1.2b-cds-annotator-preview` | Transformer-encoder genomic foundation model for metagenomic annotation at single-nucleotide resolution with bidirectional attention over sequences up to 8k bp. Pre-trained on 715B bp prokaryotic and 386B bp eukaryotic sequences. CDS-annotator variants are fine-tuned for metagenomic CDS calling. | [[Github]](https://github.com/GenerTeam/GENERanno) [[Paper]](https://www.biorxiv.org/content/10.1101/2025.06.04.656517v3) |
+| **GENERator** | `eukaryote-1.2b-base`<br>`v2-eukaryote-1.2b-base`<br>`v2-prokaryote-1.2b-base`<br>`eukaryote-3b-base`<br>`v2-eukaryote-3b-base`<br>`v2-prokaryote-3b-base` | Autoregressive Transformer genomic foundation model using k-mer tokenization trained on gene-centric functional regions. V2 introduces Factorized Nucleotide Supervision (FNS) and Genome Compression Pretraining (GCP), with context up to 98k bp and eukaryotic/prokaryotic variants. | [[Github]](https://github.com/GenerTeam/GENERator) [[Paper]](https://arxiv.org/abs/2502.07272) |
 
 
 ### Baseline Models
@@ -261,6 +283,9 @@ For GPUs older than H100, disable FP8 after installation:
 ```
 
 **Note:** If the `evo2_40b` model checkpoint is stored outside the HuggingFace cache, manually move it to: `/hub/models--arcinstitute-evo2_40b*/snapshots/snapshot_name/`
+
+## NucleotideTransformerV3 Setup
+Please note that as of now, NucleotideTransformerV3 is a gated model and requires applying for access through HuggingFace. If you get access, you need to create a HuggingFace token at https://huggingface.co/settings/tokens and and then run `hf auth login` to enter your token for access.
 
 ## Dev Mode Setup
 Dev mode requires additional dependencies for generating datasets from scratch and accessing certain datasets.
