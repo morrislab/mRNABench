@@ -121,7 +121,7 @@ class TaskHead(nn.Module):
             raise ValueError("Unknown task type: {}".format(self.task_type))
 
     def prepare_targets(self, targets: np.ndarray) -> torch.Tensor:
-        """Convert numpy targets to correctly-typed tensor for loss computation.
+        """Convert numpy targets to tensor for loss computation.
 
         Args:
             targets: Raw numpy targets from dataloader.
@@ -176,7 +176,7 @@ class TaskHead(nn.Module):
 
         Args:
             logits: Raw model output.
-            targets: Ground truth targets (already prepared via prepare_targets).
+            targets: Ground truth targets (prepared via prepare_targets).
 
         Returns:
             Dictionary of metric name to value.

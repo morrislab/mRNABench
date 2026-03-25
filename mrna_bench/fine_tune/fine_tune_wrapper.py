@@ -1,6 +1,8 @@
 """Composition-based fine-tuning wrapper for EmbeddingModel."""
 
 from collections.abc import Callable
+from typing import cast
+from functools import partial
 
 import numpy as np
 import torch
@@ -90,7 +92,10 @@ class FineTuneWrapper(nn.Module):
                 f"fine-tuning (backbone is nn.Identity)."
             )
 
-        self.backbone.model = get_peft_model(self.backbone.model, config)
+        from transformers import PreTrainedModel
+        self.backbone.model = get_peft_model(
+            cast(PreTrainedModel, self.backbone.model), config
+        )
 
         trainable = sum(
             p.requires_grad for p in self.backbone.model.parameters()
@@ -133,7 +138,7 @@ class FineTuneWrapper(nn.Module):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable = partial(torch.mean, dim=0),
     ) -> torch.Tensor:
         """Forward pass through backbone and task head.
 
@@ -147,7 +152,16 @@ class FineTuneWrapper(nn.Module):
             Task head output tensor.
         """
         embeddings = self.backbone.embed(sequences, cds, splice, agg_fn)
-        return self.task_head(embeddings)
+
+        # agg_fns which don't result in a 1-D pooled vector are not supported
+        if embeddings[0].dim() != 1:
+            raise ValueError(
+                f"agg_fn must produce a 1-D pooled vector of shape (H,). "
+                f"Got shape {embeddings[0].shape}."
+            )
+
+        stacked = torch.stack(embeddings, dim=0).to(self.device)
+        return self.task_head(stacked)
 
     def get_trainable_parameters(self) -> list[torch.nn.Parameter]:
         """Get all trainable parameters for optimizer.

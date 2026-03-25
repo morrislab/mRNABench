@@ -3,6 +3,8 @@
 from copy import deepcopy
 from dataclasses import dataclass
 
+from typing import Any, Callable
+
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
@@ -26,7 +28,11 @@ class TrainerConfig:
 class FineTuneTrainer:
     """Trainer for fine-tuning nucleotide foundation models."""
 
-    def __init__(self, wrapper: FineTuneWrapper, config: TrainerConfig | None = None):
+    def __init__(
+            self,
+            wrapper: FineTuneWrapper,
+            config: TrainerConfig | None = None
+    ):
         """Initialize FineTuneTrainer.
 
         Args:
@@ -36,7 +42,8 @@ class FineTuneTrainer:
         self.wrapper = wrapper
         self.device = wrapper.device
         self.config = config or TrainerConfig()
-        self.loss_fn = wrapper.task_head.get_loss_fn()
+        _head: Any = wrapper.task_head
+        self.loss_fn: Callable[..., torch.Tensor] = _head.get_loss_fn()
         self.optimizer: torch.optim.Optimizer | None = None
         self.scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
         self.history: dict[str, list[float]] = {
@@ -77,8 +84,9 @@ class FineTuneTrainer:
                 get_peft_model_state_dict(self.wrapper.backbone.model)
             )
         except ImportError:
+            _model = self.wrapper.backbone.model
             lora_state = deepcopy({
-                k: v for k, v in self.wrapper.backbone.model.state_dict().items()
+                k: v for k, v in _model.state_dict().items()
                 if v.requires_grad
             })
 
@@ -112,6 +120,7 @@ class FineTuneTrainer:
         Returns:
             Average training loss.
         """
+        assert self.optimizer is not None, "Call fit() before train_epoch()"
         self.wrapper.set_train_mode()
         total_loss = 0.0
         num_batches = 0
@@ -123,7 +132,9 @@ class FineTuneTrainer:
             target = batch["target"]
             if not isinstance(target, np.ndarray):
                 target = np.array(target)
-            target = self.wrapper.task_head.prepare_targets(target)
+            target = self.wrapper.task_head.prepare_targets(
+                target
+            )  # type: ignore[operator]
             target = target.to(self.device)
 
             sequences = batch["sequence"]
@@ -174,7 +185,9 @@ class FineTuneTrainer:
             target = batch["target"]
             if not isinstance(target, np.ndarray):
                 target = np.array(target)
-            target = self.wrapper.task_head.prepare_targets(target)
+            target = self.wrapper.task_head.prepare_targets(
+                target
+            )  # type: ignore[operator]
             target = target.to(self.device)
 
             sequences = batch["sequence"]
@@ -188,13 +201,17 @@ class FineTuneTrainer:
             all_preds.append(output.cpu())
             all_targets.append(target.cpu())
 
-        avg_loss = total_loss / len(dataloader.dataset)
+        n = len(dataloader.dataset)  # type: ignore[arg-type]
+        avg_loss = total_loss / n
         preds = torch.cat(all_preds, dim=0)
         targets = torch.cat(all_targets, dim=0)
 
         metrics = {"loss": avg_loss}
         metrics.update(
-            self.wrapper.task_head.compute_metrics(preds, targets)
+            self.wrapper.task_head.compute_metrics(
+                preds,
+                targets
+            )  # type: ignore[operator]
         )
         return metrics
 
