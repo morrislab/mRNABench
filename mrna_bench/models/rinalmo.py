@@ -133,7 +133,7 @@ class RiNALMo(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, hidden_dim)
+            - default (mean): (hidden_dim,)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

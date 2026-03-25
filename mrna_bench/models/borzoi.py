@@ -222,7 +222,7 @@ class Borzoi(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 1536)
+            - default (mean): (1536,)
         """
         _, _ = cds, splice
 

@@ -163,7 +163,7 @@ class NaiveBaselineSixTrack(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-             - default (mean): (1, n_features)
+             - default (mean): (n_features,)
         """
         _ = agg_fn
 

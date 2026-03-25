@@ -107,8 +107,8 @@ class ERNIERNA(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 768) for `ernierna`
-            - default (mean): (1, 768) for `ernierna-ss`
+            - default (mean): (768,) for `ernierna`
+            - default (mean): (768,) for `ernierna-ss`
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

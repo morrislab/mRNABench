@@ -118,7 +118,7 @@ class PlantRNAFM(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 480)
+            - default (mean): (480,)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]
@@ -129,16 +129,3 @@ class PlantRNAFM(EmbeddingModel):
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
         )
-
-        # # PlantRNA-FM does not properly respect attention_mask, so padding
-        # # from longer sequences bleeds into shorter ones. Process each
-        # # sequence individually to avoid ragged-batch inconsistency.
-        # results = []
-        # for seq in sequences:
-        #     results.extend(self._embed_with_chunking(
-        #         sequences=[seq],
-        #         max_chunk_length=self.max_length - 2,
-        #         embed_fn=self._forward_chunks,
-        #         agg_fn=agg_fn,
-        #     ))
-        # return results

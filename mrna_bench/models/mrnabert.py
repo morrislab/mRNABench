@@ -96,7 +96,7 @@ class mRNABERT(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-             - default (mean): (1, 768)
+             - default (mean): (768,)
         """
         if cds is not None:
             return self.embed_sixtrack(sequences, cds, splice, agg_fn)
@@ -123,14 +123,19 @@ class mRNABERT(EmbeddingModel):
             add_special_tokens=True,
             padding="longest",
             return_tensors="pt",
+            return_special_tokens_mask=True,
         ).to(self.device)
+
+        special_tokens_mask = toks["special_tokens_mask"]
+        attention_mask = 1 - special_tokens_mask
 
         hidden_states = self.model(
             input_ids=toks["input_ids"],
-            attention_mask=toks["attention_mask"],
+            attention_mask=attention_mask,
         )[0]
 
-        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask = attention_mask
+
         return hidden_states, pooling_mask
 
     def embed_sixtrack(
@@ -153,7 +158,7 @@ class mRNABERT(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-             - default (mean): (1, 768)
+             - default (mean): (768,)
         """
         _ = splice  # Unused
 

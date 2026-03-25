@@ -21,7 +21,7 @@ class MRNAFM(EmbeddingModel):
     default_version = "mrna-fm"
     valid_versions = ["mrna-fm"]
 
-    max_length = 1024
+    max_length = 1024  # in tokens (codons)
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize mRNA-FM Model.
@@ -130,7 +130,7 @@ class MRNAFM(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-                - default (mean): (batch_size, 1280)
+                - default (mean): (1280,)
         """
         _ = splice
 

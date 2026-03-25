@@ -250,7 +250,7 @@ class Evo1(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 4096)
+            - default (mean): (4096,)
         """
         _, _ = cds, splice
 

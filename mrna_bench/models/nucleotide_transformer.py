@@ -88,28 +88,28 @@ class NucleotideTransformer(EmbeddingModel):
 
         Returns:
             Tuple of (hidden_states, pooling_mask). The pooling_mask
-            excludes padding and special tokens (CLS/SEP).
+            excludes padding and CLS. NT has no EOS/SEP token.
         """
-        toks = self.tokenizer(
+        toks = self.tokenizer.batch_encode_plus(
             chunks,
             return_tensors="pt",
             padding=True,
         ).to(self.device)
 
+        attention_mask = toks["input_ids"] != self.tokenizer.pad_token_id
+
         torch_outs = self.model(
             toks["input_ids"],
-            attention_mask=toks["attention_mask"],
-            encoder_attention_mask=toks["attention_mask"],
+            attention_mask=attention_mask,
+            encoder_attention_mask=attention_mask,
             output_hidden_states=True
         )
 
         hidden_states = torch_outs["hidden_states"][-1]
-        pooling_mask = toks["attention_mask"].clone()
 
+        # NT has no EOS/SEP token — only CLS at position 0 is excluded.
+        pooling_mask = toks["attention_mask"].clone()
         pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
 
         return hidden_states, pooling_mask
 
@@ -130,7 +130,7 @@ class NucleotideTransformer(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-             - default (mean): (1, hidden_dim)
+             - default (mean): (hidden_dim,)
         """
         _, _ = cds, splice
 

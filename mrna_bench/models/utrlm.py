@@ -105,7 +105,7 @@ class UTRLM(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 128)
+            - default (mean): (128,)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

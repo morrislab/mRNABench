@@ -134,7 +134,7 @@ class Enformer(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 3072)
+            - default (mean): (3072,)
 
         """
         _, _ = cds, splice

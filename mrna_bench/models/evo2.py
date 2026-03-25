@@ -310,7 +310,7 @@ class Evo2(EmbeddingModel):
 
         Returns:
             List of embeddings with item shape depending on agg_fn.
-            - default (mean): (1, hidden_dim * num_layers)
+            - default (mean): (hidden_dim * num_layers,)
         """
         _, _ = cds, splice
 

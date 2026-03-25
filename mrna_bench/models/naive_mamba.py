@@ -151,7 +151,7 @@ class NaiveMamba(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-             - default (mean): (1, 64)
+             - default (mean): (64,)
         """
         if cds is None or splice is None:
             raise ValueError("NaiveMamba requires cds and splice tracks.")

@@ -145,8 +145,8 @@ class OmniGenome(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 480) for `omnigenome-52m`
-            - default (mean): (1, 768) for `omnigenome-186m`
+            - default (mean): (480,) for `omnigenome-52m`
+            - default (mean): (768,) for `omnigenome-186m`
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

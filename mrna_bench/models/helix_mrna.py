@@ -118,7 +118,7 @@ class HelixmRNA(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-             - default (mean): (1, 256)
+             - default (mean): (256,)
         """
         _ = splice  # Unused
 

@@ -102,7 +102,7 @@ class Orthrus(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 512)
+            - default (mean): (512,)
         """
         batch_inputs = []
         raw_lengths: list[int] = []
@@ -163,7 +163,7 @@ class Orthrus(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 512)
+            - default (mean): (512,)
         """
         batch_inputs = []
         raw_lengths: list[int] = []

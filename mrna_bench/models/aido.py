@@ -111,8 +111,8 @@ class AIDORNA(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 1280) for 650M model
-            - default (mean): (1, 2048) for 1.6B model
+            - default (mean): (1280,) for 650M model
+            - default (mean): (2048,) for 1.6B model
         """
         _, _ = cds, splice
 

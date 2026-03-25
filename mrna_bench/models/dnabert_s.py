@@ -71,7 +71,7 @@ class DNABERTS(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 768)
+            - default (mean): (768,)
         """
         _, _ = cds, splice
 

@@ -137,8 +137,8 @@ class GENERator(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 2048) for 1.2b models
-            - default (mean): (1, 3072) for 3b models
+            - default (mean): (2048,) for 1.2b models
+            - default (mean): (3072,) for 3b models
         """
         _, _ = cds, splice
 

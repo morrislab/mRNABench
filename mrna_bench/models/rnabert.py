@@ -99,7 +99,7 @@ class RNABERT(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (batch_size, 120)
+            - default (mean): (120,)
         """
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]

@@ -129,8 +129,8 @@ class GENERanno(EmbeddingModel):
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (1, 1280) for 0.5b models
-            - default (mean): (1, 2048) for 1.2b models
+            - default (mean): (1280,) for 0.5b models
+            - default (mean): (2048,) for 1.2b models
         """
         _, _ = cds, splice
 
