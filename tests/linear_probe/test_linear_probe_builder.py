@@ -125,7 +125,7 @@ def test_build_evaluator(mock_builder: LinearProbeBuilder):
 
 def test_use_persister(mock_builder: LinearProbeBuilder):
     """Check that use_persister sets persister."""
-    assert hasattr(mock_builder, "persister_flag") is False
+    assert mock_builder.persister_flag is False
 
     mock_builder.use_persister()
     assert mock_builder.persister_flag is True
@@ -148,22 +148,25 @@ def test_build(mock_builder: LinearProbeBuilder):
         with patch(
             "mrna_bench.linear_probe.linear_probe_builder.LinearProbe"
         ) as mock_probe:
-            mock_persister.return_value = Mock()
-            mock_persister.return_value.__class__ = LinearProbePersister
+            with patch.object(
+                LinearProbeBuilder, "validate", return_value=[]
+            ):
+                mock_persister.return_value = Mock()
+                mock_persister.return_value.__class__ = LinearProbePersister
 
-            mock_builder.build()
-            mock_probe.assert_called_once()
+                mock_builder.build()
+                mock_probe.assert_called_once()
 
-            mock_persister.assert_not_called()
+                mock_persister.assert_not_called()
 
-            mock_builder.use_persister()
-            mock_builder.build()
-            mock_persister.assert_called_once()
+                mock_builder.use_persister()
+                mock_builder.build()
+                mock_persister.assert_called_once()
 
 
-def test_builder_sets_is_vep_flag(mock_dataset : BenchmarkDataset):
+def test_builder_sets_is_vep_flag(mock_dataset: BenchmarkDataset):
     """Test that LinearProbeBuilder sets is_vep flag correctly."""
-    mock_dataset.dataset_name = "human_vep_variants"
+    mock_dataset.metadata.vep = True
     builder = LinearProbeBuilder(mock_dataset)
 
     assert builder.is_vep is True
