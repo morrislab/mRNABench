@@ -16,13 +16,17 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model_52m(device) -> OmniGenome:
     """Get OmniGenome 52M model."""
-    return OmniGenome("omnigenome-52m", device)
+    model = OmniGenome("omnigenome-52m", device)
+    model.set_inference_mode()
+    return model
 
 
 @pytest.fixture(scope="module")
 def model_186m(device) -> OmniGenome:
     """Get OmniGenome 186M model."""
-    return OmniGenome("omnigenome-186m", device)
+    model = OmniGenome("omnigenome-186m", device)
+    model.set_inference_mode()
+    return model
 
 
 def test_omnigenome_52m_forward(model_52m):
@@ -59,7 +63,7 @@ def test_omnigenome_embed_batch_ragged(model_52m):
         "ATGATG" * 100,
     ]
 
-    batch_output = model_52m.embed(sequences).cpu()
+    batch_output = torch.stack(model_52m.embed(sequences)).cpu()
     assert batch_output.shape == (3, 480)
 
     for i, seq in enumerate(sequences):
@@ -91,14 +95,25 @@ def test_omnigenome_excludes_special_tokens(model_52m):
         "Output should differ from mean including special tokens"
 
 
+@torch.no_grad()
+def test_omnigenome_embed_ragged_agg(model_52m):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    out = model_52m.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+
+
 def test_omnigenome_gradient_flow(model_52m):
     """Test that gradients can flow through the model."""
     model_52m.set_train_mode()
 
     out = model_52m.embed(["ATGATG"])
-    assert out.requires_grad, "Output should require gradients"
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False

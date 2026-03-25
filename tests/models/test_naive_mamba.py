@@ -18,89 +18,108 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> NaiveMamba:
     """Get NaiveMamba model."""
-    return NaiveMamba("naive-mamba", device)
+    model = NaiveMamba("naive-mamba", device)
+    model.set_inference_mode()
+    return model
+
+
+def make_cds(seq: str) -> np.ndarray:
+    """Make CDS array marking every codon start (assumes pure CDS input)."""
+    arr = np.zeros(len(seq), dtype=int)
+    arr[::3] = 1
+    return arr
+
+
+def make_splice(seq: str) -> np.ndarray:
+    """Make all-zero splice array."""
+    return np.zeros(len(seq), dtype=int)
 
 
 def test_naive_mamba_forward(model):
     """Test NaiveMamba forward pass with batch."""
     sequences = ["ATGATG", "ATGATGATG"]
-    cds = [np.array([1, 0, 0, 1, 0, 0]), np.array([1, 0, 0, 1, 0, 0, 1, 0, 0])]
-    splice = [np.array([0, 0, 0, 0, 0, 0]), np.array([0, 0, 0, 0, 0, 0, 0, 0, 0])]
+    cds = [make_cds(s) for s in sequences]
+    splice = [make_splice(s) for s in sequences]
 
-    out = model.embed(sequences, cds, splice)
+    out = torch.stack(model.embed(sequences, cds, splice))
     assert out.shape == (2, 64)
 
 
 def test_naive_mamba_single_sequence(model):
     """Test NaiveMamba with single sequence via embed_sequence."""
     sequence = "ATGATG"
-    cds = np.array([1, 0, 0, 1, 0, 0])
-    splice = np.array([0, 0, 0, 0, 0, 0])
-
-    out = model.embed_sequence(sequence, cds, splice)
+    out = model.embed_sequence(sequence, make_cds(sequence), make_splice(sequence))
     assert out.shape == (1, 64)
 
 
 def test_naive_mamba_requires_cds_splice(model):
     """Test NaiveMamba raises error without cds/splice tracks."""
+    seq = "ATGATG"
     with pytest.raises(ValueError):
-        model.embed(["ATGATG"])
-
-    with pytest.raises(ValueError):
-        model.embed(["ATGATG"], cds=[np.array([1, 0, 0, 1, 0, 0])])
+        model.embed([seq])
 
     with pytest.raises(ValueError):
-        model.embed(["ATGATG"], splice=[np.array([0, 0, 0, 0, 0, 0])])
+        model.embed([seq], cds=[make_cds(seq)])
+
+    with pytest.raises(ValueError):
+        model.embed([seq], splice=[make_splice(seq)])
 
 
-def test_naive_mamba_batch_ragged(model):
-    """Test that batch embedding matches individual embeddings."""
+def test_naive_mamba_embed_batch_ragged(model):
+    """Test ragged batches match individual embeddings."""
     sequences = ["ATGATG", "ATGATGATGATGATGATG"]
-    cds = [
-        np.array([1, 0, 0, 1, 0, 0]),
-        np.array([1, 0, 0] * 6)
-    ]
-    splice = [
-        np.array([0] * 6),
-        np.array([0] * 18)
-    ]
+    cds = [make_cds(s) for s in sequences]
+    splice = [make_splice(s) for s in sequences]
 
-    batch_out = model.embed(sequences, cds, splice)
+    batch_out = torch.stack(model.embed(sequences, cds, splice))
 
     individual_outs = []
     for seq, c, s in zip(sequences, cds, splice):
         out = model.embed([seq], [c], [s])
-        individual_outs.append(out)
+        individual_outs.append(out[0])
 
-    individual_stacked = torch.cat(individual_outs, dim=0)
+    individual_stacked = torch.stack(individual_outs)
 
     assert torch.allclose(batch_out, individual_stacked, atol=1e-5)
 
 
 def test_naive_mamba_custom_agg_fn(model):
     """Test NaiveMamba with custom aggregation function."""
-    sequence = "ATGATG"
-    cds = np.array([1, 0, 0, 1, 0, 0])
-    splice = np.array([0, 0, 0, 0, 0, 0])
+    from functools import partial
+    seq = "ATGATG"
+    cds = make_cds(seq)
+    splice = make_splice(seq)
 
-    out_mean = model.embed([sequence], [cds], [splice], agg_fn=torch.mean)
-    out_sum = model.embed([sequence], [cds], [splice], agg_fn=torch.sum)
+    out_mean = torch.stack(model.embed([seq], [cds], [splice], agg_fn=partial(torch.mean, dim=0)))
+    out_sum = torch.stack(model.embed([seq], [cds], [splice], agg_fn=partial(torch.sum, dim=0)))
 
     assert out_mean.shape == (1, 64)
     assert out_sum.shape == (1, 64)
     assert not torch.allclose(out_mean, out_sum)
 
 
+@torch.no_grad()
+def test_naive_mamba_embed_ragged_agg(model):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    cds = [make_cds(s) for s in seqs]
+    splice = [make_splice(s) for s in seqs]
+    out = model.embed(seqs, cds=cds, splice=splice, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+
+
 def test_naive_mamba_gradient_flow(model):
     """Test that gradients can flow through the model."""
     model.set_train_mode()
 
-    cds = np.array([1, 0, 0, 1, 0, 0])
-    splice = np.array([0, 0, 0, 0, 0, 0])
-    out = model.embed(["ATGATG"], cds=[cds], splice=[splice])
-    assert out.requires_grad, "Output should require gradients"
+    seq = "ATGATG"
+    out = model.embed([seq], cds=[make_cds(seq)], splice=[make_splice(seq)])
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False

@@ -1,4 +1,7 @@
 import pytest
+from unittest.mock import patch
+
+import numpy as np
 
 pytest.importorskip("torch")
 import torch
@@ -15,24 +18,40 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> CodonBERT:
     """Get CodonBERT model."""
-    return CodonBERT("codonbert", device)
+    model = CodonBERT("codonbert", device)
+    model.set_inference_mode()
+    return model
+
+
+def make_cds(seq: str) -> np.ndarray:
+    """Make CDS array marking every codon start (assumes pure CDS input)."""
+    arr = np.zeros(len(seq), dtype=int)
+    arr[::3] = 1
+    return arr
+
+
+def test_codonbert_requires_cds(model):
+    """Test that CodonBERT raises error when CDS is not provided."""
+    with pytest.raises(ValueError, match="CodonBERT requires cds"):
+        model.embed(["ATGATG"])
 
 
 def test_codonbert_forward(model):
     """Test CodonBERT forward pass."""
-    out = model.embed_sequence("ATGATG")
+    seq = "ATGATG"
+    out = model.embed_sequence(seq, cds=make_cds(seq))
     assert out.shape == (1, 768)
 
 
 @torch.no_grad()
 def test_codonbert_converts_t_to_u(model):
     """Test that CodonBERT converts T->U for proper tokenization."""
-    # DNA and RNA versions should produce identical embeddings
     dna_seq = "ATGATGATG"
     rna_seq = "AUGAUGAUG"
+    cds = make_cds(dna_seq)
 
-    dna_output = model.embed_sequence(dna_seq).cpu()
-    rna_output = model.embed_sequence(rna_seq).cpu()
+    dna_output = model.embed_sequence(dna_seq, cds=cds).cpu()
+    rna_output = model.embed_sequence(rna_seq, cds=make_cds(rna_seq)).cpu()
 
     assert torch.allclose(dna_output, rna_output, atol=1e-5), \
         "DNA (T) and RNA (U) sequences should produce identical embeddings"
@@ -42,16 +61,18 @@ def test_codonbert_converts_t_to_u(model):
 def test_codonbert_embed_batch(model):
     """Test CodonBERT batch embedding."""
     sequences = ["ATGATG", "ATGATGATG", "ATGATGATGATG"]
-    output = model.embed(sequences).cpu()
+    cds = [make_cds(s) for s in sequences]
+    output = torch.stack(model.embed(sequences, cds=cds)).cpu()
     assert output.shape == (3, 768)
 
 
 @torch.no_grad()
 def test_codonbert_embed_batch_single_equals_embed_sequence(model):
-    """Test that embed_batch with single sequence matches embed_sequence."""
+    """Test that embed with single sequence matches embed_sequence."""
     text = "ATGATGATG"
-    single_output = model.embed_sequence(text).cpu()
-    batch_output = model.embed([text]).cpu()
+    cds = make_cds(text)
+    single_output = model.embed_sequence(text, cds=cds).cpu()
+    batch_output = torch.stack(model.embed([text], cds=[cds])).cpu()
     assert torch.allclose(single_output, batch_output, atol=1e-5)
 
 
@@ -64,12 +85,13 @@ def test_codonbert_embed_batch_ragged(model):
         "ATG" * 100,
         "ATG" * 20,
     ]
+    cds = [make_cds(s) for s in sequences]
 
-    batch_output = model.embed(sequences).cpu()
+    batch_output = torch.stack(model.embed(sequences, cds=cds)).cpu()
     assert batch_output.shape == (4, 768)
 
     for i, seq in enumerate(sequences):
-        single_output = model.embed_sequence(seq).cpu()
+        single_output = model.embed_sequence(seq, cds=cds[i]).cpu()
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
@@ -80,21 +102,19 @@ def test_codonbert_embed_batch_ragged(model):
 @torch.no_grad()
 def test_codonbert_excludes_special_tokens(model):
     """Test that CLS and SEP tokens are excluded from pooling."""
-    text = "AUG" * 20  # Use RNA notation to match vocab
+    text = "AUG" * 20  # 20 codons in RNA notation
 
-    toks = model.tokenizer([text], return_tensors="pt", padding=True)
+    # Tokenize using the same codon-format that _forward_chunks uses
+    codon_text = model._nt_to_codons(text)
+    toks = model.tokenizer([codon_text], return_tensors="pt", padding=True)
     toks = toks.to(model.device)
     hidden_states = model.model(**toks).last_hidden_state
 
-    # Mean over ALL tokens (including CLS/SEP)
     mean_all = hidden_states.mean(dim=1).cpu()
-
-    # Mean excluding first and last (CLS/SEP)
     mean_no_special = hidden_states[:, 1:-1, :].mean(dim=1).cpu()
 
-    # Model output should match mean_no_special, not mean_all
-    # Note: embed_sequence converts T->U internally, so use RNA input
-    output = model.embed_sequence(text).cpu()
+    cds = make_cds(text)
+    output = model.embed_sequence(text, cds=cds).cpu()
 
     assert torch.allclose(output, mean_no_special, atol=1e-5), \
         "Output should exclude CLS/SEP tokens"
@@ -105,36 +125,90 @@ def test_codonbert_excludes_special_tokens(model):
 @torch.no_grad()
 def test_codonbert_single_codon(model):
     """Test embedding a single codon."""
-    output = model.embed_sequence("ATG").cpu()
+    seq = "ATG"
+    output = model.embed_sequence(seq, cds=make_cds(seq)).cpu()
     assert output.shape == (1, 768)
     assert not torch.isnan(output).any()
 
 
 @torch.no_grad()
+def test_codonbert_cds_slice(model):
+    """Test that CDS extraction correctly slices the CDS region."""
+    input_seq = "A" * 30 + "T" * 30 + "G" * 40
+    cds = np.array([0] * 30 + [1, 0, 0] * 10 + [0] * 40)
+
+    with patch.object(
+        model,
+        "_forward_chunks",
+        wraps=model._forward_chunks
+    ) as mock:
+        mock.return_value = (
+            torch.zeros(1, 10, 768, device=model.device),
+            torch.ones(1, 10, device=model.device)
+        )
+        model.embed([input_seq], cds=[cds])
+        chunks = mock.call_args[0][0]
+        # CDS region is 30 U's (converted from T's)
+        assert chunks[0] == "U" * 30
+
+
+@torch.no_grad()
 def test_codonbert_max_length_boundary(model):
     """Test sequence at max_length boundary."""
-    # Exactly at boundary (1 chunk) - max_length_nt = 3066
-    seq_at_boundary = "ATG" * (model.max_length_nt // 3)
-    output1 = model.embed_sequence(seq_at_boundary).cpu()
+    max_nt = (model.max_length - 2) * 3
+    seq_at_boundary = "ATG" * (max_nt // 3)
+    cds_at = make_cds(seq_at_boundary)
+    output1 = model.embed_sequence(seq_at_boundary, cds=cds_at).cpu()
     assert output1.shape == (1, 768)
 
-    # One codon over boundary (2 chunks)
     seq_over_boundary = seq_at_boundary + "ATG"
-    output2 = model.embed_sequence(seq_over_boundary).cpu()
+    cds_over = make_cds(seq_over_boundary)
+    output2 = model.embed_sequence(seq_over_boundary, cds=cds_over).cpu()
     assert output2.shape == (1, 768)
 
-    # Outputs should be different
     assert not torch.allclose(output1, output2, atol=1e-5)
+
+
+@torch.no_grad()
+def test_codonbert_get_cds_full(model):
+    """Test get_cds extracts the correct CDS region."""
+    sequence = "CCUAUGCCG"
+    cds = np.array([0, 0, 0, 1, 0, 0, 0, 0, 0])
+    cds_seq = model.get_cds(sequence, cds)
+    assert cds_seq == "AUG"
+
+
+@torch.no_grad()
+def test_codonbert_get_cds_missing(model):
+    """Test get_cds when no CDS is marked."""
+    sequence = "CCGATGCC"  # 8 chars, truncated to 6
+    cds = np.zeros(len(sequence), dtype=int)
+    with pytest.warns(UserWarning, match="No CDS found"):
+        cds_seq = model.get_cds(sequence, cds)
+    assert cds_seq == "CCGATG"
+
+
+@torch.no_grad()
+def test_codonbert_embed_ragged_agg(model):
+    """Test embed with identity agg_fn returns per-token 2D embeddings."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    cds = [make_cds(s) for s in seqs]
+    out = model.embed(seqs, cds=cds, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different codon counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
 
 
 def test_codonbert_gradient_flow(model):
     """Test that gradients can flow through the model."""
     model.set_train_mode()
 
-    out = model.embed(["ATGATG"])
-    assert out.requires_grad, "Output should require gradients"
+    seq = "ATGATG"
+    out = model.embed([seq], cds=[make_cds(seq)])
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False

@@ -33,7 +33,7 @@ def test_splicebert_1024_forward(model_1024):
     assert model_1024.max_length == 1024
 
     text = "ATGATGATGATG"
-    output = model_1024.embed([text]).cpu()
+    output = torch.stack(model_1024.embed([text])).cpu()
     assert output.shape == (1, 512)
 
 
@@ -43,7 +43,7 @@ def test_splicebert_510_forward(model_510):
     assert model_510.max_length == 510
 
     text = "A" * 510
-    output = model_510.embed([text]).cpu()
+    output = torch.stack(model_510.embed([text])).cpu()
     assert output.shape == (1, 512)
 
 
@@ -56,11 +56,11 @@ def test_splicebert_1024_embed_batch(model_1024):
         "TTTAAAGGGCCCAAA",
     ]
 
-    batch_output = model_1024.embed(sequences).cpu()
+    batch_output = torch.stack(model_1024.embed(sequences)).cpu()
     assert batch_output.shape == (3, 512)
 
     for i, seq in enumerate(sequences):
-        single_output = model_1024.embed([seq]).cpu()
+        single_output = torch.stack(model_1024.embed([seq])).cpu()
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
@@ -77,11 +77,11 @@ def test_splicebert_510_embed_batch(model_510):
         "C" * 510,
     ]
 
-    batch_output = model_510.embed(sequences).cpu()
+    batch_output = torch.stack(model_510.embed(sequences)).cpu()
     assert batch_output.shape == (3, 512)
 
     for i, seq in enumerate(sequences):
-        single_output = model_510.embed([seq]).cpu()
+        single_output = torch.stack(model_510.embed([seq])).cpu()
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
@@ -94,7 +94,7 @@ def test_splicebert_510_overlap_handling(model_510):
     model_510.set_inference_mode()
 
     seq_with_overlap = "A" * 600
-    output = model_510.embed([seq_with_overlap]).cpu()
+    output = torch.stack(model_510.embed([seq_with_overlap])).cpu()
     assert output.shape == (1, 512)
 
 
@@ -129,8 +129,19 @@ def test_splicebert_1024_chunking(model_1024):
     model_1024.set_inference_mode()
 
     long_seq = "ATGC" * 500
-    output = model_1024.embed([long_seq]).cpu()
+    output = torch.stack(model_1024.embed([long_seq])).cpu()
     assert output.shape == (1, 512)
+
+
+@torch.no_grad()
+def test_splicebert_embed_ragged_agg(model_1024):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    out = model_1024.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
 
 
 def test_splicebert_gradient_flow(model_1024):
@@ -138,9 +149,9 @@ def test_splicebert_gradient_flow(model_1024):
     model_1024.set_train_mode()
 
     out = model_1024.embed(["ATGATG"])
-    assert out.requires_grad, "Output should require gradients"
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False

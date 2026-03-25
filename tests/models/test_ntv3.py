@@ -1,5 +1,7 @@
 import pytest
 
+from unittest.mock import patch
+
 pytest.importorskip("torch")
 
 import torch
@@ -14,30 +16,121 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def ntmodelv3(device) -> NucleotideTransformerV3:
+def model(device) -> NucleotideTransformerV3:
     """Get NucleotideTransformerV3 model."""
-    return NucleotideTransformerV3("v3_8m_pre", device)
+    m = NucleotideTransformerV3("v3_8M_pre", device)
+    m.set_inference_mode()
+    return m
 
 
-def test_ntv3_forward(ntmodelv3):
+def test_ntv3_forward(model):
     """Test NucleotideTransformerV3 initialization and forward pass."""
-    assert ntmodelv3.is_sixtrack is False
-
-    out = ntmodelv3.embed_sequence("ATGATG")
+    out = model.embed_sequence("ATGATG")
     assert out.shape == (1, 256)
 
 
 def test_ntv3_forward_posttrained(device):
     """Test NucleotideTransformerV3 post-trained model forward pass."""
-    model = NucleotideTransformerV3("v3_100m_post", device)
-    model.set_species("human")
+    m = NucleotideTransformerV3("v3_100M_post", device)
+    m.set_species("human")
 
-    out = model.embed_sequence("ATGATG")
+    out = m.embed_sequence("ATGATG")
     assert out.shape == (1, 768)
 
 
-def test_ntv3_forward_non_128(ntmodelv3):
+def test_ntv3_forward_non_128(model):
     """Test NucleotideTransformerV3 forward pass with non-multiple of 128 length."""
     long_sequence = "ATGC" * 33  # 132 nucleotides
-    out = ntmodelv3.embed_sequence(long_sequence)
+    out = model.embed_sequence(long_sequence)
     assert out.shape == (1, 256)
+
+
+def test_ntv3_embed_batch(model):
+    """Test NucleotideTransformerV3 batch embedding."""
+    sequences = ["ATGATG", "GCGCGC", "AAACCC"]
+    out = torch.stack(model.embed(sequences))
+    assert out.shape == (3, 256)
+
+
+@torch.no_grad()
+def test_ntv3_embed_batch_ragged(model):
+    """Test ragged batches match individual embeddings."""
+    sequences = [
+        "ACTG" * 5,
+        "ACTG" * 50,
+        "ACTG" * 33,
+        "ACTG" * 10,
+    ]
+
+    batch_out = torch.stack(model.embed(sequences)).cpu()
+    assert batch_out.shape == (4, 256)
+
+    for i, seq in enumerate(sequences):
+        single_out = torch.stack(model.embed([seq])).cpu()
+        assert torch.allclose(
+            batch_out[i:i + 1], single_out, atol=1e-5
+        ), f"Mismatch at sequence {i} (len {len(seq)})"
+
+
+def test_ntv3_excludes_special_tokens(model):
+    """Verify pooling mask reflects no CLS/SEP — only padding is excluded."""
+    with patch.object(model, "model") as mock_model:
+        seq_len = 6
+        # NTv3 pads to multiple of 128; mock returns hidden states accordingly
+        mock_model.return_value.hidden_states = [
+            torch.ones(1, 128, 256, device=model.device)
+        ]
+
+        _, mask = model._forward_chunks(["ATGATG"])
+
+        # Nucleotide positions should be 1 (no CLS/SEP exclusion)
+        assert mask[0, :seq_len].sum().item() == seq_len
+        # Padding positions (beyond seq_len, up to 128) should be 0
+        assert mask[0, seq_len:].sum().item() == 0
+
+
+def test_ntv3_posttrained_requires_species(device):
+    """Test that post-trained model auto-sets species when none given."""
+    import warnings
+    m = NucleotideTransformerV3("v3_100M_post", device)
+    m.set_inference_mode()
+
+    # species_id should be None before any embed call
+    assert m.species_id is None
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        out = m.embed(["ATGATG"])
+        assert any("species" in str(warning.message).lower() for warning in w)
+
+    assert out[0].shape == (768,)
+
+
+@torch.no_grad()
+def test_ntv3_embed_ragged_agg(model):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+
+
+def test_ntv3_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
+
+    out = model.embed(["ATGATG"])
+    assert out[0].requires_grad, "Output should require gradients"
+
+    loss = torch.stack(out).sum()
+    loss.backward()
+
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
+
+    assert has_grad, "No gradients flowed to model parameters"

@@ -18,7 +18,9 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def borzoi(device) -> Borzoi:
     """Get Borzoi model."""
-    return Borzoi("borzoi-replicate-0", device)
+    model = Borzoi("borzoi-replicate-0", device)
+    model.set_inference_mode()
+    return model
 
 
 def test_borzoi_forward(borzoi):
@@ -31,16 +33,12 @@ def test_borzoi_forward(borzoi):
 
 def test_borzoi_embed_batch(borzoi):
     """Test batch embed matches individual embeddings."""
-    # Note: Borzoi uses self.models (list) not self.model, so we set eval manually
-    for m in borzoi.models:
-        m.eval()
-    torch.set_grad_enabled(False)
     sequences = [
         "ACGT" * 50000,
         "ACGT" * 60000,
     ]
 
-    batch_output = borzoi.embed(sequences).cpu()
+    batch_output = torch.stack(borzoi.embed(sequences)).cpu()
     assert batch_output.shape == (2, 1536)
 
     for i, seq in enumerate(sequences):
@@ -103,6 +101,17 @@ def test_borzoi_single_vs_ensemble():
     assert len(ensemble_versions) == 4
     assert ensemble_versions[0] == "borzoi-replicate-0"
     assert ensemble_versions[3] == "borzoi-replicate-3"
+
+
+@torch.no_grad()
+def test_borzoi_embed_ragged_agg(borzoi):
+    """Test embed with identity agg_fn returns per-bin embeddings (ragged)."""
+    seqs = ["ATGC" * 100, "ATGC" * 400]  # 400 and 1600 bp -> different bin counts
+    out = borzoi.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_bins, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different bin counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
 
 
 def test_borzoi_ensemble_averaging():

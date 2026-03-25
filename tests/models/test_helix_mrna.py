@@ -3,7 +3,7 @@ import pytest
 import numpy as np
 import torch
 
-from mrna_bench.models.helix_mrna import HelixmRNAWrapper
+from mrna_bench.models.helix_mrna import HelixmRNA
 
 
 @pytest.fixture(scope="module")
@@ -14,9 +14,11 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def helix_mrna(device) -> HelixmRNAWrapper:
+def helix_mrna(device) -> HelixmRNA:
     """Get Helix-mRNA model."""
-    return HelixmRNAWrapper("helix-mrna", device)
+    model = HelixmRNA("helix-mrna", device)
+    model.set_inference_mode()
+    return model
 
 
 def test_helix_mrna_forward(helix_mrna):
@@ -24,28 +26,26 @@ def test_helix_mrna_forward(helix_mrna):
     out = helix_mrna.embed_sequence("ATGATG")
     assert out.shape == (1, 256)
 
+@torch.no_grad()
+def test_helix_mrna_converts_t_to_u(helix_mrna):
+    """Test that Helix-mRNA converts T->U for proper tokenization."""
+    # DNA and RNA versions should produce identical embeddings
+    dna_seq = "ATGATGATG"
+    rna_seq = "AUGAUGAUG"
 
-def test_helix_mrna_forward_token_convert(helix_mrna):
-    """Test Helix-mRNA converts tokens from T->U."""
-    with patch.object(
-        helix_mrna.model,
-        "process_data",
-        wraps=helix_mrna.model.process_data
-    ) as mock_forward:
-        helix_mrna.embed_sequence("ATGATG")
-        mock_forward.assert_called_once_with(["AUGAUG"])
+    dna_output = helix_mrna.embed_sequence(dna_seq).cpu()
+    rna_output = helix_mrna.embed_sequence(rna_seq).cpu()
 
-    with patch.object(
-        helix_mrna.model,
-        "process_data",
-        wraps=helix_mrna.model.process_data
-    ) as mock_forward:
-        helix_mrna.embed(
-            ["ATGATG"],
-            cds=[np.zeros((6,))],
-            splice=[np.zeros((6,))]
-        )
-        mock_forward.assert_called_once_with(["AUGAUG"])
+    assert torch.allclose(dna_output, rna_output, atol=1e-5), \
+        "DNA (T) and RNA (U) sequences should produce identical embeddings"
+
+
+@torch.no_grad()
+def test_helix_mrna_embed_batch(helix_mrna):
+    """Test Helix-mRNA batch embedding."""
+    sequences = ["ATGATG", "ATGATGATG", "ATGATGATGATG"]
+    output = torch.stack(helix_mrna.embed(sequences)).cpu()
+    assert output.shape == (3, 256)
 
 
 def test_helix_mrna_converter(helix_mrna):
@@ -64,20 +64,29 @@ def test_helix_mrna_converter(helix_mrna):
     assert out_3 == "AUGUAG"
 
 
+@torch.no_grad()
+def test_helix_mrna_embed_ragged_agg(helix_mrna):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    out = helix_mrna.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+
+
 def test_helix_mrna_gradient_flow(helix_mrna):
     """Test that gradients can flow through the model."""
-    # Helix-mRNA has nested model structure: wrapper.model.model
-    helix_mrna.model.model.train()
-    torch.set_grad_enabled(True)
+    helix_mrna.set_train_mode()
 
     out = helix_mrna.embed(["ATGATG"])
-    assert out.requires_grad, "Output should require gradients"
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False
-    for param in helix_mrna.model.model.parameters():
+    for param in helix_mrna.model.parameters():
         if param.grad is not None and param.grad.abs().sum() > 0:
             has_grad = True
             break

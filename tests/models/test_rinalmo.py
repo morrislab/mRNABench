@@ -28,13 +28,16 @@ def rinalmo(request, device):
     """Get RiNALMo model and expected embedding dim."""
     model_version, embed_dim = request.param
     model = RiNALMo(model_version, device)
+    model.set_inference_mode()
     return model, embed_dim
 
 
 @pytest.fixture(scope="module")
 def rinalmo_giga(device) -> RiNALMo:
     """Get RiNALMo giga model for specific output tests."""
-    return RiNALMo("rinalmo-giga", device)
+    model = RiNALMo("rinalmo-giga", device)
+    model.set_inference_mode()
+    return model
 
 
 def test_rinalmo_forward(rinalmo):
@@ -44,7 +47,7 @@ def test_rinalmo_forward(rinalmo):
     text = "ACTTTGGCCA"
     output = model.embed_sequence(
         text,
-        agg_fn=partial(torch.mean, dim=1)
+        agg_fn=partial(torch.mean, dim=0)
     ).cpu()
     assert output.shape == (1, embed_dim)
 
@@ -54,7 +57,7 @@ def test_rinalmo_giga_output(rinalmo_giga):
     text = "ACTTTGGCCA"
     output = rinalmo_giga.embed_sequence(
         text,
-        agg_fn=partial(torch.mean, dim=1)
+        agg_fn=partial(torch.mean, dim=0)
     ).cpu()
     assert output.shape == (1, 1280)
 
@@ -66,7 +69,7 @@ def test_rinalmo_giga_output(rinalmo_giga):
     )
 
 
-def test_rinalmo_forward_converts_tu(rinalmo):
+def test_rinalmo_converts_t_to_u(rinalmo):
     """Test that RiNALMo forward pass automatically converts T->U."""
     model, _ = rinalmo
     text = "ACTTTGGCCA"
@@ -87,7 +90,7 @@ def test_rinalmo_embed_batch(rinalmo):
     """Test RiNALMo batch embedding."""
     model, embed_dim = rinalmo
     sequences = ["ACTTTGGCCA", "GGCCAATTGG", "AAAAACCCCC"]
-    output = model.embed(sequences).cpu()
+    output = torch.stack(model.embed(sequences)).cpu()
     assert output.shape == (3, embed_dim)
 
 
@@ -96,7 +99,7 @@ def test_rinalmo_embed_batch_single_equals_embed_sequence(rinalmo):
     model, _ = rinalmo
     text = "ACTTTGGCCA"
     single_output = model.embed_sequence(text).cpu()
-    batch_output = model.embed([text]).cpu()
+    batch_output = torch.stack(model.embed([text])).cpu()
     assert torch.allclose(single_output, batch_output, atol=1e-5)
 
 
@@ -107,7 +110,7 @@ def test_rinalmo_embed_batch_with_chunking(rinalmo):
     short_seq = "ACTG" * 100
     long_seq = "ACTG" * 3000
 
-    output = model.embed([short_seq, long_seq]).cpu()
+    output = torch.stack(model.embed([short_seq, long_seq])).cpu()
     assert output.shape == (2, embed_dim)
 
     single_short = model.embed_sequence(short_seq).cpu()
@@ -128,7 +131,7 @@ def test_rinalmo_embed_batch_ragged(rinalmo):
         "ACTG" * 10,
     ]
 
-    batch_output = model.embed(sequences).cpu()
+    batch_output = torch.stack(model.embed(sequences)).cpu()
     assert batch_output.shape == (4, embed_dim)
 
     for i, seq in enumerate(sequences):
@@ -194,14 +197,25 @@ def test_rinalmo_max_length_boundary(rinalmo):
     assert not torch.allclose(output1, output2, atol=1e-5)
 
 
+@torch.no_grad()
+def test_rinalmo_embed_ragged_agg(rinalmo_giga):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    out = rinalmo_giga.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+
+
 def test_rinalmo_gradient_flow(rinalmo_giga):
     """Test that gradients can flow through the model."""
     rinalmo_giga.set_train_mode()
 
     out = rinalmo_giga.embed(["ATGATG"])
-    assert out.requires_grad, "Output should require gradients"
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False

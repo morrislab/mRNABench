@@ -37,7 +37,7 @@ def test_enformer_embed_batch(enformer):
         "ACGT" * 30000,
     ]
 
-    batch_output = enformer.embed(sequences).cpu()
+    batch_output = torch.stack(enformer.embed(sequences)).cpu()
     assert batch_output.shape == (2, 3072)
 
     for i, seq in enumerate(sequences):
@@ -47,6 +47,17 @@ def test_enformer_embed_batch(enformer):
             single_output,
             atol=1e-4
         ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+
+
+@torch.no_grad()
+def test_enformer_embed_ragged_agg(enformer):
+    """Test embed with identity agg_fn returns per-bin embeddings (ragged)."""
+    seqs = ["ACGT" * 250, "ACGT" * 1000]  # 1000 and 4000 bp -> different bin counts
+    out = enformer.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_bins, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different bin counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
 
 
 def test_enformer_padding_logic(enformer):

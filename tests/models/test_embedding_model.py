@@ -78,7 +78,7 @@ def test_embed_with_chunking_batch_no_chunking(model):
         embed_fn=model.mock_forward_chunks,
     )
 
-    assert output.shape == (3, model.hidden_dim)
+    assert len(output) == 3 and output[0].shape == (model.hidden_dim,)
 
     for i, seq in enumerate(sequences):
         expected_mean = sum(ord(c) for c in seq) / len(seq)
@@ -92,9 +92,9 @@ def test_embed_with_chunking_batch_no_chunking(model):
 def test_embed_with_chunking_batch_with_chunking(model):
     """Test batch where sequences require multiple chunks."""
     sequences = [
-        "ATG",           # 1 chunk
-        "ATGATGATG",     # 3 chunks with max_chunk_length=3
-        "ATGATGA",       # 3 chunks, last chunk partial
+        "ATG",  # 1 chunk
+        "ATGATGATG",  # 3 chunks with max_chunk_length=3
+        "ATGATGA",  # 3 chunks, last chunk partial
     ]
     max_chunk_length = 3
 
@@ -104,7 +104,7 @@ def test_embed_with_chunking_batch_with_chunking(model):
         embed_fn=model.mock_forward_chunks,
     )
 
-    assert output.shape == (3, model.hidden_dim)
+    assert len(output) == 3 and output[0].shape == (model.hidden_dim,)
 
     for i, seq in enumerate(sequences):
         expected_mean = sum(ord(c) for c in seq) / len(seq)
@@ -173,7 +173,7 @@ def test_embed_with_chunking_preserves_gradient(model):
         )
 
         # Backprop should work
-        loss = output.sum()
+        loss = torch.stack(output).sum()
         loss.backward()
 
         assert grad_model.linear.weight.grad is not None

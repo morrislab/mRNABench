@@ -23,7 +23,7 @@ def test_utrbert_forward(model):
     """Test 3'UTR-BERT initialization and forward pass."""
     model.set_inference_mode()
     text = "ACUUUGGCCA"
-    output = model.embed([text]).cpu()
+    output = torch.stack(model.embed([text])).cpu()
     assert output.shape == (1, 768)
 
 
@@ -33,8 +33,8 @@ def test_utrbert_forward_dna_input(model):
     text_rna = "ACUUUGGCCA"
     text_dna = "ACTTTGGCCA"
 
-    output_rna = model.embed([text_rna]).cpu()
-    output_dna = model.embed([text_dna]).cpu()
+    output_rna = torch.stack(model.embed([text_rna])).cpu()
+    output_dna = torch.stack(model.embed([text_dna])).cpu()
 
     assert torch.allclose(output_rna, output_dna, atol=1e-5)
 
@@ -48,11 +48,11 @@ def test_utrbert_embed_batch(model):
         "UUUAAAGGGCCC",
     ]
 
-    batch_output = model.embed(sequences).cpu()
+    batch_output = torch.stack(model.embed(sequences)).cpu()
     assert batch_output.shape == (3, 768)
 
     for i, seq in enumerate(sequences):
-        single_output = model.embed([seq]).cpu()
+        single_output = torch.stack(model.embed([seq])).cpu()
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
@@ -60,14 +60,25 @@ def test_utrbert_embed_batch(model):
         ), "Mismatch at sequence {}".format(i)
 
 
+@torch.no_grad()
+def test_utrbert_embed_ragged_agg(model):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+
+
 def test_utrbert_gradient_flow(model):
     """Test that gradients can flow through the model."""
     model.set_train_mode()
 
     out = model.embed(["ATGATG"])
-    assert out.requires_grad, "Output should require gradients"
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False

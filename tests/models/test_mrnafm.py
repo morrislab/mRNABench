@@ -18,7 +18,16 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> MRNAFM:
     """Get mRNA-FM model."""
-    return MRNAFM("mrna-fm", device)
+    model = MRNAFM("mrna-fm", device)
+    model.set_inference_mode()
+    return model
+
+
+def make_cds(seq: str) -> np.ndarray:
+    """Make CDS array marking every codon start (assumes pure CDS input)."""
+    arr = np.zeros(len(seq), dtype=int)
+    arr[::3] = 1
+    return arr
 
 
 def test_mrnafm_requires_cds(model):
@@ -27,20 +36,17 @@ def test_mrnafm_requires_cds(model):
         model.embed(["ATGATG"])
 
 
-def test_mrnafm_forward_batch(model):
-    """Test mRNA-FM forward pass with multiple sequences."""
-    cds_list = [
-        np.array([1, 0, 0, 1, 0, 0]),
-        np.array([1, 0, 0, 1, 0, 0]),
-        np.array([1, 0, 0, 1, 0, 0]),
-    ]
-    out = model.embed(["ATGATG", "GCGCGC", "AAACCC"], cds=cds_list)
+def test_mrnafm_embed_batch(model):
+    """Test mRNA-FM batch embedding."""
+    sequences = ["ATGATG", "GCGCGC", "AAACCC"]
+    cds = [make_cds(s) for s in sequences]
+    out = torch.stack(model.embed(sequences, cds=cds))
     assert out.shape == (3, 1280)
 
 
-def test_mrnafm_forward_replace(model):
-    """Test mRNA-FM forward pass converts T->U."""
-    cds = np.array([1, 0, 0, 1, 0, 0])
+def test_mrnafm_converts_t_to_u(model):
+    """Test mRNA-FM converts T->U before embedding."""
+    seq = "ATGATG"
     with patch.object(
         model,
         "_forward_chunks",
@@ -50,13 +56,13 @@ def test_mrnafm_forward_replace(model):
             torch.zeros(1, 6, 1280),
             torch.ones(1, 6)
         )
-        model.embed(["ATGATG"], cds=[cds])
+        model.embed([seq], cds=[make_cds(seq)])
         chunks = mock.call_args[0][0]
         assert chunks[0] == "AUGAUG"
 
 
-def test_mrnafm_forward_cds_slice(model):
-    """Test mRNA-FM forward pass with CDS slice."""
+def test_mrnafm_cds_slice(model):
+    """Test mRNA-FM correctly slices CDS region before embedding."""
     input_seq = "A" * 30 + "T" * 30 + "G" * 40
     cds = np.array([0] * 30 + [1, 0, 0] * 10 + [0] * 40)
 
@@ -75,7 +81,7 @@ def test_mrnafm_forward_cds_slice(model):
         assert chunks[0] == "U" * 30
 
 
-def test_get_cds_full(model):
+def test_mrnafm_get_cds_full(model):
     """Test get_cds method."""
     sequence = "CCGATGCCG"
     cds = np.array([0, 0, 0, 1, 0, 0, 0, 0, 0])
@@ -84,7 +90,7 @@ def test_get_cds_full(model):
     assert cds_seq == "ATG"
 
 
-def test_get_cds_missing(model):
+def test_mrnafm_get_cds_missing(model):
     """Test get_cds method when cds is missing."""
     sequence_1 = "CCGATGCCG"
     cds_1 = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0])
@@ -101,7 +107,7 @@ def test_get_cds_missing(model):
     assert cds_seq_2 == "CCGATG"
 
 
-def test_get_cds_irregular(model):
+def test_mrnafm_get_cds_irregular(model):
     """Test get_cds method when cds is not a multiple of 3."""
     sequence = "CCGATGCCG"
     cds_1 = np.array([0, 0, 0, 0, 1, 0, 0, 1, 0])
@@ -152,22 +158,19 @@ def test_mrnafm_mask_variable_lengths(model):
         assert mask[2].sum().item() == 3  # 3 codons
 
 
-def test_mrnafm_forward_variable_length(model):
-    """Test mRNA-FM forward pass with variable length sequences."""
-    cds_list = [
-        np.array([1, 0, 0, 1, 0, 0]),
-        np.array([1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0]),
-    ]
-    out = model.embed(["ATGATG", "GCGCGCGCGCGC"], cds=cds_list)
+def test_mrnafm_embed_batch_ragged(model):
+    """Test mRNA-FM batch embedding with variable length sequences."""
+    sequences = ["ATGATG", "GCGCGCGCGCGC"]
+    cds = [make_cds(s) for s in sequences]
+    out = torch.stack(model.embed(sequences, cds=cds))
     assert out.shape == (2, 1280)
 
 
-def test_mrnafm_forward_chunking(model):
-    """Test mRNA-FM forward pass with sequence requiring chunking."""
+def test_mrnafm_chunking(model):
+    """Test mRNA-FM with sequence requiring chunking."""
     # max_chunk_length = (1024 - 2) * 3 = 3066 nucleotides
     # Create sequence longer than that to trigger chunking
     long_seq = "ATG" * 1100  # 3300 nucleotides > 3066
-    cds = np.array([1, 0, 0] * 1100)
 
     with patch.object(
         model,
@@ -179,25 +182,37 @@ def test_mrnafm_forward_chunking(model):
             torch.zeros(2, 1024, 1280, device=model.device),
             torch.ones(2, 1024, device=model.device)
         )
-        model.embed([long_seq], cds=[cds])
+        model.embed([long_seq], cds=[make_cds(long_seq)])
 
         # Should be called once with 2 chunks
         assert mock.call_count == 1
         chunks = mock.call_args[0][0]
         assert len(chunks) == 2
         assert len(chunks[0]) == 3066  # max chunk length
-        assert len(chunks[1]) == 234   # remaining: 3300 - 3066
+        assert len(chunks[1]) == 234  # remaining: 3300 - 3066
+
+
+@torch.no_grad()
+def test_mrnafm_embed_ragged_agg(model):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCATGATG"]  # 6 and 12 chars
+    cds = [make_cds(s) for s in seqs]
+    out = model.embed(seqs, cds=cds, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
 
 
 def test_mrnafm_gradient_flow(model):
     """Test that gradients can flow through the model."""
     model.set_train_mode()
 
-    cds = np.array([1, 0, 0, 1, 0, 0])
-    out = model.embed(["ATGATG"], cds=[cds])
-    assert out.requires_grad, "Output should require gradients"
+    seq = "ATGATG"
+    out = model.embed([seq], cds=[make_cds(seq)])
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False

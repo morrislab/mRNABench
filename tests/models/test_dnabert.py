@@ -16,7 +16,9 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def dnabert2(device) -> DNABERT2:
     """Get DNABERT2 model."""
-    return DNABERT2("dnabert2", device)
+    model = DNABERT2("dnabert2", device)
+    model.set_inference_mode()
+    return model
 
 
 def test_dnabert2_forward(dnabert2):
@@ -34,7 +36,7 @@ def test_dnabert2_embed_batch_ragged(dnabert2):
         "ATGATG" * 100,
     ]
 
-    batch_output = dnabert2.embed(sequences).cpu()
+    batch_output = torch.stack(dnabert2.embed(sequences)).cpu()
     assert batch_output.shape == (3, 768)
 
     for i, seq in enumerate(sequences):
@@ -69,14 +71,25 @@ def test_dnabert2_excludes_special_tokens(dnabert2):
         "Output should differ from mean including special tokens"
 
 
+@torch.no_grad()
+def test_dnabert2_embed_ragged_agg(dnabert2):
+    """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
+    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    out = dnabert2.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert out[0].dim() == 2  # (num_tokens, hidden_dim)
+    assert out[1].dim() == 2
+    assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
+    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+
+
 def test_dnabert2_gradient_flow(dnabert2):
     """Test that gradients can flow through the model."""
     dnabert2.set_train_mode()
 
     out = dnabert2.embed(["ATGATG"])
-    assert out.requires_grad, "Output should require gradients"
+    assert out[0].requires_grad, "Output should require gradients"
 
-    loss = out.sum()
+    loss = torch.stack(out).sum()
     loss.backward()
 
     has_grad = False
