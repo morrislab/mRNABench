@@ -1,9 +1,9 @@
-import os
 import subprocess
 import argparse
 
 import mrna_bench as mb
 from mrna_bench.datasets.dataset_catalog import DATASET_INFO
+from mrna_bench.linear_probe.persister import LinearProbePersister
 from mrna_bench.models.model_catalog import MODEL_VERSION_MAP, MODEL_CATALOG
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
 
@@ -27,13 +27,11 @@ if __name__ == "__main__":
     parser.add_argument("--per_seed", action='store_true', help="Submit jobs per random seed.")
     args = parser.parse_args()
 
-    lp_format = "{}/result_lp_{}_{}_{}_tcol-{}_split-{}_rs-{}.json"
-
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
         target_cols = dataset_info["target_col"]
-        lp_res_folder = mb.load_dataset(dataset_name).dataset_path + "/lp_results"
+        dataset = mb.load_dataset(dataset_name)
 
         print("Dataset name: ", dataset_name)
 
@@ -84,29 +82,19 @@ if __name__ == "__main__":
                                 # existence check
                                 # ----------------------------
                                 if not args.force_recompute:
-                                    all_exist = True
-                                    for seed in seeds:
+                                    if combo and combo != "all":
+                                        check_name = f"{model_short_name}-{combo}"
+                                    else:
+                                        check_name = model_short_name
 
-                                        if combo and combo != "all":
-                                            name = f"{model_short_name}-{combo}"
-                                        else:
-                                            name = model_short_name
-
-                                        out_fn = lp_format.format(
-                                            lp_res_folder,
-                                            dataset_name,
-                                            name,
-                                            dataset_info["task"][index],
-                                            target_col,
-                                            split_type,
-                                            seed
-                                        )
-
-                                        if not os.path.exists(out_fn):
-                                            all_exist = False
-                                            break
-
-                                    if all_exist:
+                                    persister = LinearProbePersister(
+                                        dataset,
+                                        check_name,
+                                        dataset_info["task"][index],
+                                        target_col,
+                                        split_type,
+                                    )
+                                    if all(persister.result_exists(seed) for seed in seeds):
                                         continue
 
                                 seed_arg = f"[{seeds[0]}]" if args.per_seed else str(seeds)

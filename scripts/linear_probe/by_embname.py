@@ -1,7 +1,6 @@
 """Run linear probe on specified embeddings for a dataset."""
 
 import argparse
-import os
 
 from mrna_bench.datasets import DATASET_CATALOG
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
@@ -33,13 +32,10 @@ if __name__ == "__main__":
         .build()
     )
 
-    lp_res_path = dataset.dataset_path + "/lp_results"
-
     seeds = eval(args.seeds)
 
     for seed in seeds:
-        out_fn = prober.persister.get_output_filename(seed)
-        if os.path.exists(lp_res_path) and out_fn in os.listdir(lp_res_path) and not args.force_recompute:
+        if not args.force_recompute and prober.persister.result_exists(seed):
             print("Results already computed for seed:", seed)
             continue
 
