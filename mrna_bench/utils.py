@@ -80,19 +80,26 @@ class DataManager:
     def get_data_path(self) -> str:
         """Load data_dir_path from config.
 
-        Throws exception if config is not yet initialized.
+        Returns default cache path (~/.cache/mrna_bench) if config is not
+        yet initialized, and persists it to config.
 
         Returns:
             Path to data storage directory.
         """
-        if os.path.exists(self.config_path):
-            with open(self.config_path) as stream:
-                return yaml.safe_load(stream)["data_path"]
+        c_init = os.path.exists(self.config_path)
+        if c_init:
+            with open(self.config_path) as f:
+                config_data = yaml.safe_load(f)
+                p_init = "data_path" in (config_data or {})
         else:
-            raise RuntimeError((
-                "Data storage path is not set. Please run: "
-                "mrna_bench.update_data_path(path_to_store_data)"
-            ))
+            p_init = False
+
+        if not c_init or not p_init:
+            default_path = str(Path.home() / ".cache" / "mrna_bench")
+            self.update_data_path(default_path)
+
+        with open(self.config_path) as stream:
+            return yaml.safe_load(stream)["data_path"]
 
     def update_model_weights_path(self, model_weights_path: str):
         """Update path to model weights storage directory.
