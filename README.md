@@ -54,17 +54,13 @@ After installation, disable FP8 for Evo2 (required for GPUs older than H100):
 # Change line 52: use_fp8_input_projections: False
 ```
 
-### Post-install
-> [!IMPORTANT]
-> After installation, please run the following in Python to set where data associated with the benchmarks will be stored.
+### Post-install (Optional)
+By default, benchmark data is stored in `~/.cache/mrna_bench` and model weights in `~/.cache/mrna_bench/model_weights`. To use a custom location, run:
 ```python
 import mrna_bench as mb
 
-path_to_dir_to_store_data = "DESIRED_PATH"
-mb.update_data_path(path_to_dir_to_store_data)
-
-path_to_dir_to_store_weights = "DESIRED_PATH_FOR_MODEL_WEIGHTS"
-mb.update_model_weights_path(path_to_dir_to_store_weights)
+mb.update_data_path("DESIRED_PATH")
+mb.update_model_weights_path("DESIRED_PATH_FOR_MODEL_WEIGHTS")
 ```
 
 ### Evo2
