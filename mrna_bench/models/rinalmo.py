@@ -16,75 +16,80 @@ class RiNALMo(EmbeddingModel):
     RoPE, SwiGLU activations, and Flash Attention.
 
     Link: https://github.com/lbcb-sci/RiNALMo
-
-    This wrapper uses the multimolecule implementation of RiNALMo:
-    https://huggingface.co/multimolecule
-
-    Available model versions:
-        - rinalmo-giga (0.7B parameters)
-        - rinalmo-mega (0.1B parameters)
-        - rinalmo-micro (33.5M parameters)
     """
 
-    default_version = "rinalmo-mega"
-    valid_versions = ["rinalmo-micro", "rinalmo-mega", "rinalmo-giga"]
+    default_version = "RiNALMo-mega"
+    valid_versions = [
+        "RiNALMo-micro",
+        "RiNALMo-mega",
+        "RiNALMo-giga"
+    ]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"layers\.\d+"]
 
-    max_length = 8192
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        short_name_map = {
+            "RiNALMo-micro": "rinalmo-micro",
+            "RiNALMo-mega": "rinalmo-mega",
+            "RiNALMo-giga": "rinalmo-giga",
+        }
+        return short_name_map[model_version]
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize RiNALMo inference wrapper.
 
         Args:
             model_version: Version of model to load. Valid versions: {
-                "rinalmo-giga", "rinalmo-mega", "rinalmo-micro"
+                "RiNALMo-giga", "RiNALMo-mega", "RiNALMo-micro"
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
-            from multimolecule import (
-                RnaTokenizer, RiNALMoModel, RiNALMoConfig
-            )
+            from transformers import AutoTokenizer, AutoModel
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use RiNALMo."
             )
 
-        model_path = "multimolecule/{}".format(model_version)
-        weights_path = get_model_weights_path()
-
-        self.tokenizer = RnaTokenizer.from_pretrained(
-            model_path,
-            extra_special_tokens={},
-            cache_dir=weights_path
+        hub_id = "Taykhoom/{}".format(model_version)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
         )
 
-        # Checkpoints are saved as RiNALMoForPreTraining with a 'model.'
-        # prefix; RiNALMoModel.from_pretrained doesn't strip it, so we
-        # load manually. Issue exists for multimolecule < 0.0.9
-        from huggingface_hub import hf_hub_download
-        import safetensors.torch as st
-
-        config = RiNALMoConfig.from_pretrained(
-            model_path,
-            cache_dir=weights_path
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
         )
-        self.model = RiNALMoModel(config)
-
-        ckpt_path = hf_hub_download(
-            repo_id=model_path,
-            filename="model.safetensors",
-            cache_dir=weights_path,
-        )
-        ckpt = st.load_file(ckpt_path)
-        weights = {
-            k[len("model."):]: v for k, v in ckpt.items()
-            if k.startswith("model.")
-        }
-        self.model.load_state_dict(weights, strict=False)
-
-        self.model = self.model.to(device)
+        self.model = AutoModel.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
+        ).to(device)
+        self.max_length = self.tokenizer.model_max_length
 
     def _forward_chunks(
         self,
@@ -144,4 +149,51 @@ class RiNALMo(EmbeddingModel):
             max_chunk_length=effective_max,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from RiNALMo.
+
+        RiNALMo nominally uses Flash Attention, but the HuggingFace
+        implementation falls back to eager attention when
+        output_attentions=True is requested, so attention weights are
+        available for all 33 transformer layers.
+
+        Args:
+            sequences: RNA sequences (T or U bases; T→U applied internally).
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            return self.tokenizer(  # type: ignore[return-value]
+                seqs, return_tensors="pt", padding=False
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=self.max_length - 2,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )

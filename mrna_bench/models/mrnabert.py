@@ -23,60 +23,78 @@ class mRNABERT(EmbeddingModel):
 
     default_version = "mRNABERT"
     valid_versions = ["mRNABERT"]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"encoder\.layer\.\d+"]
 
-    # the model uses ALiBi so it can support length extension
-    # during inference, but we empirically set a max length for
-    # chunking to avoid OOM issues because transformers have
-    # quadratic memory usage with respect to sequence length
-    max_length = 10_000
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        short_name_map = {
+            "mRNABERT": "mrnabert",
+        }
+        return short_name_map[model_version]
 
-    def __init__(self, model_version: str, device: torch.device):
+    # the mlps have different target modules for LoRA
+    lora_target_modules = ["Wqkv", "dense", "gated_layers", "wo"]
+
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize mRNABERT inference wrapper.
 
         Args:
             model_version: Version of model to load.
                 Only "mRNABERT" is supported.
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
-            from transformers import AutoModel, AutoTokenizer
-            from transformers.models.bert.configuration_bert import BertConfig
-            from transformers.models.bert.modeling_bert import BertModel
+            from transformers import AutoModel, AutoTokenizer, AutoConfig
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use mRNABERT."
             )
 
-        config = BertConfig.from_pretrained(
-            "Taykhoom/mRNABERT-no-flashattention",
-            cache_dir=get_model_weights_path()
-        )
+        hub_id = "Taykhoom/{}".format(model_version)
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "Taykhoom/mRNABERT-no-flashattention",
+            hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
+
+        self.config = AutoConfig.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+        )
+
+        self.config.attn_implementation = attn_implementation
 
         self.model = AutoModel.from_pretrained(
-            "Taykhoom/mRNABERT-no-flashattention",
+            hub_id,
             trust_remote_code=True,
-            config=config,
-            cache_dir=get_model_weights_path()
-        ).to(device)
-
-        # The remote code registers a custom BertConfig subclass (with
-        # alibi_starting_size) as the AutoModel handler for BertConfig.
-        # Reset to the standard BertModel so that subsequent models that
-        # use plain AutoModel.from_pretrained on a BertConfig don't pick
-        # up the mRNABERT model class and fail on missing config fields.
-        AutoModel._model_mapping.register(
-            BertConfig,
-            (BertModel, BertModel),
-            exist_ok=True
-        )
+            add_pooling_layer=False,
+            cache_dir=get_model_weights_path(),
+            config=self.config,
+        ).to(self.device)
+        # ALiBi allows arbitrary lengths; model_max_length (from config) caps
+        # the chunk size to avoid quadratic-memory OOM.
+        self.max_length = self.tokenizer.model_max_length
 
     def embed(
         self,
@@ -132,7 +150,7 @@ class mRNABERT(EmbeddingModel):
         hidden_states = self.model(
             input_ids=toks["input_ids"],
             attention_mask=attention_mask,
-        )[0]
+        ).last_hidden_state
 
         pooling_mask = attention_mask
 
@@ -223,31 +241,30 @@ class mRNABERT(EmbeddingModel):
         sequence: str,
         cds: np.ndarray,
         chunk_length: int
-    ) -> list[tuple[str, np.ndarray]]:
+    ) -> list[tuple[list[str], np.ndarray]]:
         """Chunk sequence while respecting codon boundaries.
 
         Args:
             sequence: Full RNA sequence.
-            cds: CDS track for sequence.
-            chunk_length: Maximum length of each chunk.
+            cds: CDS track for sequence (one entry per nucleotide).
+            chunk_length: Maximum number of tokens per chunk.
         Returns:
-            List of (sequence chunk, cds chunk) tuples.
+            List of (token list chunk, cds chunk) tuples.
         """
+        tokens = list(sequence)
+        n = len(tokens)
+
         starts = np.where(cds != 0)[0]
         codon_starts = set(starts.tolist())
 
         if not codon_starts:
             return [
-                (
-                    sequence[i: i + chunk_length],
-                    cds[i: i + chunk_length]
-                )
-                for i in range(0, len(sequence), chunk_length)
+                (tokens[i:i + chunk_length], cds[i:i + chunk_length])
+                for i in range(0, n, chunk_length)
             ]
 
         chunks = []
         i = 0
-        n = len(sequence)
 
         while i < n:
             end = min(i + chunk_length, n)
@@ -259,14 +276,14 @@ class mRNABERT(EmbeddingModel):
             if end == i:
                 end = min(i + chunk_length, n)
 
-            chunks.append((sequence[i:end], cds[i:end]))
+            chunks.append((tokens[i:end], cds[i:end]))
             i = end
 
         return chunks
 
     def separate_utr_cds(
         self,
-        sequence: str,
+        tokens: list[str],
         cds: np.ndarray,
     ) -> list[str]:
         """Add spacing to separate UTR and CDS regions.
@@ -279,33 +296,96 @@ class mRNABERT(EmbeddingModel):
         the returned sequence would be: "A A CTG C G T G"
 
         Args:
-            sequence: Full RNA sequence.
-            cds: CDS track for sequence.
+            tokens: Per-nucleotide token list for the sequence chunk (from
+                chunk_sequence_cds_aware).
+            cds: CDS track matching the token list length.
         Returns:
-            Tuple of (5' UTR, CDS, 3' UTR) with appropriate spacing.
+            List containing a single formatted string for the tokenizer.
         """
         starts = np.where(cds != 0)[0]
         if len(starts) == 0:
-            return [" ".join(sequence),]
+            return [" ".join(tokens)]
 
-        start = starts[0]
-        end = min(starts[-1] + 3, len(sequence))
+        start = int(starts[0])
+        end = min(int(starts[-1]) + 3, len(tokens))
 
         parts = []
 
         if start > 0:
-            parts.append(" ".join(sequence[:start]))
+            parts.append(" ".join(tokens[:start]))
 
-        parts.append(
-            " ".join(
-                [
-                    sequence[i: i + 3]
-                    for i in range(start, end, 3)
-                ]
-            )
-        )
+        # CDS: group tokens into 3-nucleotide codons. Truncated codons at the
+        # end are kept as-is (not extended or padded).
+        cds_items = []
+        for j in range(start, end, 3):
+            cds_items.append(''.join(tokens[j:j + 3]))
+        parts.append(" ".join(cds_items))
 
-        if end < len(sequence):
-            parts.append(" ".join(sequence[end:]))
+        if end < len(tokens):
+            parts.append(" ".join(tokens[end:]))
 
         return [" ".join(parts)]
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from mRNABERT.
+
+        Requires CDS tracks for the 6-track tokenization scheme.
+
+        Args:
+            sequences: RNA sequences.
+            cds: CDS tracks (required for 6-track encoding).
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        if cds is None:
+            raise ValueError(
+                "CDS tracks must be provided for mRNABERT extract()."
+            )
+        _ = splice
+
+        def _chunk(seq_cds: tuple) -> list[tuple]:
+            return self.chunk_sequence_cds_aware(
+                seq_cds[0], seq_cds[1], self.max_length - 2
+            )
+
+        def _tokenize(items: list[tuple]) -> dict[str, torch.Tensor]:
+            chunk_seq, chunk_cds = items[0]
+            transformed = self.separate_utr_cds(chunk_seq, chunk_cds)
+            raw = self.tokenizer.batch_encode_plus(
+                transformed,
+                add_special_tokens=True,
+                padding=False,
+                return_tensors="pt",
+                return_special_tokens_mask=True,
+            )
+            return {
+                "input_ids": raw["input_ids"].to(self.device),
+                "attention_mask": (
+                    1 - raw["special_tokens_mask"]
+                ).to(self.device),
+            }
+
+        return self._standard_hf_extract(
+            sequences=list(zip(sequences, cds)),
+            tokenize_fn=_tokenize,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
+            chunk_fn=_chunk,
+        )

@@ -21,19 +21,42 @@ class CodonBERT(EmbeddingModel):
     Link: https://github.com/Sanofi-Public/CodonBERT
     """
 
-    default_version = "codonbert"
-    valid_versions = ["codonbert"]
+    default_version = "CodonBERT"
+    valid_versions = ["CodonBERT"]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"encoder\.layer\.\d+"]
 
-    max_length = 1024  # in tokens (codons)
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        short_name_map = {
+            "CodonBERT": "codonbert",
+        }
+        return short_name_map[model_version]
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize CodonBERT inference wrapper.
 
         Args:
-            model_version: Version of model used; must be "codonbert".
+            model_version: Version of model used; must be "CodonBERT".
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
             from transformers import AutoTokenizer, AutoModel
@@ -42,17 +65,28 @@ class CodonBERT(EmbeddingModel):
                 "Install base_models optional_dependency to use CodonBERT."
             )
 
+        hub_id = "Taykhoom/{}".format(model_version)
+
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "lhallee/CodonBERT",
+            hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
 
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
+        )
+
         self.model = AutoModel.from_pretrained(
-            "lhallee/CodonBERT",
+            hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
         ).to(self.device)
+        self.max_length = self.tokenizer.model_max_length
 
     @staticmethod
     def _nt_to_codons(sequence: str) -> str:
@@ -172,4 +206,62 @@ class CodonBERT(EmbeddingModel):
             max_chunk_length=(self.max_length - 2) * 3,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from CodonBERT.
+
+        CodonBERT is trained on CDS sequences only. If cds tracks are
+        provided, the CDS region is extracted before embedding.
+
+        Args:
+            sequences: RNA sequences.
+            cds: CDS tracks used to extract coding region (required).
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _ = splice
+
+        if cds is None:
+            raise ValueError(
+                "CodonBERT requires cds to extract coding region."
+            )
+
+        processed_sequences = []
+        for i, seq in enumerate(sequences):
+            seq = seq.replace("T", "U")
+            seq = self.get_cds(seq, cds[i])
+            processed_sequences.append(seq)
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            codon_seqs = [self._nt_to_codons(s) for s in seqs]
+            return self.tokenizer(  # type: ignore[return-value]
+                codon_seqs,
+                return_tensors="pt",
+                padding=False,
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=processed_sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=(self.max_length - 2) * 3,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )

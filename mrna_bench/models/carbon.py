@@ -1,33 +1,34 @@
 from collections.abc import Callable
 from functools import partial
+from typing import Any
 
-import torch
 import numpy as np
+import torch
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
-class GENERanno(EmbeddingModel):
-    """Inference wrapper for GENERanno.
+class Carbon(EmbeddingModel):
+    """Inference wrapper for the Carbon family of genomic models.
 
-    GENERanno is a Transformer-encoder genomic foundation model designed for
-    metagenomic annotation. It operates at single-nucleotide resolution with
-    bidirectional attention over sequences up to 8k base pairs.
+    Carbon is a family of decoder-only autoregressive DNA models with a
+    Llama-style architecture (RoPE positional embeddings, ``LlamaForCausalLM``)
+    trained with next-token prediction on eukaryotic genes, mature/spliced
+    mRNA, and bacterial genomes. The models share a hybrid tokenizer that
+    encodes DNA as non-overlapping 6-mers (each DNA token spans ~6 bp) and
+    English text as Qwen3 BPE; DNA inputs must be wrapped in ``<dna>...</dna>``
+    so the tokenizer routes them through the 6-mer vocabulary rather than the
+    text BPE. Native context is 8,192 tokens (~49 kbp).
 
-    The base checkpoints are pretrained on large-scale DNA corpora (e.g.,
-    715B bp prokaryotic and 386B bp eukaryotic variants). Specialized
-    "cds-annotator" checkpoints are finetuned for metagenomic CDS calling.
-
-    Link: https://github.com/GenerTeam/GENERanno
+    Link: https://github.com/huggingface/carbon
     """
 
-    default_version = "eukaryote-0.5b-base"
+    default_version = "Carbon-3B"
     valid_versions = [
-        "prokaryote-0.5b-base",
-        "prokaryote-0.5b-cds-annotator",
-        "eukaryote-0.5b-base",
-        "eukaryote-1.2b-cds-annotator-preview",
+        "Carbon-500M",
+        "Carbon-3B",
+        "Carbon-8B",
     ]
     default_attn_implementation = "flash_attention_2"
     valid_attn_implementations = [
@@ -37,10 +38,15 @@ class GENERanno(EmbeddingModel):
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
 
+    lora_target_modules = [
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
+    ]
+
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
-        return "generanno-" + model_version
+        return model_version.lower()
 
     def __init__(
         self,
@@ -48,33 +54,29 @@ class GENERanno(EmbeddingModel):
         device: torch.device,
         attn_implementation: str | None,
     ):
-        """Initialize GENERanno inference wrapper.
+        """Initialize Carbon inference wrapper.
 
         Args:
-            model_version: Version of GENERanno to load. Valid values are: {
-                "prokaryote-0.5b-base",
-                "prokaryote-0.5b-cds-annotator",
-                "eukaryote-0.5b-base",
-                "eukaryote-1.2b-cds-annotator-preview",
+            model_version: Version of Carbon to load. Valid values are: {
+                "Carbon-500M",
+                "Carbon-3B",
+                "Carbon-8B",
             }
             device: PyTorch device to send model to.
             attn_implementation: Attention backend.
         """
-        super().__init__(
-            model_version,
-            device,
-            attn_implementation
-        )
+        super().__init__(model_version, device, attn_implementation)
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import AutoModel, AutoTokenizer
         except ImportError:
             raise ImportError(
-                "Install base_models optional_dependency to use GENERanno."
+                "Install base_models optional_dependency to use Carbon."
             )
 
+        hub_id = "HuggingFaceBio/{}".format(model_version)
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "GenerTeam/GENERanno-{}".format(model_version),
+            hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
         )
@@ -86,21 +88,40 @@ class GENERanno(EmbeddingModel):
         )
 
         self.model = AutoModel.from_pretrained(
-            "GenerTeam/GENERanno-{}".format(model_version),
+            hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
             dtype=dtype,
         ).to(self.device)
 
-        self.tokenizer.padding_side = "right"
-        self.tokenizer.truncation_side = "right"
+        # DNA tag tokens delimiting the 6-mer region; excluded from pooling.
+        self.dna_tag_ids = set(
+            self.tokenizer.convert_tokens_to_ids(["<dna>", "</dna>"])
+        )
 
-        # Set pad_token to eos_token if not defined
-        if self.tokenizer.pad_token is None:
-            self.tokenizer.pad_token = self.tokenizer.eos_token
+        # Native context (in tokens) varies by model: 8,192 for Carbon-500M,
+        # 32,768 for Carbon-3B/8B. Read it from the config rather
+        # than hardcode.
+        model: Any = self.model
+        self.context_length: int = (
+            model.config.max_position_embeddings
+        )
 
-        self.max_length = 8192  # based on technical report
+        # Reserve the two <dna>/</dna> tokens, then convert the remaining token
+        # budget to nucleotides using the tokenizer's k-mer size.
+        self.max_length = (self.context_length - 2) * self.tokenizer.k
+
+    def _wrap_dna(self, chunks: list[str]) -> list[str]:
+        """Wrap raw nucleotide chunks in <dna>...</dna> for 6-mer tokenization.
+
+        Args:
+            chunks: Raw nucleotide sequence chunks.
+
+        Returns:
+            Chunks delimited by the DNA tags expected by the tokenizer.
+        """
+        return ["<dna>{}</dna>".format(chunk) for chunk in chunks]
 
     def _forward_chunks(
         self,
@@ -109,30 +130,30 @@ class GENERanno(EmbeddingModel):
         """Forward pass for a batch of sequence chunks.
 
         Args:
-            chunks: List of sequence chunks to embed.
+            chunks: List of raw nucleotide chunks to embed.
 
         Returns:
             Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
-            padding and special tokens (CLS/SEP).
+            padding and the <dna>/</dna> delimiter tokens.
         """
         toks = self.tokenizer(
-            chunks,
-            add_special_tokens=True,
+            self._wrap_dna(chunks),
+            add_special_tokens=False,
             return_tensors="pt",
             padding=True,
             truncation=True,
-            max_length=self.max_length,
-            return_special_tokens_mask=True
+            max_length=self.context_length,
         ).to(self.device)
-
-        special_tokens_mask = toks.pop("special_tokens_mask")
 
         hidden_states = self.model(
             **toks,
             output_hidden_states=True
-        ).hidden_states[-1]
+        ).hidden_states[-1].float()
 
-        pooling_mask = 1 - special_tokens_mask
+        is_dna_tag = torch.zeros_like(toks["input_ids"], dtype=torch.bool)
+        for tag_id in self.dna_tag_ids:
+            is_dna_tag |= toks["input_ids"] == tag_id
+        pooling_mask = toks["attention_mask"] * (~is_dna_tag)
 
         return hidden_states, pooling_mask
 
@@ -143,7 +164,7 @@ class GENERanno(EmbeddingModel):
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> list[torch.Tensor]:
-        """Embed sequences using GENERanno.
+        """Embed sequences using Carbon.
 
         Args:
             sequences: List of sequences to embed.
@@ -152,15 +173,14 @@ class GENERanno(EmbeddingModel):
             agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            Embeddings with item shape depending on agg_fn.
-            - default (mean): (1280,) for 0.5b models
-            - default (mean): (2048,) for 1.2b models
+            Embeddings with item shape depending on agg_fn. Default (mean)
+            produces (hidden_dim,): 1024 for 500M, 3072 for 3B, 4096 for 8B.
         """
         _, _ = cds, splice
 
         return self._embed_with_chunking(
             sequences=sequences,
-            max_chunk_length=self.max_length - 2,
+            max_chunk_length=self.max_length,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
         )
@@ -177,7 +197,7 @@ class GENERanno(EmbeddingModel):
         dict[str, list[list[torch.Tensor]]],
         dict[str, list[list[torch.Tensor]] | None],
     ]:
-        """Extract per-layer representations from GENERanno.
+        """Extract per-layer representations from Carbon.
 
         Args:
             sequences: DNA sequences.
@@ -194,18 +214,18 @@ class GENERanno(EmbeddingModel):
 
         def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
             return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                add_special_tokens=True,
+                self._wrap_dna(seqs),
+                add_special_tokens=False,
                 return_tensors="pt",
                 padding=False,
                 truncation=True,
-                max_length=self.max_length,
+                max_length=self.context_length,
             ).to(self.device)
 
         return self._standard_hf_extract(
             sequences=sequences,
             tokenize_fn=tokenize,
-            max_chunk_length=self.max_length - 2,
+            max_chunk_length=self.max_length,
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,

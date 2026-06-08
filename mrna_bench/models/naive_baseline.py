@@ -64,20 +64,34 @@ class NaiveBaseline(EmbeddingModel):
 
     default_version = "naive-4-track"
     valid_versions = ["naive-4-track"]
+    default_attn_implementation = None
+    valid_attn_implementations = None
+    hookable_layer_patterns = []
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
         return model_version.replace("-track", "")
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize NaiveBaseline model.
 
         Args:
             model_version: Version of NaiveBaseline to load.
             device: PyTorch device (unused, kept for interface consistency).
+            attn_implementation: Attention backend (unused, kept
+                for interface consistency).
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         self.model = torch.nn.Identity()
         self.kmer_vectorizer = CountVectorizer(
@@ -123,20 +137,34 @@ class NaiveBaselineSixTrack(EmbeddingModel):
 
     default_version = "naive-6-track"
     valid_versions = ["naive-6-track"]
+    default_attn_implementation = None
+    valid_attn_implementations = None
+    hookable_layer_patterns = []
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
         return model_version.replace("-track", "")
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize NaiveBaselineSixTrack model.
 
         Args:
             model_version: Version of NaiveBaselineSixTrack to load.
             device: PyTorch device (unused, kept for interface consistency).
+            attn_implementation: Attention backend (unused, kept
+                for interface consistency).
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         self.model = torch.nn.Identity()
         self.kmer_vectorizer = CountVectorizer(

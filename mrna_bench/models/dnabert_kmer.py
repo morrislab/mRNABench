@@ -4,28 +4,27 @@ from functools import partial
 import numpy as np
 import torch
 
-from mrna_bench.models.embedding_model import EmbeddingModel
-from mrna_bench.utils import get_model_weights_path
+from mrna_bench import get_model_weights_path
+from mrna_bench.models import EmbeddingModel
 
 
-class SpliceBERT(EmbeddingModel):
-    """Inference Wrapper for SpliceBERT.
+class DNABERT(EmbeddingModel):
+    """Inference wrapper for original k-mer DNABERT models.
 
-    SpliceBERT is a transformer-based RNA foundation model trained on 2 million
-    vertebrate mRNA sequences using a MLM pretraining objective. Alternative
-    versions are trained on only human RNA, and using smaller context windows.
+    DNABERT is a BERT-base DNA foundation model pretrained on the human
+    reference genome using overlapping k-mer tokenization. Unlike DNABERT2,
+    original DNABERT requires sequences to be split into overlapping k-mers
+    separated by spaces before tokenization.
 
-    SpliceBERT-510nt versions strictly use 510nt windows, sequence that is not
-    divisible by 510 is truncated.
-
-    Link: https://github.com/biomed-AI/SpliceBERT
+    Link: https://github.com/jerryji1993/DNABERT
     """
 
-    default_version = "SpliceBERT-1024nt"
+    default_version = "DNABERT-6mer"
     valid_versions = [
-        "SpliceBERT-1024nt",
-        "SpliceBERT-510nt",
-        "SpliceBERT-human-510nt",
+        "DNABERT-3mer",
+        "DNABERT-4mer",
+        "DNABERT-5mer",
+        "DNABERT-6mer",
     ]
     default_attn_implementation = "flash_attention_2"
     valid_attn_implementations = [
@@ -39,9 +38,10 @@ class SpliceBERT(EmbeddingModel):
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
         short_name_map = {
-            "SpliceBERT-1024nt": "splicebert-v-1024nt",
-            "SpliceBERT-510nt": "splicebert-v-510nt",
-            "SpliceBERT-human-510nt": "splicebert-h-510nt",
+            "DNABERT-3mer": "dnabert-3mer",
+            "DNABERT-4mer": "dnabert-4mer",
+            "DNABERT-5mer": "dnabert-5mer",
+            "DNABERT-6mer": "dnabert-6mer",
         }
         return short_name_map[model_version]
 
@@ -51,15 +51,16 @@ class SpliceBERT(EmbeddingModel):
         device: torch.device,
         attn_implementation: str | None,
     ):
-        """Initialize SpliceBERT Model.
+        """Initialize original k-mer DNABERT.
 
         Args:
-            model_version: Model version to use. Valid versions: {
-                "SpliceBERT-1024nt",
-                "SpliceBERT-510nt",
-                "SpliceBERT-human-510nt"
+            model_version: Version of model to load. Valid versions: {
+                "DNABERT-3mer",
+                "DNABERT-4mer",
+                "DNABERT-5mer",
+                "DNABERT-6mer"
             }
-            device: PyTorch device used by model inference.
+            device: PyTorch device to send model to.
             attn_implementation: Attention backend.
         """
         super().__init__(
@@ -72,30 +73,56 @@ class SpliceBERT(EmbeddingModel):
             from transformers import AutoTokenizer, AutoModel
         except ImportError:
             raise ImportError(
-                "Install base_models optional dependency to use SpliceBERT."
+                "Install base_models optional dependency to use DNABERT."
             )
 
+        self.k = int(model_version.split("-")[1].replace("mer", ""))
+
         hub_id = "Taykhoom/{}".format(model_version)
-        cache_dir = get_model_weights_path()
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            hub_id,
-            cache_dir=cache_dir,
-            trust_remote_code=True,
-        )
         dtype = (
             torch.bfloat16
             if self.attn_implementation == "flash_attention_2"
             else torch.float32
         )
+        model_kwargs = {
+            "trust_remote_code": True,
+            "cache_dir": get_model_weights_path(),
+            "attn_implementation": self.attn_implementation,
+            "dtype": dtype,
+        }
+
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+        )
         self.model = AutoModel.from_pretrained(
             hub_id,
-            attn_implementation=self.attn_implementation,
-            cache_dir=cache_dir,
-            trust_remote_code=True,
-            dtype=dtype,
-        ).to(device)
+            **model_kwargs,
+        ).to(self.device)
 
         self.max_length = self.tokenizer.model_max_length
+        self.max_kmer_tokens = self.max_length - 2
+        self.max_chunk_length = self.max_kmer_tokens + self.k - 1
+
+    def _seq_to_kmers(self, seq: str) -> str:
+        """Convert a DNA sequence to overlapping space-delimited k-mers."""
+        return " ".join(
+            seq[i:i + self.k]
+            for i in range(len(seq) - self.k + 1)
+        )
+
+    def _chunk_sequence_for_kmers(self, sequence: str) -> list[str]:
+        """Split sequence into chunks with at most 510 k-mer tokens each."""
+        if len(sequence) < self.k:
+            return [sequence]
+
+        total_kmers = len(sequence) - self.k + 1
+        chunks = []
+        for start in range(0, total_kmers, self.max_kmer_tokens):
+            end = start + self.max_chunk_length
+            chunks.append(sequence[start:end])
+        return chunks
 
     def _forward_chunks(
         self,
@@ -109,10 +136,10 @@ class SpliceBERT(EmbeddingModel):
         Returns:
             Tuple of (hidden_states, pooling_mask) tensors.
         """
-        spaced_chunks = [" ".join(list(chunk)) for chunk in chunks]
+        kmer_chunks = [self._seq_to_kmers(chunk) for chunk in chunks]
 
         toks = self.tokenizer(
-            spaced_chunks,
+            kmer_chunks,
             return_tensors="pt",
             padding=True,
         ).to(self.device)
@@ -127,55 +154,31 @@ class SpliceBERT(EmbeddingModel):
 
         return hidden_states, pooling_mask
 
-    def _embed_1024(
+    def embed(
         self,
         sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
         agg_fn: Callable = partial(torch.mean, dim=0)
     ) -> list[torch.Tensor]:
-        """Embed sequences using 1024nt model.
+        """Embed sequences using original k-mer DNABERT.
 
         Args:
-            sequences: List of sequences to embed.
-            agg_fn: Function used to aggregate embedding across length dim.
-
-        Returns:
-            SpliceBERT embeddings with shape (batch_size, 512).
-        """
-        return self._embed_with_chunking(
-            sequences=sequences,
-            max_chunk_length=self.max_length,
-            embed_fn=self._forward_chunks,
-            agg_fn=agg_fn,
-        )
-
-    def _embed_510(
-        self,
-        sequences: list[str],
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> list[torch.Tensor]:
-        """Embed sequences using 510nt model with overlap handling.
-
-        Args:
-            sequences: List of sequences to embed.
-            agg_fn: Function used to aggregate embedding across length dim.
+            sequences: List of DNA sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
             Embeddings with item shape depending on agg_fn.
-            - default (mean): (512,)
+            - default (mean): (768,)
         """
+        _, _ = cds, splice
+
         all_chunks = []
         chunk_counts = []
-
         for seq in sequences:
-            chunks = self.chunk_sequence(seq, 510)
-            if len(chunks) == 1 and len(chunks[0]) != 510:
-                print(
-                    "Warning: SpliceBERT-510nt input must be at least 510nts. "
-                    "Embedding may not work correctly."
-                )
-            elif len(chunks) > 1 and len(chunks[-1]) != 510:
-                overlap = 510 - len(chunks[-1])
-                chunks[-1] = chunks[-2][-overlap:] + chunks[-1]
+            chunks = self._chunk_sequence_for_kmers(seq)
             all_chunks.extend(chunks)
             chunk_counts.append(len(chunks))
 
@@ -183,7 +186,6 @@ class SpliceBERT(EmbeddingModel):
 
         seq_embeddings = []
         chunk_ptr = 0
-
         for num_chunks in chunk_counts:
             seq_hidden = hidden_states[chunk_ptr:chunk_ptr + num_chunks]
             seq_mask = pooling_mask[chunk_ptr:chunk_ptr + num_chunks]
@@ -192,37 +194,11 @@ class SpliceBERT(EmbeddingModel):
             mask = seq_mask.reshape(-1).bool()
 
             masked_hidden = hidden[mask]
-            seq_embeddings.append(agg_fn(masked_hidden, dim=0))
+            seq_embeddings.append(agg_fn(masked_hidden))
 
             chunk_ptr += num_chunks
 
         return seq_embeddings
-
-    def embed(
-        self,
-        sequences: list[str],
-        cds: list[np.ndarray] | None = None,
-        splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> list[torch.Tensor]:
-        """Embed sequences using SpliceBERT.
-
-        Args:
-            sequences: List of sequences to embed.
-            cds: Unused.
-            splice: Unused.
-            agg_fn: Function used to aggregate embedding across length dim.
-
-        Returns:
-            Embeddings with item shape depending on agg_fn.
-                - default (mean): (512,)
-        """
-        _, _ = cds, splice
-
-        if self.max_length == 510:
-            return self._embed_510(sequences, agg_fn)
-        else:
-            return self._embed_1024(sequences, agg_fn)
 
     def extract(
         self,
@@ -236,12 +212,10 @@ class SpliceBERT(EmbeddingModel):
         dict[str, list[list[torch.Tensor]]],
         dict[str, list[list[torch.Tensor]] | None],
     ]:
-        """Extract per-layer representations from SpliceBERT.
-
-        Uses single-nucleotide spaced tokenization (" ".join(list(seq))).
+        """Extract per-layer representations from original k-mer DNABERT.
 
         Args:
-            sequences: RNA/DNA sequences.
+            sequences: DNA sequences.
             cds: Unused.
             splice: Unused.
             layers: Layer selection; see EmbeddingModel.extract().
@@ -254,9 +228,9 @@ class SpliceBERT(EmbeddingModel):
         _, _ = cds, splice
 
         def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            spaced = [" ".join(list(s)) for s in seqs]
+            kmer_seqs = [self._seq_to_kmers(seq) for seq in seqs]
             return self.tokenizer(  # type: ignore[return-value]
-                spaced,
+                kmer_seqs,
                 return_tensors="pt",
                 padding=False,
             ).to(self.device)
@@ -264,8 +238,8 @@ class SpliceBERT(EmbeddingModel):
         return self._standard_hf_extract(
             sequences=sequences,
             tokenize_fn=tokenize,
-            max_chunk_length=self.max_length,
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,
+            chunk_fn=self._chunk_sequence_for_kmers,
         )

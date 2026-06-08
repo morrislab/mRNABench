@@ -24,10 +24,19 @@ class OmniGenome(EmbeddingModel):
 
     default_version = "omnigenome-186m"
     valid_versions = ["omnigenome-52m", "omnigenome-186m"]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"encoder\.layer\.\d+"]
 
-    max_length = 1024
-
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize OmniGenome inference wrapper.
 
         Args:
@@ -36,11 +45,17 @@ class OmniGenome(EmbeddingModel):
                 "omnigenome-186m",
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
+        self.max_length = 1024
 
         try:
-            from transformers import AutoModel, AutoTokenizer
+            from transformers import AutoModel, AutoTokenizer, AutoConfig
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use OmniGenome."
@@ -61,12 +76,31 @@ class OmniGenome(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        self.model = AutoModel.from_pretrained(
+        config = AutoConfig.from_pretrained(
             path,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
-            token_dropout=False,
+        )
+        config.use_flash_attention = (
+            self.attn_implementation == "flash_attention_2"
+        )
+
+        self.model = AutoModel.from_pretrained(
+            path,
+            trust_remote_code=True,
+            config=config,
+            cache_dir=get_model_weights_path(),
         ).to(device)
+
+        # The 52M model's remote modeling code ignores
+        # config.use_flash_attention (unlike the 186M model) and uses
+        # FlashAttention whenever the flash_attn package is importable.
+        # Force the eager path by clearing the per-layer flash_attn_func,
+        # which each attention block checks before using FlashAttention.
+        if self.attn_implementation != "flash_attention_2":
+            for module in self.model.modules():
+                if hasattr(module, "flash_attn_func"):
+                    module.flash_attn_func = None  # type: ignore[assignment]
 
     def _forward_chunks(
         self,
@@ -157,3 +191,50 @@ class OmniGenome(EmbeddingModel):
             all_embeddings.append(embedding)
 
         return all_embeddings
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from OmniGenome.
+
+        Note: Processes sequences individually to avoid context-dependent
+        embeddings from padding interactions.
+
+        Args:
+            sequences: RNA sequences (T or U bases; T→U applied internally).
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            return self.tokenizer(  # type: ignore[return-value]
+                seqs,
+                return_tensors="pt",
+                padding=False,
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=self.max_length - 2,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
+        )

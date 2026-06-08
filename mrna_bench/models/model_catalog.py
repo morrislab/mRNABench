@@ -1,9 +1,12 @@
 from typing import Type
 
 from .aido import AIDORNA
+from .alphagenome import AlphaGenome
 from .borzoi import Borzoi
+from .carbon import Carbon
 from .codonbert import CodonBERT
 from .dnabert import DNABERT2
+from .dnabert_kmer import DNABERT
 from .dnabert_s import DNABERTS
 from .enformer import Enformer
 from .ernierna import ERNIERNA
@@ -36,8 +39,11 @@ from .embedding_model import EmbeddingModel
 
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "AIDO.RNA": AIDORNA,
+    "AlphaGenome": AlphaGenome,
     "Borzoi": Borzoi,
+    "Carbon": Carbon,
     "CodonBERT": CodonBERT,
+    "DNABERT": DNABERT,
     "DNABERT-S": DNABERTS,
     "DNABERT2": DNABERT2,
     "Enformer": Enformer,

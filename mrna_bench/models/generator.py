@@ -35,13 +35,25 @@ class GENERator(EmbeddingModel):
         "v2-eukaryote-3b-base",
         "v2-prokaryote-3b-base",
     ]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"layers\.\d+"]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
-        return "GENERator-" + model_version
+        return "generator-" + model_version
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize GENERator inference wrapper.
 
         Args:
@@ -54,8 +66,13 @@ class GENERator(EmbeddingModel):
                 "v2-prokaryote-3b-base",
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
             from transformers import AutoTokenizer, AutoModel
@@ -67,14 +84,21 @@ class GENERator(EmbeddingModel):
         self.tokenizer = AutoTokenizer.from_pretrained(
             "GenerTeam/GENERator-{}".format(model_version),
             trust_remote_code=True,
-            clean_up_tokenization_spaces=True,
             cache_dir=get_model_weights_path()
+        )
+
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
         )
 
         self.model = AutoModel.from_pretrained(
             "GenerTeam/GENERator-{}".format(model_version),
             trust_remote_code=True,
-            cache_dir=get_model_weights_path()
+            cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
         ).to(self.device)
 
         self.tokenizer.padding_side = "right"
@@ -147,4 +171,50 @@ class GENERator(EmbeddingModel):
             max_chunk_length=self.max_length - 2,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from GENERator.
+
+        Args:
+            sequences: DNA sequences.
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            return self.tokenizer(  # type: ignore[return-value]
+                seqs,
+                add_special_tokens=True,
+                return_tensors="pt",
+                padding=False,
+                truncation=True,
+                max_length=self.max_length,
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=self.max_length - 2,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )

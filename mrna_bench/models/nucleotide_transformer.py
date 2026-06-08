@@ -1,5 +1,6 @@
 from collections.abc import Callable
 from functools import partial
+import warnings
 
 import numpy as np
 import torch
@@ -31,13 +32,25 @@ class NucleotideTransformer(EmbeddingModel):
         "v2-250m-multi-species",
         "v2-500m-multi-species",
     ]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2"
+    ]
+    hookable_layer_patterns = [r"esm\.encoder\.layer\.\d+"]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
         return "nt-" + model_version
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize NucleotideTransformer inference wrapper.
 
         Args:
@@ -52,8 +65,13 @@ class NucleotideTransformer(EmbeddingModel):
                 "v2-500m-multi-species"
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
             from transformers import AutoTokenizer, AutoModelForMaskedLM
@@ -69,10 +87,27 @@ class NucleotideTransformer(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
+        # NTv2 do not support sdpa or FA2
+        if "v2" in model_version and attn_implementation != "eager":
+            warnings.warn(
+                "NucleotideTransformer v2 models only support eager attention."
+                " Defaulting to eager attention implementation."
+            )
+
+            self.attn_implementation = "eager"
+
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
+        )
+
         self.model = AutoModelForMaskedLM.from_pretrained(
             "InstaDeepAI/nucleotide-transformer-{}".format(model_version),
             trust_remote_code=True,
-            cache_dir=get_model_weights_path()
+            cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
         ).to(self.device)
 
         self.max_length = self.tokenizer.model_max_length
@@ -144,4 +179,54 @@ class NucleotideTransformer(EmbeddingModel):
             max_chunk_length=max_chunk_length,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from NucleotideTransformer.
+
+        Uses 6-mer tokenization; each token covers ~6 nucleotides.
+
+        Args:
+            sequences: DNA sequences.
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+        max_chunk_length = (self.max_length - 2) * 6
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            toks = self.tokenizer.batch_encode_plus(
+                seqs,
+                return_tensors="pt",
+                padding=False,
+            )
+            toks["attention_mask"] = (
+                toks["input_ids"] != self.tokenizer.pad_token_id
+            ).long()
+            return toks.to(self.device)  # type: ignore[return-value]
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=max_chunk_length,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )

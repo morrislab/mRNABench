@@ -113,16 +113,31 @@ class NaiveMamba(EmbeddingModel):
 
     default_version = "naive-mamba"
     valid_versions = ["naive-mamba"]
+    default_attn_implementation = None
 
-    def __init__(self, model_version: str, device: torch.device):
+    lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
+    valid_attn_implementations = None
+    hookable_layer_patterns = [r"layers\.\d+"]
+
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize NaiveMamba model.
 
         Args:
             model_version: Unused.
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
         _ = model_version
-        super().__init__("naive-mamba", device)
+        super().__init__(
+            "naive-mamba",
+            device,
+            attn_implementation
+        )
 
         torch.random.manual_seed(0)
         np.random.seed(0)
@@ -190,3 +205,76 @@ class NaiveMamba(EmbeddingModel):
             embeddings.append(agg_fn(seq_hidden))
 
         return embeddings
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from NaiveMamba.
+
+        Uses forward hooks on Mamba layers. Scores are None for all layers
+        (Mamba SSM, no attention weights). Requires cds and splice tracks.
+
+        Args:
+            sequences: RNA/DNA sequences.
+            cds: CDS tracks (required).
+            splice: Splice site tracks (required).
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Ignored (no attention scores for Mamba).
+            offload_to_cpu: Move tensors to CPU after each sequence.
+
+        Returns:
+            (hidden_states, scores); scores are all None.
+        """
+        if cds is None or splice is None:
+            raise ValueError("NaiveMamba requires cds and splice tracks.")
+
+        resolved = self._resolve_layer_paths(layers)
+        hidden_out: dict[str, list[list[torch.Tensor]]] = {
+            p: [] for p in resolved
+        }
+        score_out: dict[str, list[list[torch.Tensor]] | None] = {
+            p: None for p in resolved
+        }
+
+        for i, seq in enumerate(sequences):
+            ohe_sequence = str_to_ohe(seq)
+            model_input = np.hstack((
+                ohe_sequence,
+                cds[i].reshape(-1, 1),
+                splice[i].reshape(-1, 1),
+            ))
+            inp = torch.tensor(
+                model_input,
+                dtype=torch.float32,
+                device=self.device,
+            ).transpose(0, 1).unsqueeze(0)  # (1, 6, T)
+
+            seq_hidden: dict[str, list[torch.Tensor]] = {
+                p: [] for p in resolved
+            }
+
+            handles, activations = self._register_hooks(resolved)
+            try:
+                self.model(inp)
+            finally:
+                self._remove_hooks(handles)
+
+            for path in resolved:
+                h = activations[path][0]
+                if h.dim() == 3:
+                    h = h[0]  # (T, D)
+                seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
+
+            for path in resolved:
+                hidden_out[path].append(seq_hidden[path])
+
+        return hidden_out, score_out

@@ -18,29 +18,64 @@ class AIDORNA(EmbeddingModel):
     Link: https://github.com/genbio-ai/ModelGenerator
     """
 
-    max_length = 1024
-
-    default_version = "aido_rna_650m_cds"
+    default_version = "AIDO.RNA-650M-CDS"
     valid_versions = [
-        "aido_rna_650m",
-        "aido_rna_650m_cds",
-        "aido_rna_1b600m",
-        "aido_rna_1b600m_cds"
+        "AIDO.RNA-650M",
+        "AIDO.RNA-650M-CDS",
+        "AIDO.RNA-1.6B",
+        "AIDO.RNA-1.6B-CDS",
+        "AIDO.RNA-1M-MARS",
+        "AIDO.RNA-25M-MARS",
+        "AIDO.RNA-300M-MARS",
     ]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"encoder\.layer\.\d+"]
 
-    def __init__(self, model_version: str, device: torch.device):
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        short_name_map = {
+            "AIDO.RNA-650M": "aido-rna-650m",
+            "AIDO.RNA-650M-CDS": "aido-rna-650m-cds",
+            "AIDO.RNA-1.6B": "aido-rna-1b600m",
+            "AIDO.RNA-1.6B-CDS": "aido-rna-1b600m-cds",
+            "AIDO.RNA-1M-MARS": "aido-rna-mars-1m",
+            "AIDO.RNA-25M-MARS": "aido-rna-mars-25m",
+            "AIDO.RNA-300M-MARS": "aido-rna-mars-300m",
+        }
+        return short_name_map[model_version]
+
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize AIDO.RNA.
 
         Args:
             model_version: Version of model used. Valid versions: {
-                "aido_rna_1b600m",
-                "aido_rna_1b600m_cds",
-                "aido_rna_650m",
-                "aido_rna_650m_cds",
+                "AIDO.RNA-650M",
+                "AIDO.RNA-650M-CDS",
+                "AIDO.RNA-1.6B",
+                "AIDO.RNA-1.6B-CDS",
+                "AIDO.RNA-1M-MARS",
+                "AIDO.RNA-25M-MARS",
+                "AIDO.RNA-300M-MARS",
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
             from transformers import AutoTokenizer, AutoModel
@@ -49,19 +84,28 @@ class AIDORNA(EmbeddingModel):
                 "Install base_models optional_dependency to use AIDO.RNA."
             )
 
+        hub_id = "Taykhoom/{}".format(model_version)
+
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "Taykhoom/AIDO-RNA-Wrapper",
+            hub_id,
             trust_remote_code=True,
-            clean_up_tokenization_spaces=True,
             cache_dir=get_model_weights_path(),
         )
 
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
+        )
+
         self.model = AutoModel.from_pretrained(
-            "Taykhoom/AIDO-RNA-Wrapper",
+            hub_id,
             trust_remote_code=True,
-            base_model=model_version,
             cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
         ).to(device)
+        self.max_length = self.tokenizer.model_max_length
 
     def _forward_chunks(
         self,
@@ -115,10 +159,56 @@ class AIDORNA(EmbeddingModel):
             - default (mean): (2048,) for 1.6B model
         """
         _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
 
         return self._embed_with_chunking(
             sequences=sequences,
             max_chunk_length=self.max_length - 2,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from AIDO.RNA.
+
+        Args:
+            sequences: RNA sequences.
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            return self.tokenizer(  # type: ignore[return-value]
+                seqs,
+                return_tensors="pt",
+                add_special_tokens=True,
+                padding=False,
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=self.max_length - 2,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )

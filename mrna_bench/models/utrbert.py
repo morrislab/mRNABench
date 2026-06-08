@@ -16,53 +16,83 @@ class UTRBERT(EmbeddingModel):
     versions of 3UTRBERT are available with different k-mer sizes (3, 4, 5, 6).
 
     Link: https://github.com/yangyn533/3UTRBERT
-
-    This wrapper uses the multimolecule implementation of 3UTRBERT:
-    https://huggingface.co/multimolecule/utrbert-3mer
     """
 
-    default_version = "utrbert-6mer"
+    default_version = "UTRBERT-6mer"
     valid_versions = [
-        "utrbert-3mer",
-        "utrbert-4mer",
-        "utrbert-5mer",
-        "utrbert-6mer",
+        "UTRBERT-3mer",
+        "UTRBERT-4mer",
+        "UTRBERT-5mer",
+        "UTRBERT-6mer",
     ]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"encoder\.layer\.\d+"]
 
-    max_length = 512
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        short_name_map = {
+            "UTRBERT-3mer": "utrbert-3mer",
+            "UTRBERT-4mer": "utrbert-4mer",
+            "UTRBERT-5mer": "utrbert-5mer",
+            "UTRBERT-6mer": "utrbert-6mer",
+        }
+        return short_name_map[model_version]
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize 3UTRBERT.
 
         Args:
             model_version: Version of model to load. Valid versions: {
-                "utrbert-3mer", "utrbert-4mer", "utrbert-5mer", "utrbert-6mer"
+                "UTRBERT-3mer", "UTRBERT-4mer", "UTRBERT-5mer",
+                "UTRBERT-6mer"
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
-            from multimolecule import RnaTokenizer, UtrBertModel, UtrBertConfig
+            from transformers import AutoTokenizer, AutoModel
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use 3UTRBERT."
             )
 
-        self.kmer_size = int(model_version.split("-")[1].replace("mer", ""))
-
-        self.config = UtrBertConfig(nmers=self.kmer_size)
-
-        self.tokenizer = RnaTokenizer.from_pretrained(
-            "multimolecule/{}".format(model_version),
-            extra_special_tokens={},
-            cache_dir=get_model_weights_path()
-        )
-        self.model = UtrBertModel.from_pretrained(
-            "multimolecule/{}".format(model_version),
+        hub_id = "Taykhoom/{}".format(model_version)
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
             cache_dir=get_model_weights_path(),
-            config=self.config
+        )
+
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
+        )
+        self.model = AutoModel.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
         ).to(device)
+        self.max_length = self.tokenizer.model_max_length
 
     def _forward_chunks(
         self,
@@ -119,4 +149,46 @@ class UTRBERT(EmbeddingModel):
             max_chunk_length=self.max_length - 2,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from 3UTRBERT.
+
+        Args:
+            sequences: RNA sequences (T or U bases; T→U applied internally).
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            return self.tokenizer(  # type: ignore[return-value]
+                seqs, return_tensors="pt", padding=False
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=self.max_length - 2,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )

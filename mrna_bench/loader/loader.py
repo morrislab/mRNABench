@@ -11,6 +11,7 @@ def load_model(
     model_name: str,
     model_version: str | None = None,
     device: "torch.device | None" = None,
+    attn_implementation: str | None = None,
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
@@ -19,6 +20,9 @@ def load_model(
         model_version: Specific model version to load. Defaults to model's
             default_version if not specified.
         device: PyTorch device to load model to. Defaults to CUDA if available.
+        attn_implementation: Attention implementation override.  One of
+            "eager", "sdpa", or "flash_attention_2".  Pass None to use the
+            model's default.
 
     Returns:
         Initialized EmbeddingModel in inference mode.
@@ -37,7 +41,12 @@ def load_model(
         if model_version is None:
             model_version = model_class.default_version
 
-        model = model_class(model_version, device)
+        if attn_implementation is None:
+            attn_implementation = model_class.default_attn_implementation
+
+        model = model_class(
+            model_version, device, attn_implementation=attn_implementation
+        )
         model.set_inference_mode()
 
     except ModuleNotFoundError:

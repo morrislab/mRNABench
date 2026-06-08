@@ -21,7 +21,14 @@ class Orthrus(EmbeddingModel):
     """
 
     default_version = "orthrus-large-6-track"
-    valid_versions = ["orthrus-large-6-track", "orthrus-large-4-track"]
+    valid_versions = [
+        "orthrus-base-4-track",
+        "orthrus-large-4-track",
+        "orthrus-large-6-track",
+    ]
+    default_attn_implementation = None
+    valid_attn_implementations = None
+    hookable_layer_patterns = [r"layers\.\d+"]
 
     lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
 
@@ -30,17 +37,28 @@ class Orthrus(EmbeddingModel):
         """Get shortened name of model version."""
         return model_version.replace("-track", "")
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize Orthrus model.
 
         Args:
             model_version: Version of Orthrus to load. Valid values are: {
+                "orthrus-base-4-track",
                 "orthrus-large-4-track",
                 "orthrus-large-6-track"
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
             from transformers import AutoModel
@@ -80,7 +98,7 @@ class Orthrus(EmbeddingModel):
         Returns:
             Orthrus embeddings with shape (batch_size, hidden_dim).
         """
-        if self.model_version == "orthrus-large-6-track":
+        if "6-track" in self.model_version:
             if cds is None or splice is None:
                 raise ValueError(
                     "Orthrus 6-track model requires cds and splice tracks."
@@ -105,7 +123,7 @@ class Orthrus(EmbeddingModel):
             - default (mean): (512,)
         """
         batch_inputs = []
-        raw_lengths: list[int] = []
+        raw_lengths = []
 
         for seq in sequences:
             ohe_sequence = torch.from_numpy(
@@ -166,7 +184,7 @@ class Orthrus(EmbeddingModel):
             - default (mean): (512,)
         """
         batch_inputs = []
-        raw_lengths: list[int] = []
+        raw_lengths = []
 
         for seq, c, s in zip(sequences, cds, splice):
             ohe_sequence = str_to_ohe(seq)
@@ -211,3 +229,84 @@ class Orthrus(EmbeddingModel):
             seq_embeddings.append(agg_fn(seq_hidden))
 
         return seq_embeddings
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from Orthrus.
+
+        Uses forward hooks on Mamba layers. Scores are None for all layers
+        (Mamba SSM, no attention weights). The 6-track model requires cds
+        and splice tracks.
+
+        Args:
+            sequences: RNA/DNA sequences.
+            cds: CDS tracks (required for 6-track model).
+            splice: Splice site tracks (required for 6-track model).
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Ignored (no attention scores for Mamba).
+            offload_to_cpu: Move tensors to CPU after each sequence.
+
+        Returns:
+            (hidden_states, scores); scores are all None.
+        """
+        if "6-track" in self.model_version:
+            if cds is None or splice is None:
+                raise ValueError(
+                    "Orthrus 6-track model requires cds and splice tracks."
+                )
+
+        resolved = self._resolve_layer_paths(layers)
+        hidden_out: dict[str, list[list[torch.Tensor]]] = {
+            p: [] for p in resolved
+        }
+        score_out: dict[str, list[list[torch.Tensor]] | None] = {
+            p: None for p in resolved
+        }
+
+        for i, seq in enumerate(sequences):
+            if "6-track" in self.model_version:
+                assert cds is not None and splice is not None
+                ohe = str_to_ohe(seq)
+                inp = np.hstack((
+                    ohe,
+                    cds[i].reshape(-1, 1),
+                    splice[i].reshape(-1, 1),
+                ))
+                batch = torch.tensor(
+                    inp, dtype=torch.float32
+                ).unsqueeze(0).to(self.device)
+            else:
+                batch = torch.from_numpy(
+                    str_to_ohe(seq)
+                ).float().unsqueeze(0).to(self.device)
+
+            seq_hidden: dict[str, list[torch.Tensor]] = {
+                p: [] for p in resolved
+            }
+
+            handles, activations = self._register_hooks(resolved)
+            try:
+                self.model.forward(batch, channel_last=True)
+            finally:
+                self._remove_hooks(handles)
+
+            for path in resolved:
+                h = activations[path][0]
+                if h.dim() == 3:
+                    h = h[0]  # (T, D)
+                seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
+
+            for path in resolved:
+                hidden_out[path].append(seq_hidden[path])
+
+        return hidden_out, score_out

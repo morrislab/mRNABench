@@ -33,13 +33,21 @@ class HyenaDNA(EmbeddingModel):
         "hyenadna-small-32k-seqlen-hf",
         "hyenadna-tiny-16k-seqlen-d128-hf",
     ]
+    default_attn_implementation = None
+    valid_attn_implementations = None
+    hookable_layer_patterns = [r"backbone\.layers\.\d+"]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
         return model_version.replace("-seqlen", "").replace("-hf", "")
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize HyenaDNA inference wrapper.
 
         Support for HyenaDNA 1k models is currently omitted.
@@ -53,8 +61,13 @@ class HyenaDNA(EmbeddingModel):
                 "hyenadna-tiny-16k-seqlen-d128-hf"
             }
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
             from transformers import AutoModel, AutoTokenizer
@@ -72,7 +85,7 @@ class HyenaDNA(EmbeddingModel):
 
         model = AutoModel.from_pretrained(
             checkpoint,
-            torch_dtype=torch.bfloat16,
+            dtype=torch.bfloat16,
             device_map="auto",
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
@@ -168,3 +181,70 @@ class HyenaDNA(EmbeddingModel):
             all_embeddings.append(embedding.squeeze(0))
 
         return all_embeddings
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from HyenaDNA.
+
+        Uses forward hooks. Scores are None for all layers (Hyena, no
+        attention weights).
+
+        Args:
+            sequences: DNA sequences.
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Ignored (no attention scores for Hyena).
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); scores are all None.
+        """
+        _, _ = cds, splice
+
+        resolved = self._resolve_layer_paths(layers)
+        hidden_out: dict[str, list[list[torch.Tensor]]] = {
+            p: [] for p in resolved
+        }
+        score_out: dict[str, list[list[torch.Tensor]] | None] = {
+            p: None for p in resolved
+        }
+
+        for seq in sequences:
+            chunks = self.chunk_sequence(seq, self.max_length)
+            seq_hidden: dict[str, list[torch.Tensor]] = {
+                p: [] for p in resolved
+            }
+
+            for chunk in chunks:
+                toks = self.tokenizer(
+                    chunk,
+                    return_tensors="pt",
+                ).to(self.device)
+
+                handles, activations = self._register_hooks(resolved)
+                try:
+                    self.model(toks["input_ids"])
+                finally:
+                    self._remove_hooks(handles)
+
+                for path in resolved:
+                    h = activations[path][0]
+                    if h.dim() == 3:
+                        h = h[0]  # (T, D)
+                    seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
+
+            for path in resolved:
+                hidden_out[path].append(seq_hidden[path])
+
+        return hidden_out, score_out

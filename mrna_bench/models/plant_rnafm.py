@@ -22,18 +22,39 @@ class PlantRNAFM(EmbeddingModel):
 
     default_version = "plant_rnafm"
     valid_versions = ["plant_rnafm"]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2"
+    ]
+    hookable_layer_patterns = [r"encoder\.layer\.\d+"]
 
-    max_length = 1026
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        return model_version.replace("_", "-")
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
         """Initialize PlantRNAFM inference wrapper.
 
         Args:
             model_version: Version of model to load.
                     Only "plant_rnafm" is supported.
             device: PyTorch device to send model to.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
+        self.max_length = 1026
 
         try:
             from transformers import AutoModel, AutoTokenizer, AutoConfig
@@ -42,7 +63,7 @@ class PlantRNAFM(EmbeddingModel):
                 "Install base_models optional dependency to use PlantRNAFM."
             )
 
-        self.config = AutoConfig.from_pretrained(
+        config = AutoConfig.from_pretrained(
             "yangheng/PlantRNA-FM",
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
@@ -63,13 +84,21 @@ class PlantRNAFM(EmbeddingModel):
         # See: https://github.com/facebookresearch/esm/issues/267 for more on
         # token dropout. See huggingface->transformers->modeling_esm.py L210
         # for more about how mask_token_id is used in ESM's forward pass.
-        self.config.mask_token_id = self.tokenizer.mask_token_id
+        config.mask_token_id = self.tokenizer.mask_token_id
+
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
+        )
 
         self.model = AutoModel.from_pretrained(
             "yangheng/PlantRNA-FM",
             trust_remote_code=True,
-            config=self.config,
+            config=config,
             cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
         ).to(device)
 
     def _forward_chunks(
@@ -128,4 +157,48 @@ class PlantRNAFM(EmbeddingModel):
             max_chunk_length=self.max_length - 2,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from PlantRNAFM.
+
+        Args:
+            sequences: RNA sequences (T or U bases; T→U applied internally).
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            return self.tokenizer(  # type: ignore[return-value]
+                seqs,
+                return_tensors="pt",
+                padding=False,
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=self.max_length - 2,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )

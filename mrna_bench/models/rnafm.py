@@ -9,47 +9,79 @@ from mrna_bench.models.embedding_model import EmbeddingModel
 
 
 class RNAFM(EmbeddingModel):
-    """Inference Wrapper for RNA-FM.
+    """Inference wrapper for RNA-FM.
 
-    RNA-FM is a transformer based RNA foundation model pre-trained using MLM on
+    RNA-FM is a transformer-based RNA foundation model pre-trained using MLM on
     23 million ncRNA sequences. The primary competency for RNA-FM is ncRNA
     property and structural prediction.
 
     Link: https://github.com/ml4bio/RNA-FM/
     """
 
-    default_version = "rna-fm"
-    valid_versions = ["rna-fm"]
+    default_version = "RNA-FM"
+    valid_versions = ["RNA-FM"]
+    default_attn_implementation = "flash_attention_2"
+    valid_attn_implementations = [
+        "eager",
+        "sdpa",
+        "flash_attention_2",
+    ]
+    hookable_layer_patterns = [r"layers\.\d+"]
 
-    max_length = 1024
+    @staticmethod
+    def get_model_short_name(model_version: str) -> str:
+        """Get shortened name of model version."""
+        if model_version == "RNA-FM":
+            return "rna-fm"
+        return model_version.replace("_", "-")
 
-    def __init__(self, model_version: str, device: torch.device):
-        """Initialize RNA-FM Model.
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        attn_implementation: str | None,
+    ):
+        """Initialize RNA-FM model.
 
         Args:
-            model_version: Version of RNA-FM to use. Must be "rna-fm".
+            model_version: Version of RNA-FM to use. Must be "RNA-FM".
             device: PyTorch device used by model inference.
+            attn_implementation: Attention backend.
         """
-        super().__init__(model_version, device)
+        super().__init__(
+            model_version,
+            device,
+            attn_implementation
+        )
 
         try:
-            import fm
+            from transformers import AutoModel, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use RNA-FM."
             )
 
-        import os
-        hub_path = os.path.join(get_model_weights_path(), "hub")
-        old_hub_dir = torch.hub.get_dir()
-        torch.hub.set_dir(hub_path)
+        hub_id = "Taykhoom/RNA-FM"
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+        )
 
-        model, alphabet = fm.pretrained.rna_fm_t12()
+        dtype = (
+            torch.bfloat16
+            if self.attn_implementation == "flash_attention_2"
+            else torch.float32
+        )
 
-        torch.hub.set_dir(old_hub_dir)
-
-        self.model = model.to(device)
-        self.batch_converter = alphabet.get_batch_converter()
+        self.model = AutoModel.from_pretrained(
+            hub_id,
+            trust_remote_code=True,
+            cache_dir=get_model_weights_path(),
+            attn_implementation=self.attn_implementation,
+            dtype=dtype,
+        ).to(device)
+        self.max_length = self.tokenizer.model_max_length
 
     def _forward_chunks(
         self,
@@ -57,25 +89,25 @@ class RNAFM(EmbeddingModel):
     ) -> tuple[torch.Tensor, torch.Tensor]:
         """Run forward pass on sequence chunks.
 
-        The fm library's batch_converter pads sequences to the longest in the
-        batch using the alphabet's padding_idx token.
-
         Args:
             chunks: List of sequence chunks to embed.
 
         Returns:
-            Tuple of (hidden_states, pooling_mask) tensors.
+            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
+            padding and special tokens (CLS/EOS).
         """
-        data = [("", chunk) for chunk in chunks]
-        _, _, tokens = self.batch_converter(data)
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
 
-        model_output = self.model(tokens.to(self.device), repr_layers=[12])
-        hidden_states = model_output["representations"][12]
-
-        batch_size, seq_len, _ = hidden_states.shape
-        pooling_mask = torch.zeros(batch_size, seq_len, device=self.device)
-        for i, chunk in enumerate(chunks):
-            pooling_mask[i, 1:len(chunk) + 1] = 1
+        hidden_states = self.model(**toks).last_hidden_state
+        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
 
         return hidden_states, pooling_mask
 
@@ -92,7 +124,7 @@ class RNAFM(EmbeddingModel):
             sequences: List of sequences to embed.
             cds: Unused.
             splice: Unused.
-            agg_fn: Function used to aggregate embedding across length dim.
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
             Embeddings with item shape depending on agg_fn.
@@ -106,4 +138,48 @@ class RNAFM(EmbeddingModel):
             max_chunk_length=self.max_length - 2,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
+        )
+
+    def extract(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        layers: list[int | str] | None = None,
+        return_attentions: bool = False,
+        offload_to_cpu: bool = True,
+    ) -> tuple[
+        dict[str, list[list[torch.Tensor]]],
+        dict[str, list[list[torch.Tensor]] | None],
+    ]:
+        """Extract per-layer representations from RNA-FM.
+
+        Args:
+            sequences: RNA sequences (T or U bases; T→U applied internally).
+            cds: Unused.
+            splice: Unused.
+            layers: Layer selection; see EmbeddingModel.extract().
+            return_attentions: Whether to extract attention weights.
+            offload_to_cpu: Move tensors to CPU after each chunk.
+
+        Returns:
+            (hidden_states, scores); see EmbeddingModel.extract().
+        """
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
+
+        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
+            return self.tokenizer(  # type: ignore[return-value]
+                seqs,
+                return_tensors="pt",
+                padding=False,
+            ).to(self.device)
+
+        return self._standard_hf_extract(
+            sequences=sequences,
+            tokenize_fn=tokenize,
+            max_chunk_length=self.max_length - 2,
+            layers=layers,
+            return_attentions=return_attentions,
+            offload_to_cpu=offload_to_cpu,
         )
