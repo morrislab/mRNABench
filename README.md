@@ -7,7 +7,7 @@
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![bioRxiv](https://img.shields.io/badge/bioRxiv-2025.07.05.662870-b31b1b.svg)](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)
 
-<img width="650" alt="image" src="https://github.com/user-attachments/assets/f43be914-d6e7-4a71-8dda-146cc09a6c05" />
+<img width="850" alt="image" src="https://github.com/user-attachments/assets/f43be914-d6e7-4a71-8dda-146cc09a6c05" />
 
 </div>
 
