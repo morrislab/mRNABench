@@ -81,7 +81,7 @@ class UTRVariantsBohnUTR3(UTRVariantsBohn):
     METADATA = DatasetMetadata(
         dataset_name="utr-variants-bohn-utr3",
         species="human",
-        task=["classification"],
+        task=["classification", "zeroshot"],
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",

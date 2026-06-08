@@ -50,12 +50,13 @@ DATASET_CATALOG: dict[str, type[BenchmarkDataset]] = {
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
 
-DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
+DATASET_INFO: dict[str, dict[str, str | list[str] | bool]] = {
     name: {
         "dataset": cls.METADATA.dataset_name,
         "task": cls.METADATA.task,
         "target_col": cls.METADATA.target_col,
         "default_split_type": cls.METADATA.default_split_type,
+        "vep": cls.METADATA.vep,
     }
     for name, cls in DATASET_CATALOG.items()
 }

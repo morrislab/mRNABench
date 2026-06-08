@@ -1,3 +1,5 @@
+from typing import Callable
+
 import numpy as np
 
 from mrna_bench import load_dataset
@@ -9,6 +11,7 @@ from mrna_bench.models import EmbeddingModel
 from mrna_bench.linear_probe.linear_probe import LinearProbe
 from mrna_bench.linear_probe.persister import LinearProbePersister
 from mrna_bench.linear_probe.evaluator import LinearProbeEvaluator
+from mrna_bench.linear_probe.zeroshot_vep import ZeroShotVEP
 
 
 class LinearProbeBuilder:
@@ -87,9 +90,14 @@ class LinearProbeBuilder:
         self.model_short_name: str | None = None
         self.embeddings: np.ndarray | None = None
         self.persister_flag = False
+        self.scoring_fn: Callable[[np.ndarray], np.ndarray] | None = None
 
         self.splitter = self._build_default_splitter(metadata)
-        self.evaluator = LinearProbeEvaluator(self.task)
+        self.evaluator = (
+            LinearProbeEvaluator(self.task)
+            if self.task != "zeroshot"
+            else None
+        )
 
     @staticmethod
     def _resolve_default_target_col(metadata: object | None) -> str:
@@ -105,7 +113,7 @@ class LinearProbeBuilder:
             tasks = getattr(metadata, "task", None)
             if isinstance(tasks, list):
                 for task in tasks:
-                    if task in LinearProbeEvaluator.valid_tasks:
+                    if task in LinearProbeEvaluator.valid_tasks + ["zeroshot"]:
                         return task
         return "regression"
 
@@ -273,14 +281,33 @@ class LinearProbeBuilder:
         """Set evaluator for LinearProbe.
 
         Args:
-            task: Task for linear probing evaluation.
+            task: Task for linear probing evaluation. Use ``"zeroshot"`` for
+                zero-shot VEP scoring (no training, no data split).
 
         Returns:
             LinearProbeBuilder with set evaluator.
         """
         self.task = task
-        self.evaluator = LinearProbeEvaluator(self.task)
+        self.evaluator = (
+            LinearProbeEvaluator(task) if task != "zeroshot" else None
+        )
 
+        return self
+
+    def set_scoring_fn(
+        self,
+        scoring_fn: Callable[[np.ndarray], np.ndarray],
+    ) -> "LinearProbeBuilder":
+        """Set custom scoring function for zero-shot VEP.
+
+        Args:
+            scoring_fn: Callable mapping an (N, D) delta matrix to (N,)
+                scalar scores. Only used when task is ``"zeroshot"``.
+
+        Returns:
+            LinearProbeBuilder with set scoring function.
+        """
+        self.scoring_fn = scoring_fn
         return self
 
     def use_persister(self) -> "LinearProbeBuilder":
@@ -313,6 +340,10 @@ class LinearProbeBuilder:
                 "model_short_name (required when persister is enabled)"
             )
 
+        is_probe = self.task != "zeroshot" and not self.is_vep
+        if is_probe and self.splitter is None:
+            missing.append("splitter (call build_splitter())")
+
         return missing
 
     def status(self) -> dict[str, object]:
@@ -330,11 +361,12 @@ class LinearProbeBuilder:
             "missing": self.validate(),
         }
 
-    def build(self) -> LinearProbe:
-        """Build LinearProbe instance.
+    def build(self) -> "LinearProbe | ZeroShotVEP":
+        """Build LinearProbe or ZeroShotVEP instance.
 
         Returns:
-            LinearProbe instance with set parameters.
+            LinearProbe for standard tasks, ZeroShotVEP when task is
+            ``"zeroshot"``.
         """
         missing = self.validate()
         if len(missing) > 0:
@@ -348,15 +380,27 @@ class LinearProbeBuilder:
 
         if self.persister_flag:
             assert self.model_short_name is not None
+            split_type = "none" if self.task == "zeroshot" else self.split_type
             self.persister = LinearProbePersister(
                 self.dataset,
                 self.model_short_name,
                 self.task,
                 self.target_col,
-                self.split_type
+                split_type,
             )
 
         assert self.embeddings is not None
+
+        if self.task == "zeroshot":
+            return ZeroShotVEP(
+                self.data_df,
+                self.embeddings,
+                self.target_col,
+                self.persister,
+                self.scoring_fn,
+            )
+
+        assert self.evaluator is not None
         return LinearProbe(
             self.data_df,
             self.embeddings,
