@@ -20,6 +20,7 @@ from mrna_bench.models import MODEL_CATALOG
 default_seeds = "[0]"
 default_lrs = "[1e-5, 1e-4, 1e-3]"
 default_ranks = "[4, 8, 16]"
+default_alpha = "[16]"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_name", type=str, required=True)
@@ -30,10 +31,13 @@ parser.add_argument("--target", type=str, default=None)
 parser.add_argument("--split_type", type=str, default=None)
 parser.add_argument("--learning_rates", type=str, default=default_lrs)
 parser.add_argument("--lora_ranks", type=str, default=default_ranks)
+parser.add_argument("--lora_alpha", type=int, default=default_alpha)
 parser.add_argument("--epochs", type=int, default=15)
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--accumulation_steps", type=int, default=1)
 parser.add_argument("--seeds", type=str, default=default_seeds)
+parser.add_argument("--lr_schedule", type=str, default="none",
+                    choices=["none", "linear", "cosine"])
 parser.add_argument("--eval_test", action="store_true")
 parser.add_argument("--force_recompute", action="store_true")
 args = parser.parse_args()
@@ -58,7 +62,7 @@ def get_embedding_dim(model, dataset):
 
     with torch.no_grad():
         emb = model.embed([dummy_seq], **kwargs)
-    return emb.shape[-1]
+    return emb[0].shape[-1]
 
 
 def get_output_dim(dataset, task, target_col):
@@ -90,11 +94,13 @@ def run_finetune(
     split_type,
     learning_rate,
     lora_rank,
+    lora_alpha,
     epochs,
     batch_size,
     accumulation_steps,
     random_seed,
     device,
+    lr_schedule="none",
     eval_test=False,
 ):
     """Run fine-tuning for a single (lr, rank, seed) configuration.
@@ -108,17 +114,20 @@ def run_finetune(
         split_type: Type of data split.
         learning_rate: Learning rate.
         lora_rank: LoRA rank.
+        lora_alpha: LoRA alpha.
         epochs: Maximum number of epochs.
         batch_size: Batch size.
         accumulation_steps: Gradient accumulation steps.
         random_seed: Random seed for split.
         device: PyTorch device.
+        lr_schedule: Learning rate schedule type ("none", "linear", "cosine").
         eval_test: Whether to also evaluate on test set.
 
     Returns:
         Tuple of (val_metrics, test_metrics, history).
     """
-    model = model_class(model_version, device)
+    attn_implementation = model_class.default_attn_implementation
+    model = model_class(model_version, device, attn_implementation=attn_implementation)
     model.set_inference_mode()
 
     emb_dim = get_embedding_dim(model, dataset)
@@ -126,11 +135,12 @@ def run_finetune(
 
     head = TaskHead(input_dim=emb_dim, output_dim=output_dim, task_type=task)
     wrapper = FineTuneWrapper(model, head)
-    wrapper.apply_lora(rank=lora_rank)
+    wrapper.apply_lora(rank=lora_rank, alpha=lora_alpha)
 
     param_info = wrapper.get_parameter_count()
-    print("  Parameters: {} trainable / {} total".format(
-        param_info["total_trainable"], param_info["backbone_total"]
+    print("  Parameters: {} trainable / {} total (%{})".format(
+        param_info["backbone_trainable"], param_info["backbone_total"],
+        100 * param_info["backbone_trainable"] / param_info["backbone_total"],
     ))
 
     train_loader, val_loader, test_loader = create_dataloaders(
@@ -145,11 +155,13 @@ def run_finetune(
         learning_rate=learning_rate,
         epochs=epochs,
         gradient_accumulation_steps=accumulation_steps,
+        lr_schedule=lr_schedule,
     )
     trainer = FineTuneTrainer(wrapper, config)
     trainer.fit(train_loader, val_loader)
 
-    val_metrics = trainer.evaluate(val_loader)
+    # Full metrics from the best checkpoint are captured during fit()
+    val_metrics = trainer.best_val_metrics
 
     test_metrics = None
     if eval_test:
@@ -169,7 +181,8 @@ if __name__ == "__main__":
     dataset = mb.load_dataset(args.dataset_name)
     metadata = dataset.metadata
 
-    task = args.task or metadata.task[0]
+    _TASK_MAP = {"reg_lin": "regression", "reg_ridge": "regression"}
+    task = args.task or _TASK_MAP.get(metadata.task[0], metadata.task[0])
     target = args.target or metadata.target_col[0]
     split_type = args.split_type or metadata.default_split_type
 
@@ -182,14 +195,16 @@ if __name__ == "__main__":
     seeds = json.loads(args.seeds)
     learning_rates = json.loads(args.learning_rates)
     lora_ranks = json.loads(args.lora_ranks)
+    lora_alphas = json.loads(args.lora_alphas)
 
     print("Learning rates: {}".format(learning_rates))
     print("LoRA ranks: {}".format(lora_ranks))
+    print("LoRA alphas: {}".format(lora_alphas))
     print("Seeds: {}".format(seeds))
     print("Eval test: {}".format(args.eval_test))
 
     for lr in learning_rates:
-        for lora_rank in lora_ranks:
+        for lora_rank, lora_alpha in zip(lora_ranks, lora_alphas):
             persister = FineTunePersister(
                 dataset=dataset,
                 model_short_name=model_short_name,
@@ -221,11 +236,13 @@ if __name__ == "__main__":
                     split_type=split_type,
                     learning_rate=lr,
                     lora_rank=lora_rank,
+                    lora_alpha=lora_alpha,
                     epochs=args.epochs,
                     batch_size=args.batch_size,
                     accumulation_steps=args.accumulation_steps,
                     random_seed=seed,
                     device=device,
+                    lr_schedule=args.lr_schedule,
                     eval_test=args.eval_test,
                 )
 

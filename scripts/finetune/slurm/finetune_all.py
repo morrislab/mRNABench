@@ -14,6 +14,8 @@ split_types = list(SPLIT_CATALOG.keys())
 random_seeds = [0]
 learning_rates = [1e-5, 1e-4, 1e-3]
 lora_ranks = [4, 8, 16]
+lora_alphas = [8, 16, 32]
+accumulation_steps = 8
 
 # Models that are too large or not suitable for LoRA fine-tuning
 SKIP_VERSIONS = {"evo2_40b_base", "evo2_40b"}
@@ -39,6 +41,23 @@ if __name__ == "__main__":
         "--eval_test", action="store_true",
         help="Also evaluate on test set.",
     )
+    parser.add_argument(
+        "--lr_schedule", type=str, default="none",
+        choices=["none", "linear", "cosine"],
+        help="Learning rate schedule type.",
+    )
+    parser.add_argument(
+        "--dataset_name", nargs="+", default=None,
+        help="If specified, only fine-tune on these datasets.",
+    )
+    parser.add_argument(
+        "--model_name", nargs="+", default=None,
+        help="If specified, only fine-tune these models.",
+    )
+    parser.add_argument(
+        "--model_version", nargs="+", default=None,
+        help="If specified, only fine-tune these model versions.",
+    )
     args = parser.parse_args()
 
     from mrna_bench.fine_tune import FineTunePersister
@@ -46,7 +65,13 @@ if __name__ == "__main__":
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
-        if "vep" in dataset_name or "utr" in dataset_name:
+        if (
+            args.dataset_name is not None
+            and dataset_name not in args.dataset_name
+        ):
+            continue
+
+        if dataset_info["vep"]:
             continue
 
         target_cols = dataset_info["target_col"]
@@ -55,14 +80,30 @@ if __name__ == "__main__":
         print("Dataset: {}".format(dataset_name))
 
         for index, target_col in enumerate(target_cols):
-            task = dataset_info["task"][index]
+
+            if len(dataset_info["task"]) == 1:
+                task = dataset_info["task"][0]
+            else:
+                task = dataset_info["task"][index]
 
             for model_name, model_versions in MODEL_VERSION_MAP.items():
                 if model_name in SKIP_MODELS:
                     continue
 
+                if (
+                    args.model_name is not None
+                    and model_name not in args.model_name
+                ):
+                    continue
+
                 for model_version in model_versions:
                     if model_version in SKIP_VERSIONS:
+                        continue
+
+                    if (
+                        args.model_version is not None
+                        and model_version not in args.model_version
+                    ):
                         continue
 
                     model_short_name = MODEL_CATALOG[model_name].get_model_short_name(model_version)
@@ -78,7 +119,7 @@ if __name__ == "__main__":
 
                     for split_type in valid_split_types:
                         for lr in learning_rates:
-                            for lora_rank in lora_ranks:
+                            for lora_rank, lora_alpha in zip(lora_ranks, lora_alphas):
                                 persister = FineTunePersister(
                                     dataset=dataset,
                                     model_short_name=model_short_name,
@@ -110,7 +151,10 @@ if __name__ == "__main__":
                                     "--split_type", split_type,
                                     "--seeds", str(random_seeds),
                                     "--learning_rates", str([lr]),
+                                    "--lr_schedule", args.lr_schedule,
                                     "--lora_ranks", str([lora_rank]),
+                                    "--lora_alphas", str([lora_alpha]),
+                                    "--accumulation_steps", str(accumulation_steps),
                                     "--force_recompute", str(args.force_recompute),
                                     "--eval_test", str(args.eval_test),
                                 ]

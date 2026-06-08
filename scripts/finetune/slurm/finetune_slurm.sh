@@ -4,8 +4,8 @@
 #SBATCH --partition=gpu
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem-per-cpu=8GB
+#SBATCH --cpus-per-task=4
+#SBATCH --mem-per-cpu=16GB
 #SBATCH --gres=gpu:1
 #SBATCH --time=12:00:00
 #SBATCH --output=./logs/finetune.%A.out
@@ -18,11 +18,13 @@ conda activate [path/to/env]
 force_recompute="False"
 eval_test="False"
 epochs=15
-batch_size=32
+batch_size=1
 accumulation_steps=1
 seeds="[0]"
 learning_rates="[1e-4]"
+lr_schedule="none"
 lora_ranks="[8]"
+lora_alphas="[16]"
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -34,7 +36,9 @@ while [[ "$#" -gt 0 ]]; do
         --split_type) split_type="$2"; shift ;;
         --seeds) seeds="$2"; shift ;;
         --learning_rates) learning_rates="$2"; shift ;;
+        --lr_schedule) lr_schedule="$2"; shift ;;
         --lora_ranks) lora_ranks="$2"; shift ;;
+        --lora_alphas) lora_alphas="$2"; shift ;;
         --epochs) epochs="$2"; shift ;;
         --batch_size) batch_size="$2"; shift ;;
         --accumulation_steps) accumulation_steps="$2"; shift ;;
@@ -54,7 +58,9 @@ cmd="python ../run_finetune.py \
     --split_type $split_type \
     --seeds $seeds \
     --learning_rates $learning_rates \
+    --lr_schedule $lr_schedule \
     --lora_ranks $lora_ranks \
+    --lora_alphas $lora_alphas \
     --epochs $epochs \
     --batch_size $batch_size \
     --accumulation_steps $accumulation_steps"

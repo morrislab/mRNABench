@@ -36,14 +36,15 @@ if __name__ == "__main__":
     model_version = model_class.default_version
     model_short_name = model_class.get_model_short_name(model_version)
 
-    model = model_class(model_version, device)
+    attn_implementation = model_class.default_attn_implementation
+    model = model_class(model_version, device, attn_implementation=attn_implementation)
     model.set_inference_mode()
 
     lora_rank = 4
     learning_rate = 1e-4
 
     # Get embedding dim
-    emb_dim = model.embed(["AUGC"]).shape[-1]
+    emb_dim = model.embed(["AUGC"])[0].shape[-1]
     print("Embedding dim: {}".format(emb_dim))
 
     # Create wrapper with head and LoRA
