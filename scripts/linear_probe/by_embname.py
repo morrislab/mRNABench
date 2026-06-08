@@ -25,7 +25,7 @@ if __name__ == "__main__":
     prober = (
         LinearProbeBuilder(dataset_name=args.dataset_name)
         .fetch_embedding_by_filename(args.embedding_fn)
-        .build_splitter(args.split_type, species=dataset.species, eval_all_splits=True)
+        .build_splitter(args.split_type, species=dataset.metadata.species, eval_all_splits=True)
         .build_evaluator(args.task)
         .set_target(args.target)
         .use_persister()

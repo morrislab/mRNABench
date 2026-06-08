@@ -30,10 +30,13 @@ if __name__ == "__main__":
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
-        target_cols = dataset_info["target_col"]
-        dataset = mb.load_dataset(dataset_name)
+        if dataset_info["vep"]:
+            continue
 
         print("Dataset name: ", dataset_name)
+
+        target_cols = dataset_info["target_col"]
+        dataset = mb.load_dataset(dataset_name)
 
         skip_model_keys = [
             "evo2-40b",
@@ -41,46 +44,25 @@ if __name__ == "__main__":
         ]
 
         for index, target_col in enumerate(target_cols):
-            for model_name, model_versions in MODEL_VERSION_MAP.items():
-                for model_version in model_versions:
+            for task in dataset_info["task"]:
+                for model_name, model_versions in MODEL_VERSION_MAP.items():
+                    for model_version in model_versions:
 
-                    model_short_name = MODEL_CATALOG[model_name].get_model_short_name(model_version)
+                        model_short_name = MODEL_CATALOG[model_name].get_model_short_name(model_version)
 
-                    if sum([k in model_short_name for k in skip_model_keys]) > 0:
-                        continue
-
-                    if args.canonical_split:
-                        valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
-                    elif "mrl-sample" in dataset_name:
-                        valid_split_types = ["default", "hard-kmer", "kmer"]
-                    elif "mrl-hl-lbkwk" in dataset_name:
-                        valid_split_types = ["default"]
-                    else:
-                        valid_split_types = split_types
-
-                    for split_type in valid_split_types:
+                        if sum([k in model_short_name for k in skip_model_keys]) > 0:
+                            continue
 
                         # ----------------------------
-                        # decide feature combos
+                        # zeroshot VEP: single run, no splits, no seeds
                         # ----------------------------
-                        if model_name == "NaiveBaseline" and model_short_name in MODEL_FEATURE_COMBOS:
-                            combos = MODEL_FEATURE_COMBOS[model_short_name]
-                        else:
-                            combos = [""]
+                        if task == "zeroshot":
+                            if "NaiveBaseline" in model_name and model_short_name in MODEL_FEATURE_COMBOS:
+                                combos = MODEL_FEATURE_COMBOS[model_short_name]
+                            else:
+                                combos = [""]
 
-                        # ----------------------------
-                        # decide seeds
-                        # ----------------------------
-                        seeds_to_run = random_seeds if args.per_seed else [random_seeds]
-
-                        for combo in combos:
-                            for seed_block in seeds_to_run:
-
-                                seeds = [seed_block] if args.per_seed else seed_block
-
-                                # ----------------------------
-                                # existence check
-                                # ----------------------------
+                            for combo in combos:
                                 if not args.force_recompute:
                                     if combo and combo != "all":
                                         check_name = f"{model_short_name}-{combo}"
@@ -90,14 +72,12 @@ if __name__ == "__main__":
                                     persister = LinearProbePersister(
                                         dataset,
                                         check_name,
-                                        dataset_info["task"][index],
+                                        "zeroshot",
                                         target_col,
-                                        split_type,
+                                        "none",
                                     )
-                                    if all(persister.result_exists(seed) for seed in seeds):
+                                    if persister.result_exists("zeroshot"):
                                         continue
-
-                                seed_arg = f"[{seeds[0]}]" if args.per_seed else str(seeds)
 
                                 cmd = [
                                     "sbatch",
@@ -105,11 +85,11 @@ if __name__ == "__main__":
                                     "--model_name", model_name,
                                     "--model_version", model_version,
                                     "--dataset_name", dataset_name,
-                                    "--task", dataset_info["task"][index],
+                                    "--task", "zeroshot",
                                     "--target", target_col,
-                                    "--split_type", split_type,
+                                    "--split_type", "none",
                                     "--combo", combo,
-                                    "--seeds", seed_arg,
+                                    "--seeds", '["zeroshot"]',
                                     "--force_recompute", str(args.force_recompute),
                                 ]
 
@@ -117,8 +97,85 @@ if __name__ == "__main__":
                                     print("\t\tDry run:", " ".join(cmd))
                                 else:
                                     result = subprocess.run(cmd, capture_output=True, text=True)
-
                                     if result.stdout:
                                         print('\t' + result.stdout.strip())
                                     if result.stderr:
                                         print('\t' + result.stderr.strip())
+                            continue
+
+                        # ----------------------------
+                        # standard LP: splits + seeds
+                        # ----------------------------
+                        if args.canonical_split:
+                            valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
+                        elif "mrl-sample" in dataset_name:
+                            valid_split_types = ["default", "hard-kmer", "kmer"]
+                        elif "mrl-hl-lbkwk" in dataset_name:
+                            valid_split_types = ["default"]
+                        else:
+                            valid_split_types = split_types
+
+                        for split_type in valid_split_types:
+
+                            # ----------------------------
+                            # decide feature combos
+                            # ----------------------------
+                            if "NaiveBaseline" in model_name and model_short_name in MODEL_FEATURE_COMBOS:
+                                combos = MODEL_FEATURE_COMBOS[model_short_name]
+                            else:
+                                combos = [""]
+
+                            # ----------------------------
+                            # decide seeds
+                            # ----------------------------
+                            seeds_to_run = random_seeds if args.per_seed else [random_seeds]
+
+                            for combo in combos:
+                                for seed_block in seeds_to_run:
+
+                                    seeds = [seed_block] if args.per_seed else seed_block
+
+                                    # ----------------------------
+                                    # existence check
+                                    # ----------------------------
+                                    if not args.force_recompute:
+                                        if combo and combo != "all":
+                                            check_name = f"{model_short_name}-{combo}"
+                                        else:
+                                            check_name = model_short_name
+
+                                        persister = LinearProbePersister(
+                                            dataset,
+                                            check_name,
+                                            task,
+                                            target_col,
+                                            split_type,
+                                        )
+                                        if all(persister.result_exists(seed) for seed in seeds):
+                                            continue
+
+                                    seed_arg = f"[{seeds[0]}]" if args.per_seed else str(seeds)
+
+                                    cmd = [
+                                        "sbatch",
+                                        "./modelname_slurm.sh",
+                                        "--model_name", model_name,
+                                        "--model_version", model_version,
+                                        "--dataset_name", dataset_name,
+                                        "--task", task,
+                                        "--target", target_col,
+                                        "--split_type", split_type,
+                                        "--combo", combo,
+                                        "--seeds", seed_arg,
+                                        "--force_recompute", str(args.force_recompute),
+                                    ]
+
+                                    if args.dry_run:
+                                        print("\t\tDry run:", " ".join(cmd))
+                                    else:
+                                        result = subprocess.run(cmd, capture_output=True, text=True)
+
+                                        if result.stdout:
+                                            print('\t' + result.stdout.strip())
+                                        if result.stderr:
+                                            print('\t' + result.stderr.strip())
