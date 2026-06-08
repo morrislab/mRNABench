@@ -41,12 +41,7 @@ base_models = [
     "transformer_engine[pytorch]==2.5.0",
     "flash-attn==2.7.4.post1",
     "mamba-ssm==2.2.5",
-    "rna-fm==0.2.2",
     "accelerate==1.8.1",
-    "multimolecule==0.0.8",
-    "protobuf",
-    "evo-model==0.5",
-    "evo2==0.5.0",
     "borzoi-pytorch==0.4.2",
     "enformer-pytorch==0.8.10",
     "ViennaRNA==2.7.0"
@@ -58,7 +53,7 @@ dev = [
     "pytest",
     "types-requests",
     "types-PyYAML",
-    "genomekit==7.2.1"
+    "genomekit==7.4.5"
 ]
 fine_tune = [
     "torch==2.7.1",
