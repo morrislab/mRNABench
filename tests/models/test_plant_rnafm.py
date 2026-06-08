@@ -16,7 +16,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> PlantRNAFM:
     """Get PlantRNAFM model."""
-    model = PlantRNAFM("plant_rnafm", device)
+    model = PlantRNAFM("plant_rnafm", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -109,3 +109,32 @@ def test_plant_rnafm_gradient_flow(model):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model.set_inference_mode()
+
+
+def test_plant_rnafm_extract_structure(model):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = model.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_plant_rnafm_extract_layer_selection(model):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = model.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_plant_rnafm_extract_attention_weights(model):
+    """return_attentions=True yields (H, T, T) tensors with rows summing to 1."""
+    h, s = model.extract(["ATGATG"], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-4)

@@ -21,7 +21,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model_4track(device) -> NaiveBaseline:
     """Get NaiveBaseline 4-track model."""
-    model = NaiveBaseline("naive-4-track", device)
+    model = NaiveBaseline("naive-4-track", device, NaiveBaseline.default_attn_implementation)
     model.set_inference_mode()
     return model
 
@@ -29,7 +29,7 @@ def model_4track(device) -> NaiveBaseline:
 @pytest.fixture(scope="module")
 def model_6track(device) -> NaiveBaselineSixTrack:
     """Get NaiveBaselineSixTrack model."""
-    model = NaiveBaselineSixTrack("naive-6-track", device)
+    model = NaiveBaselineSixTrack("naive-6-track", device, NaiveBaselineSixTrack.default_attn_implementation)
     model.set_inference_mode()
     return model
 

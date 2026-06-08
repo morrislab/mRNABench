@@ -18,7 +18,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def aidomodel(device) -> AIDORNA:
     """Get AIDORNA model."""
-    model = AIDORNA("aido_rna_650m", device)
+    model = AIDORNA("AIDO.RNA-650M", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -28,6 +28,18 @@ def test_aido_forward(aidomodel):
 
     out = aidomodel.embed_sequence("ATGATG")
     assert out.shape == (1, 1280)
+
+
+def test_aido_dna_rna_equivalent(aidomodel):
+    """AIDO.RNA is RNA-trained; DNA (T) and RNA (U) inputs must match.
+
+    The wrapper converts T->U so genomic DNA isn't fed the distinct, untrained
+    'T' token.
+    """
+    import torch
+    dna = aidomodel.embed_sequence("ATGCATGCATGC").cpu()
+    rna = aidomodel.embed_sequence("AUGCAUGCAUGC").cpu()
+    assert torch.allclose(dna, rna, atol=1e-4)
 
 
 def test_aido_forward_long(aidomodel):
@@ -108,3 +120,32 @@ def test_aido_gradient_flow(aidomodel):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    aidomodel.set_inference_mode()
+
+
+def test_aido_extract_structure(aidomodel):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = aidomodel.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_aido_extract_layer_selection(aidomodel):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = aidomodel.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_aido_extract_attention_weights(aidomodel):
+    """return_attentions=True yields (H, T, T) tensors with rows summing to 1."""
+    h, s = aidomodel.extract(["ATGATG"], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

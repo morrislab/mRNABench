@@ -18,7 +18,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> NucleotideTransformerV3:
     """Get NucleotideTransformerV3 model."""
-    m = NucleotideTransformerV3("v3_8M_pre", device)
+    m = NucleotideTransformerV3("v3_8M_pre", device, "eager")
     m.set_inference_mode()
     return m
 
@@ -31,7 +31,7 @@ def test_ntv3_forward(model):
 
 def test_ntv3_forward_posttrained(device):
     """Test NucleotideTransformerV3 post-trained model forward pass."""
-    m = NucleotideTransformerV3("v3_100M_post", device)
+    m = NucleotideTransformerV3("v3_100M_post", device, "eager")
     m.set_species("human")
 
     out = m.embed_sequence("ATGATG")
@@ -92,7 +92,7 @@ def test_ntv3_excludes_special_tokens(model):
 def test_ntv3_posttrained_requires_species(device):
     """Test that post-trained model auto-sets species when none given."""
     import warnings
-    m = NucleotideTransformerV3("v3_100M_post", device)
+    m = NucleotideTransformerV3("v3_100M_post", device, "eager")
     m.set_inference_mode()
 
     # species_id should be None before any embed call
@@ -134,3 +134,55 @@ def test_ntv3_gradient_flow(model):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model.set_inference_mode()
+
+NTV3_EXTRACT_SEQ = "ATGC" * 40  # 160 nt — min required by 7× avg_pool
+
+
+def test_ntv3_extract_structure(model):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = model.extract([NTV3_EXTRACT_SEQ], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_ntv3_extract_layer_selection(model):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = model.extract([NTV3_EXTRACT_SEQ], layers=[0])
+    assert len(h) == 1
+
+
+def test_ntv3_extract_conv_tower_downsampling(model):
+    """Conv tower layers produce progressively shorter sequences (stride > 1)."""
+    h, _ = model.extract([NTV3_EXTRACT_SEQ])
+    T_first = h["core.conv_tower_blocks.0"][0][0].shape[0]
+    T_last_conv = h["core.conv_tower_blocks.6"][0][0].shape[0]
+    assert T_last_conv < T_first
+
+
+def test_ntv3_extract_transformer_attention(model):
+    """Transformer blocks expose (H, T, T) attention weights with eager."""
+    _, s = model.extract(
+        [NTV3_EXTRACT_SEQ],
+        layers=["core.transformer_blocks.0"],
+        return_attentions=True,
+    )
+    attn = s["core.transformer_blocks.0"]
+    assert attn is not None
+    w = attn[0][0]  # (H, T, T)
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+
+
+def test_ntv3_extract_conv_deconv_scores_none(model):
+    """Conv and deconv tower layers return None scores (no attention matrix)."""
+    _, s = model.extract(
+        [NTV3_EXTRACT_SEQ],
+        layers=["core.conv_tower_blocks.0", "core.deconv_tower_blocks.0"],
+        return_attentions=True,
+    )
+    assert s["core.conv_tower_blocks.0"] is None
+    assert s["core.deconv_tower_blocks.0"] is None

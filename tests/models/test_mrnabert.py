@@ -20,7 +20,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> mRNABERT:
     """Get mRNABERT model."""
-    m = mRNABERT("mRNABERT", device)
+    m = mRNABERT("mRNABERT", device, "eager")
     m.set_inference_mode()
     return m
 
@@ -164,3 +164,35 @@ def test_mrnabert_gradient_flow(model):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model.set_inference_mode()
+
+def test_mrnabert_extract_structure(model):
+    seq = "ATGATGATG"
+    cds = make_cds(seq)
+    h, s = model.extract([seq], cds=[cds], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_mrnabert_extract_layer_selection(model):
+    seq = "ATGATGATG"
+    cds = make_cds(seq)
+    h, _ = model.extract([seq], cds=[cds], layers=[0])
+    assert len(h) == 1
+
+
+def test_mrnabert_extract_attention_weights(model):
+    """mRNABERT with eager attn returns attention weights."""
+    seq = "ATGATGATG"
+    cds = make_cds(seq)
+    h, s = model.extract([seq], cds=[cds], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

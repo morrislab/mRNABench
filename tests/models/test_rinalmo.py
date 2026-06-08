@@ -10,9 +10,9 @@ from mrna_bench.models.rinalmo import RiNALMo
 
 
 RINALMO_VERSIONS = [
-    ("rinalmo-giga", 1280),
-    ("rinalmo-mega", 640),
-    ("rinalmo-micro", 480),
+    ("RiNALMo-giga", 1280),
+    ("RiNALMo-mega", 640),
+    ("RiNALMo-micro", 480),
 ]
 
 
@@ -27,7 +27,7 @@ def device() -> torch.device:
 def rinalmo(request, device):
     """Get RiNALMo model and expected embedding dim."""
     model_version, embed_dim = request.param
-    model = RiNALMo(model_version, device)
+    model = RiNALMo(model_version, device, "eager")
     model.set_inference_mode()
     return model, embed_dim
 
@@ -35,7 +35,7 @@ def rinalmo(request, device):
 @pytest.fixture(scope="module")
 def rinalmo_giga(device) -> RiNALMo:
     """Get RiNALMo giga model for specific output tests."""
-    model = RiNALMo("rinalmo-giga", device)
+    model = RiNALMo("RiNALMo-giga", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -225,3 +225,32 @@ def test_rinalmo_gradient_flow(rinalmo_giga):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    rinalmo_giga.set_inference_mode()
+
+
+def test_rinalmo_extract_structure(rinalmo_giga):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = rinalmo_giga.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_rinalmo_extract_layer_selection(rinalmo_giga):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = rinalmo_giga.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_rinalmo_extract_attention_weights(rinalmo_giga):
+    """return_attentions=True yields (H, T, T) tensors with rows summing to 1."""
+    h, s = rinalmo_giga.extract(["ATGATG"], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

@@ -18,7 +18,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def enformer(device) -> Enformer:
     """Get Enformer model."""
-    return Enformer("enformer-official-rough", device)
+    return Enformer("enformer-official-rough", device, "eager")
 
 
 def test_enformer_forward(enformer):
@@ -87,3 +87,46 @@ def test_enformer_padding_logic(enformer):
 
         first_bin_val = output[0, 0, 0].item()
         assert first_bin_val == expected_start_bin
+
+
+def test_enformer_extract_structure(enformer):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    seq = "ACGT" * 1000
+    h, s = enformer.extract([seq], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_enformer_extract_layer_selection(enformer):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    seq = "ACGT" * 1000
+    h, _ = enformer.extract([seq], layers=[0])
+    assert len(h) == 1
+
+
+def test_enformer_extract_scores_none(enformer):
+    """CNN/stem layers return None scores (layers=[0] resolves to stem)."""
+    seq = "ACGT" * 1000
+    _, s = enformer.extract([seq], layers=[0], return_attentions=True)
+    assert all(v is None for v in s.values())
+
+
+def test_enformer_extract_transformer_attention(enformer):
+    """Transformer layers return (H, T, T) attention weights with rows summing to 1."""
+    seq = "ACGT" * 1000
+    _, s = enformer.extract([seq], layers=["transformer.0"], return_attentions=True)
+    assert s["transformer.0"] is not None
+    w = s["transformer.0"][0][0]  # seq[0], chunk[0] -> (H, T, T)
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]  # T x T square
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-3)
+
+
+def test_enformer_extract_cnn_scores_none_with_attentions(enformer):
+    """CNN layers return None scores even when return_attentions=True."""
+    seq = "ACGT" * 1000
+    _, s = enformer.extract([seq], layers=["conv_tower.0"], return_attentions=True)
+    assert s["conv_tower.0"] is None

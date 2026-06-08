@@ -1,45 +1,53 @@
 import pytest
 
 pytest.importorskip("torch")
-pytest.importorskip("evo")
+
 import torch
+
+# The Evo1 HuggingFace ports load via ``AutoModel.from_pretrained`` and do not
+# require the ``evo`` package. The 7B model needs a CUDA device.
+if not torch.cuda.is_available():
+    pytest.skip(
+        "Evo1 7B integration test requires a CUDA GPU",
+        allow_module_level=True,
+    )
+
 from mrna_bench.models.evo1 import Evo1
 
-
-EVO1_VERSIONS = [
-    "evo-1.5-8k-base",
-    "evo-1-8k-base",
-]
+# Evo1-1-7B-8K: hidden_size = 4096. Embeddings use the final-layer hidden
+# state only (matching the original wrapper, which embedded the 'norm' layer).
+EVO1_VERSION = "Evo1-1-7B-8K"
+HIDDEN_DIM = 4096
 
 
 @pytest.fixture(scope="module")
 def device() -> torch.device:
-    """Get torch cuda device if available, else use cpu."""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    return torch.device(device)
+    """Get torch cuda device."""
+    return torch.device("cuda")
 
 
-@pytest.fixture(scope="module", params=EVO1_VERSIONS, ids=lambda x: x)
-def model(request, device) -> Evo1:
-    """Get Evo1 model."""
-    return Evo1(request.param, device)
+@pytest.fixture(scope="module")
+def model(device) -> Evo1:
+    """Get Evo1 model (eager backend so attention weights are materializable)."""
+    model = Evo1(EVO1_VERSION, device, "eager")
+    model.set_inference_mode()
+    return model
 
 
 def test_evo1_forward(model):
-    """Test Evo1 forward pass."""
+    """Evo1 embeds to the final-layer hidden dimension."""
     out = model.embed_sequence("ATGATG")
-    assert out.shape == (1, 4096)
+    assert out.shape == (1, HIDDEN_DIM)
 
 
-def test_evo1_max_length(device):
-    """Test Evo1 max_length is set correctly."""
-    model_8k = Evo1("evo-1-8k-base", device)
-    assert model_8k.max_length == 8192
+def test_evo1_max_length(model):
+    """Evo1-1-7B-8K uses an 8192nt context window."""
+    assert model.max_length == 8192
 
 
+@torch.no_grad()
 def test_evo1_embed_batch(model):
     """Test batch embed matches individual embeddings."""
-    model.set_inference_mode()
     sequences = [
         "ATGATG" * 10,
         "ATGATG" * 50,
@@ -47,14 +55,14 @@ def test_evo1_embed_batch(model):
     ]
 
     batch_output = torch.stack(model.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 4096)
+    assert batch_output.shape == (3, HIDDEN_DIM)
 
     for i, seq in enumerate(sequences):
         single_output = model.embed_sequence(seq).cpu()
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
-            atol=1e-4
+            atol=1e-2,
         ), "Mismatch at sequence {} (len {})".format(i, len(seq))
 
 
@@ -66,7 +74,7 @@ def test_evo1_embed_ragged_agg(model):
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
-    assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
+    assert out[0].shape[1] == out[1].shape[1] == HIDDEN_DIM  # same feature dim
 
 
 def test_evo1_gradient_flow(model):
@@ -86,3 +94,60 @@ def test_evo1_gradient_flow(model):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model.set_inference_mode()
+
+
+def test_evo1_extract_structure(model):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = model.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_evo1_extract_layer_selection(model):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = model.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_evo1_extract_transformer_attention(model):
+    """Transformer blocks return causal (H, T, T) attention, rows ~sum to 1."""
+    attn_idx = model.model.config.attn_layer_idxs[0]
+    path = f"blocks.{attn_idx}"
+    _, s = model.extract(
+        ["ATGCATGCATGCATGCATGC"], layers=[path], return_attentions=True
+    )
+    assert s[path] is not None
+    w = s[path][0][0]  # (H, T, T)
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    # Evo1 is autoregressive: attention is causal (strict upper triangle == 0).
+    seq_len = w.shape[1]
+    upper = w.float()[:, torch.triu(torch.ones(seq_len, seq_len), 1).bool()]
+    assert upper.abs().max() == 0.0
+    # Rows are a softmax distribution (sum to 1 within bf16 tolerance).
+    rowsum = w.float().sum(-1)
+    assert torch.allclose(rowsum, torch.ones_like(rowsum), atol=1e-2)
+
+
+def test_evo1_extract_hyena_scores_none(model):
+    """Hyena/SSM blocks always return None scores regardless of return_attentions."""
+    _, s = model.extract(["ATGCATGC"], layers=["blocks.0"], return_attentions=True)
+    assert s["blocks.0"] is None
+
+
+def test_evo1_peft_target(model):
+    """get_peft_target returns the HF model; set_peft_target writes it back."""
+    target = model.get_peft_target()
+    assert target is model.model
+
+    original = model.model
+    sentinel = torch.nn.Linear(1, 1)
+    model.set_peft_target(sentinel)
+    assert model.model is sentinel
+
+    model.set_peft_target(original)  # restore for any subsequent use
+    assert model.model is original

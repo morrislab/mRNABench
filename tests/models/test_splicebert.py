@@ -18,13 +18,13 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model_1024(device) -> SpliceBERT:
     """Get SpliceBERT 1024nt model."""
-    return SpliceBERT("SpliceBERT.1024nt", device)
+    return SpliceBERT("SpliceBERT-1024nt", device, "eager")
 
 
 @pytest.fixture(scope="module")
 def model_510(device) -> SpliceBERT:
     """Get SpliceBERT 510nt model."""
-    return SpliceBERT("SpliceBERT.510nt", device)
+    return SpliceBERT("SpliceBERT-510nt", device, "eager")
 
 
 def test_splicebert_1024_forward(model_1024):
@@ -161,3 +161,32 @@ def test_splicebert_gradient_flow(model_1024):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model_1024.set_inference_mode()
+
+
+def test_splicebert_extract_structure(model_1024):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = model_1024.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_splicebert_extract_layer_selection(model_1024):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = model_1024.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_splicebert_extract_attention_weights(model_1024):
+    """return_attentions=True yields (H, T, T) tensors with rows summing to 1."""
+    h, s = model_1024.extract(["ATGATG"], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

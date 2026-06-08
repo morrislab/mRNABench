@@ -1,10 +1,11 @@
 import pytest
 
-from unittest.mock import patch
-
 pytest.importorskip("torch")
 import torch
-from mrna_bench.models.generator import GENERator
+from mrna_bench.models.carbon import Carbon
+
+
+HIDDEN_DIM = 1024  # Carbon-500M
 
 
 @pytest.fixture(scope="module")
@@ -15,49 +16,45 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def model(device) -> GENERator:
-    """Get GENERator model."""
-    model = GENERator("v2-eukaryote-3b-base", device, "eager")
+def model(device) -> Carbon:
+    """Get Carbon-500M model (smallest version)."""
+    model = Carbon("Carbon-500M", device, "eager")
     model.set_inference_mode()
     return model
 
 
-def test_generator_forward(model):
-    """Test GENERator forward pass."""
-    out = model.embed(["ATGATG"])
-    assert len(out) == 1 and out[0].shape == (3072,)
+def test_carbon_forward(model):
+    """Test Carbon forward pass."""
+    out = model.embed(["ATGATGATGATG"])
+    assert len(out) == 1 and out[0].shape == (HIDDEN_DIM,)
 
 
-def test_generator_embed_batch(model):
-    """Test GENERator batch embedding."""
-    out = model.embed(["ATGATG", "GCGCGC", "AAACCC"])
-    assert len(out) == 3 and out[0].shape == (3072,)
+def test_carbon_embed_batch(model):
+    """Test Carbon batch embedding."""
+    out = model.embed(["ATGATGATGATG", "GCGCGCGCGCGC", "AAACCCGGGTTT"])
+    assert len(out) == 3 and out[0].shape == (HIDDEN_DIM,)
 
 
-def test_generator_embed_batch_ragged(model):
-    """Test GENERator batch embedding with variable length sequences."""
-    out = model.embed(["ATGATG", "GCGCGCGCGCGC"])
-    assert len(out) == 2 and out[0].shape == (3072,)
+def test_carbon_embed_batch_ragged(model):
+    """Test Carbon batch embedding with variable length sequences."""
+    out = model.embed(["ATGATG", "GCGCGCGCGCGCGCGCGC"])
+    assert len(out) == 2 and out[0].shape == (HIDDEN_DIM,)
 
 
-def test_generator_excludes_special_tokens(model):
-    """Verify pooling mask excludes BOS/EOS special tokens."""
-    with patch.object(model, "model") as mock_model:
-        mock_model.return_value.hidden_states = [
-            torch.ones(1, 8, 3072, device=model.device)
-        ]
-
-        _, mask = model._forward_chunks(["ATGATG"])
-
-        # Mask should be 0 at special token positions (BOS, EOS)
-        assert mask[0, 0].item() == 0  # BOS
-        assert mask[0, -1].item() == 0  # EOS
+def test_carbon_excludes_dna_tags(model):
+    """Verify pooling mask excludes the <dna>/</dna> delimiter tokens."""
+    _, mask = model._forward_chunks(["ATGCGCATGCGC"])
+    # First token is <dna>, last is </dna>; both must be excluded.
+    assert mask[0, 0].item() == 0
+    assert mask[0, -1].item() == 0
+    # The interior 6-mer tokens are kept.
+    assert mask[0, 1:-1].sum().item() > 0
 
 
 @torch.no_grad()
-def test_generator_embed_ragged_agg(model):
+def test_carbon_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
-    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    seqs = ["ATGATG", "GCGCGCGCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
@@ -65,11 +62,11 @@ def test_generator_embed_ragged_agg(model):
     assert out[0].shape[1] == out[1].shape[1]  # same hidden dim
 
 
-def test_generator_gradient_flow(model):
+def test_carbon_gradient_flow(model):
     """Test that gradients can flow through the model."""
     model.set_train_mode()
 
-    out = model.embed(["ATGATG"])
+    out = model.embed(["ATGATGATGATG"])
     assert out[0].requires_grad, "Output should require gradients"
 
     loss = torch.stack(out).sum()
@@ -83,11 +80,11 @@ def test_generator_gradient_flow(model):
 
     assert has_grad, "No gradients flowed to model parameters"
     model.set_inference_mode()
-    
 
-def test_generator_extract_structure(model):
+
+def test_carbon_extract_structure(model):
     """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
-    h, s = model.extract(["ATGATG"], layers=[0])
+    h, s = model.extract(["ATGATGATGATG"], layers=[0])
     assert isinstance(h, dict) and isinstance(s, dict)
     assert set(h.keys()) == set(s.keys())
     layer = next(iter(h))
@@ -95,15 +92,15 @@ def test_generator_extract_structure(model):
     assert h[layer][0][0].device.type == "cpu"
 
 
-def test_generator_extract_layer_selection(model):
+def test_carbon_extract_layer_selection(model):
     """Requesting layers=[0] returns exactly 1 layer."""
-    h, _ = model.extract(["ATGATG"], layers=[0])
+    h, _ = model.extract(["ATGATGATGATG"], layers=[0])
     assert len(h) == 1
 
 
-def test_generator_extract_attention_weights(model):
+def test_carbon_extract_attention_weights(model):
     """return_attentions=True with eager yields (H, T, T) tensors."""
-    h, s = model.extract(["ATGATG"], layers=[0], return_attentions=True)
+    h, s = model.extract(["ATGATGATGATG"], layers=[0], return_attentions=True)
     layer = next(iter(s))
     attn = s[layer]
     assert attn is not None

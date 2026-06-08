@@ -1,5 +1,6 @@
 import pytest
 from unittest.mock import patch
+from types import SimpleNamespace
 
 import numpy as np
 
@@ -18,7 +19,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> MRNAFM:
     """Get mRNA-FM model."""
-    model = MRNAFM("mrna-fm", device)
+    model = MRNAFM("mRNA-FM", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -126,9 +127,9 @@ def test_mrnafm_mask_codon_tokenization(model):
     """Verify mask accounts for codon (3nt = 1 token) tokenization."""
     with patch.object(model, "model") as mock_model:
         # 6 nucleotides = 2 codons, so expect seq_len = 2 + 2 (CLS + EOS)
-        mock_model.return_value = {
-            "representations": {12: torch.ones(1, 4, 1280, device=model.device)}
-        }
+        mock_model.return_value = SimpleNamespace(
+            last_hidden_state=torch.ones(1, 4, 1280, device=model.device)
+        )
 
         _, mask = model._forward_chunks(["AUGAUG"])
 
@@ -145,9 +146,9 @@ def test_mrnafm_mask_variable_lengths(model):
     """Test mask construction with different length sequences."""
     with patch.object(model, "model") as mock_model:
         # 3 sequences: 1, 2, 3 codons; padded to longest (3 codons + CLS + EOS = 5)
-        mock_model.return_value = {
-            "representations": {12: torch.ones(3, 5, 1280, device=model.device)}
-        }
+        mock_model.return_value = SimpleNamespace(
+            last_hidden_state=torch.ones(3, 5, 1280, device=model.device)
+        )
 
         chunks = ["AUG", "AUGAUG", "AUGAUGAUG"]  # 1, 2, 3 codons
         _, mask = model._forward_chunks(chunks)
@@ -222,3 +223,34 @@ def test_mrnafm_gradient_flow(model):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model.set_inference_mode()
+
+def test_mrnafm_extract_structure(model):
+    seq = "ATGATG"
+    cds = make_cds(seq)
+    h, s = model.extract([seq], cds=[cds], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_mrnafm_extract_layer_selection(model):
+    seq = "ATGATG"
+    cds = make_cds(seq)
+    h, _ = model.extract([seq], cds=[cds], layers=[0])
+    assert len(h) == 1
+
+
+def test_mrnafm_extract_attention_weights(model):
+    seq = "ATGATG"
+    cds = make_cds(seq)
+    h, s = model.extract([seq], cds=[cds], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

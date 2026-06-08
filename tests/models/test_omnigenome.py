@@ -16,7 +16,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model_52m(device) -> OmniGenome:
     """Get OmniGenome 52M model."""
-    model = OmniGenome("omnigenome-52m", device)
+    model = OmniGenome("omnigenome-52m", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -24,7 +24,7 @@ def model_52m(device) -> OmniGenome:
 @pytest.fixture(scope="module")
 def model_186m(device) -> OmniGenome:
     """Get OmniGenome 186M model."""
-    model = OmniGenome("omnigenome-186m", device)
+    model = OmniGenome("omnigenome-186m", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -123,3 +123,32 @@ def test_omnigenome_gradient_flow(model_52m):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model_52m.set_inference_mode()
+
+def test_omnigenome_extract_structure(model_52m):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = model_52m.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_omnigenome_extract_layer_selection(model_52m):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = model_52m.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_omnigenome_extract_attention_weights(model_52m):
+    """return_attentions=True yields (H, T, T) tensors with rows summing to 1."""
+    model_52m.set_inference_mode()
+    h, s = model_52m.extract(["ATGATG"], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-4)

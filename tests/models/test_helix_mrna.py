@@ -16,7 +16,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def helix_mrna(device) -> HelixmRNA:
     """Get Helix-mRNA model."""
-    model = HelixmRNA("helix-mrna", device)
+    model = HelixmRNA("helix-mrna", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -92,3 +92,31 @@ def test_helix_mrna_gradient_flow(helix_mrna):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    helix_mrna.set_inference_mode()
+
+def test_helix_mrna_extract_structure(helix_mrna):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = helix_mrna.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_helix_mrna_extract_layer_selection(helix_mrna):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = helix_mrna.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_helix_mrna_extract_mixed_attention(helix_mrna):
+    """With eager, the transformer layer has attention; Mamba layers return None."""
+    _, s = helix_mrna.extract(["ATGATG"], return_attentions=True)
+    attn_layers = [k for k, v in s.items() if v is not None]
+    none_layers = [k for k, v in s.items() if v is None]
+    assert len(attn_layers) >= 1, "Expected at least one transformer layer with attention"
+    assert len(none_layers) >= 1, "Expected at least one Mamba layer with None scores"
+    w = s[attn_layers[0]][0][0]  # (H, T, T)
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]

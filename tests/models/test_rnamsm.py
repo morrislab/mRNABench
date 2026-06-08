@@ -16,7 +16,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> RNAMSM:
     """Get RNA-MSM model."""
-    return RNAMSM("rnamsm", device)
+    return RNAMSM("RNA-MSM", device, "eager")
 
 
 def test_rnamsm_forward(model):
@@ -25,6 +25,22 @@ def test_rnamsm_forward(model):
     text = "ACUUGGCCA"
     output = torch.stack(model.embed([text])).cpu()
     assert output.shape == (1, 768)
+
+
+def test_rnamsm_excludes_only_cls(model):
+    """RNA-MSM prepends CLS but appends no EOS.
+
+    Pooling should drop only the leading CLS and keep every real nucleotide,
+    so the pooled-token count equals the sequence length.
+    """
+    model.set_inference_mode()
+    seq = "ACGUACGU"  # 8 nucleotides
+    _, pooling_mask = model._forward_chunks([seq])
+
+    # CLS lives at index 0 and must be excluded.
+    assert int(pooling_mask[0, 0].item()) == 0
+    # All real nucleotides are kept (no trailing EOS to drop).
+    assert int(pooling_mask.sum().item()) == len(seq)
 
 
 def test_rnamsm_forward_dna_input(model):
@@ -88,3 +104,32 @@ def test_rnamsm_gradient_flow(model):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model.set_inference_mode()
+
+
+def test_rnamsm_extract_structure(model):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = model.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_rnamsm_extract_layer_selection(model):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = model.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_rnamsm_extract_attention_weights(model):
+    """return_attentions=True yields (H, T, T) tensors with rows summing to 1."""
+    h, s = model.extract(["ATGATG"], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

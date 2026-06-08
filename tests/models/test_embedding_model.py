@@ -11,6 +11,8 @@ class MockEmbeddingModel(EmbeddingModel):
 
     default_version = "mock"
     valid_versions = ["mock"]
+    default_attn_implementation = "mock"
+    valid_attn_implementations = ["mock"]
     hidden_dim = 64
 
     def __init__(self, device: torch.device):

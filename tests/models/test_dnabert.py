@@ -16,7 +16,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def dnabert2(device) -> DNABERT2:
     """Get DNABERT2 model."""
-    model = DNABERT2("dnabert2", device)
+    model = DNABERT2("DNABERT2", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -99,3 +99,32 @@ def test_dnabert2_gradient_flow(dnabert2):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    dnabert2.set_inference_mode()
+    
+
+def test_dnabert_extract_structure(dnabert2):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = dnabert2.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_dnabert_extract_layer_selection(dnabert2):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = dnabert2.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_dnabert_extract_attention_weights(dnabert2):
+    """return_attentions=True yields (H, T, T) tensors with rows summing to 1."""
+    h, s = dnabert2.extract(["ATGATG"], layers=[0], return_attentions=True)
+    layer = next(iter(s))
+    attn = s[layer]
+    assert attn is not None
+    w = attn[0][0]
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

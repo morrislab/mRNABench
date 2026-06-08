@@ -16,7 +16,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def model(device) -> HyenaDNA:
     """Get HyenaDNA model."""
-    return HyenaDNA("hyenadna-small-32k-seqlen-hf", device)
+    return HyenaDNA("hyenadna-small-32k-seqlen-hf", device, None)
 
 
 def test_hyenadna_forward(model):
@@ -28,7 +28,7 @@ def test_hyenadna_forward(model):
 
 def test_hyenadna_max_length(device):
     """Test HyenaDNA max_length is set correctly."""
-    model_32k = HyenaDNA("hyenadna-small-32k-seqlen-hf", device)
+    model_32k = HyenaDNA("hyenadna-small-32k-seqlen-hf", device, None)
     assert model_32k.max_length == 32000
 
 
@@ -81,3 +81,25 @@ def test_hyenadna_gradient_flow(model):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    model.set_inference_mode()
+
+def test_hyenadna_extract_structure(model):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    h, s = model.extract(["ATGATG"], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_hyenadna_extract_layer_selection(model):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    h, _ = model.extract(["ATGATG"], layers=[0])
+    assert len(h) == 1
+
+
+def test_hyenadna_extract_scores_none(model):
+    """HyenaDNA scores are None for all layers (no attention matrix)."""
+    _, s = model.extract(["ATGATG"], layers=[0], return_attentions=True)
+    assert all(v is None for v in s.values())

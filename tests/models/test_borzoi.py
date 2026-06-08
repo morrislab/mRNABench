@@ -18,7 +18,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def borzoi(device) -> Borzoi:
     """Get Borzoi model."""
-    model = Borzoi("borzoi-replicate-0", device)
+    model = Borzoi("borzoi-replicate-0", device, "eager")
     model.set_inference_mode()
     return model
 
@@ -138,3 +138,97 @@ def test_borzoi_ensemble_averaging():
 
     assert averaged.shape == (1, 1536, 100)
     assert torch.allclose(averaged, torch.ones(1, 1536, 100) * 2)
+
+
+def test_borzoi_extract_structure(borzoi):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    seq = "ACGT" * 1000  # 4000 nt
+    h, s = borzoi.extract([seq], layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_borzoi_extract_layer_selection(borzoi):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    seq = "ACGT" * 1000
+    h, _ = borzoi.extract([seq], layers=[0])
+    assert len(h) == 1
+
+
+def test_borzoi_extract_scores_none(borzoi):
+    """CNN layers return None scores (layers=[0] resolves to res_tower.0)."""
+    seq = "ACGT" * 1000
+    _, s = borzoi.extract([seq], layers=[0], return_attentions=True)
+    assert all(v is None for v in s.values())
+
+
+def test_borzoi_extract_transformer_attention(borzoi):
+    """Transformer layers return (H, T, T) attention weights with rows summing to 1."""
+    seq = "ACGT" * 1000
+    _, s = borzoi.extract([seq], layers=["transformer.0"], return_attentions=True)
+    assert s["transformer.0"] is not None
+    w = s["transformer.0"][0][0]  # seq[0], chunk[0] -> (H, T, T)
+    assert w.dim() == 3
+    assert w.shape[1] == w.shape[2]  # T x T square
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-3)
+
+
+def test_borzoi_extract_cnn_scores_none_with_attentions(borzoi):
+    """CNN layers return None scores even when return_attentions=True."""
+    seq = "ACGT" * 1000
+    _, s = borzoi.extract([seq], layers=["res_tower.0"], return_attentions=True)
+    assert s["res_tower.0"] is None
+
+
+def test_borzoi_gradient_flow(borzoi):
+    """Test that gradients can flow through the model."""
+    borzoi.set_train_mode()
+
+    out = borzoi.embed(["ACGT" * 100])
+    assert out[0].requires_grad, "Output should require gradients"
+
+    loss = torch.stack(out).sum()
+    loss.backward()
+
+    has_grad = False
+    for param in borzoi.models[0].parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
+
+    assert has_grad, "No gradients flowed to model parameters"
+    borzoi.set_inference_mode()
+
+
+def test_borzoi_peft_target(borzoi):
+    """get_peft_target returns models[0]; set_peft_target writes back to it."""
+    target = borzoi.get_peft_target()
+    assert target is borzoi.models[0]
+
+    sentinel = torch.nn.Linear(1, 1)
+    original = borzoi.models[0]
+    borzoi.set_peft_target(sentinel)
+    assert borzoi.models[0] is sentinel
+
+    borzoi.models[0] = original  # restore for subsequent tests
+
+
+def test_borzoi_extract_cnn_downsampling(borzoi):
+    """CNN res_tower layers produce shorter sequences as the tower progresses.
+
+    res_tower.0 is a ConvBlock at the same resolution as conv_dna (no stride).
+    Downsampling occurs in res_tower.1 (MaxPool1d, not hookable), so the first
+    hookable layer with reduced length is res_tower.2.
+    """
+    seq = "ACGT" * 1000
+    h, _ = borzoi.extract([seq], layers=["conv_dna", "res_tower.0", "res_tower.2", "res_tower.8"])
+    T_dna = h["conv_dna"][0][0].shape[0]
+    T_res0 = h["res_tower.0"][0][0].shape[0]
+    T_res2 = h["res_tower.2"][0][0].shape[0]
+    T_res8 = h["res_tower.8"][0][0].shape[0]
+    assert T_res0 == T_dna   # res_tower.0 is a ConvBlock: same resolution as conv_dna
+    assert T_res2 < T_dna    # res_tower.2 is after the first MaxPool: 2× downsampled
+    assert T_res8 <= T_res2  # res_tower.8 is further downsampled

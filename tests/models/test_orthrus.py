@@ -18,7 +18,7 @@ def device() -> torch.device:
 @pytest.fixture(scope="module")
 def orthrus_6(device) -> Orthrus:
     """Get Orthrus 6-track model."""
-    model = Orthrus("orthrus-large-6-track", device)
+    model = Orthrus("orthrus-large-6-track", device, None)
     model.set_inference_mode()
     return model
 
@@ -26,7 +26,7 @@ def orthrus_6(device) -> Orthrus:
 @pytest.fixture(scope="module")
 def orthrus_4(device) -> Orthrus:
     """Get Orthrus 4-track model."""
-    model = Orthrus("orthrus-large-4-track", device)
+    model = Orthrus("orthrus-large-4-track", device, None)
     model.set_inference_mode()
     return model
 
@@ -164,3 +164,33 @@ def test_orthrus_gradient_flow(orthrus_4):
             break
 
     assert has_grad, "No gradients flowed to model parameters"
+    orthrus_4.set_inference_mode()
+
+def test_orthrus_extract_structure(orthrus_6):
+    """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
+    seq = "ATGATG"
+    cds = [make_cds(seq)]
+    splice = [make_splice(seq)]
+    h, s = orthrus_6.extract([seq], cds=cds, splice=splice, layers=[0])
+    assert isinstance(h, dict) and isinstance(s, dict)
+    assert set(h.keys()) == set(s.keys())
+    layer = next(iter(h))
+    assert h[layer][0][0].dim() == 2
+    assert h[layer][0][0].device.type == "cpu"
+
+
+def test_orthrus_extract_layer_selection(orthrus_6):
+    """Requesting layers=[0] returns exactly 1 layer."""
+    seq = "ATGATG"
+    h, _ = orthrus_6.extract([seq], cds=[make_cds(seq)], splice=[make_splice(seq)], layers=[0])
+    assert len(h) == 1
+
+
+def test_orthrus_extract_scores_none(orthrus_6):
+    """Orthrus scores are None for all layers (Mamba SSM, no attention matrix)."""
+    seq = "ATGATG"
+    _, s = orthrus_6.extract(
+        [seq], cds=[make_cds(seq)], splice=[make_splice(seq)],
+        layers=[0], return_attentions=True
+    )
+    assert all(v is None for v in s.values())
