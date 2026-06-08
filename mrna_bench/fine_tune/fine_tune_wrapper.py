@@ -93,12 +93,15 @@ class FineTuneWrapper(nn.Module):
             )
 
         from transformers import PreTrainedModel
-        self.backbone.model = get_peft_model(
-            cast(PreTrainedModel, self.backbone.model), config
+        peft_target = self.backbone.get_peft_target()
+        peft_model = get_peft_model(
+            cast(PreTrainedModel, peft_target), config
         )
+        self.backbone.set_peft_target(peft_model)
 
         trainable = sum(
-            p.requires_grad for p in self.backbone.model.parameters()
+            p.requires_grad
+            for p in self.backbone.get_peft_target().parameters()
         )
         if trainable == 0:
             raise ValueError(
@@ -123,7 +126,7 @@ class FineTuneWrapper(nn.Module):
         models whose attention layers have this attribute.
         """
         try:
-            base = self.backbone.model.base_model.model
+            base = self.backbone.get_peft_target().base_model.model
             if hasattr(base, "layers"):
                 for layer in base.layers:
                     if hasattr(layer, "self_attn"):
@@ -170,7 +173,8 @@ class FineTuneWrapper(nn.Module):
             List of trainable parameters (backbone LoRA + head).
         """
         params = [
-            p for p in self.backbone.model.parameters() if p.requires_grad
+            p for p in self.backbone.get_peft_target().parameters()
+            if p.requires_grad
         ]
         params.extend(self.task_head.parameters())
         return params
@@ -181,10 +185,11 @@ class FineTuneWrapper(nn.Module):
         Returns:
             Dictionary with parameter count breakdown.
         """
-        total = sum(p.numel() for p in self.backbone.model.parameters())
+        peft_target = self.backbone.get_peft_target()
+        total = sum(p.numel() for p in peft_target.parameters())
         backbone_trainable = sum(
             p.numel()
-            for p in self.backbone.model.parameters()
+            for p in peft_target.parameters()
             if p.requires_grad
         )
         head_params = sum(

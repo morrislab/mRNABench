@@ -4,7 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from scipy.stats import pearsonr, spearmanr
-from sklearn.metrics import roc_auc_score
+from sklearn.metrics import average_precision_score, roc_auc_score
 
 
 @runtime_checkable
@@ -191,16 +191,25 @@ class TaskHead(nn.Module):
 
         scores_np = self.score(logits).numpy()
         targets_np = targets.numpy()
+
+        if self.task_type == "classification":
+            pos_scores = scores_np[:, 1]
+        else:
+            pos_scores = scores_np
+
         try:
-            if self.task_type == "multilabel":
-                auroc = float(roc_auc_score(
-                    targets_np, scores_np, average="micro",
-                ))
-            else:
-                auroc = float(roc_auc_score(targets_np, scores_np))
+            auroc = float(roc_auc_score(
+                targets_np, pos_scores,
+                average="micro" if self.task_type == "multilabel" else None,
+            ))
+            auprc = float(average_precision_score(
+                targets_np, pos_scores,
+                average="micro" if self.task_type == "multilabel" else None,
+            ))
         except ValueError as e:
             if "Only one class" in str(e):
                 auroc = float("nan")
+                auprc = float("nan")
             else:
                 raise
-        return {"auroc": auroc}
+        return {"auroc": auroc, "auprc": auprc}

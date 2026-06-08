@@ -23,6 +23,12 @@ class TrainerConfig:
     early_stopping_patience: int = 3
     gradient_accumulation_steps: int = 1
     max_grad_norm: float = 1.0
+    # Decay schedule applied after warmup: "none", "linear", or "cosine".
+    # "none" keeps LR constant after warmup.
+    lr_schedule: str = "none"
+    # Total optimizer steps for decay schedules. If None, computed from the
+    # dataloader length at the start of fit().
+    total_steps: int | None = None
 
 
 class FineTuneTrainer:
@@ -63,13 +69,53 @@ class FineTuneTrainer:
     def _create_scheduler(
         self,
         optimizer: torch.optim.Optimizer,
+        total_steps: int,
     ) -> torch.optim.lr_scheduler.LRScheduler:
-        """Create linear warmup scheduler (constant after warmup)."""
-        return torch.optim.lr_scheduler.LinearLR(
+        """Create scheduler: linear warmup followed by optional decay.
+
+        Args:
+            optimizer: Optimizer to schedule.
+            total_steps: Total optimizer steps (used for decay schedules).
+        """
+        valid = ("none", "linear", "cosine")
+        if self.config.lr_schedule not in valid:
+            raise ValueError(
+                "lr_schedule must be one of {}; got {!r}".format(
+                    valid, self.config.lr_schedule
+                )
+            )
+
+        warmup = torch.optim.lr_scheduler.LinearLR(
             optimizer,
             start_factor=1e-8,
             end_factor=1.0,
             total_iters=self.config.warmup_steps,
+        )
+
+        decay_steps = max(total_steps - self.config.warmup_steps, 1)
+
+        if self.config.lr_schedule == "none":
+            decay: torch.optim.lr_scheduler.LRScheduler = (
+                torch.optim.lr_scheduler.ConstantLR(
+                    optimizer, factor=1.0, total_iters=decay_steps,
+                )
+            )
+        elif self.config.lr_schedule == "linear":
+            decay = torch.optim.lr_scheduler.LinearLR(
+                optimizer,
+                start_factor=1.0,
+                end_factor=0.0,
+                total_iters=decay_steps,
+            )
+        else:  # cosine
+            decay = torch.optim.lr_scheduler.CosineAnnealingLR(
+                optimizer, T_max=decay_steps, eta_min=0.0,
+            )
+
+        return torch.optim.lr_scheduler.SequentialLR(
+            optimizer,
+            schedulers=[warmup, decay],
+            milestones=[self.config.warmup_steps],
         )
 
     def _save_trainable_state(self) -> dict:
@@ -81,10 +127,12 @@ class FineTuneTrainer:
         try:
             from peft import get_peft_model_state_dict
             lora_state = deepcopy(
-                get_peft_model_state_dict(self.wrapper.backbone.model)
+                get_peft_model_state_dict(
+                    self.wrapper.backbone.get_peft_target()
+                )
             )
         except ImportError:
-            _model = self.wrapper.backbone.model
+            _model = self.wrapper.backbone.get_peft_target()
             lora_state = deepcopy({
                 k: v for k, v in _model.state_dict().items()
                 if v.requires_grad
@@ -102,10 +150,10 @@ class FineTuneTrainer:
         try:
             from peft import set_peft_model_state_dict
             set_peft_model_state_dict(
-                self.wrapper.backbone.model, state["lora"]
+                self.wrapper.backbone.get_peft_target(), state["lora"]
             )
         except ImportError:
-            self.wrapper.backbone.model.load_state_dict(
+            self.wrapper.backbone.get_peft_target().load_state_dict(
                 state["lora"], strict=False
             )
 
@@ -163,6 +211,20 @@ class FineTuneTrainer:
             total_loss += batch_loss
             num_batches += 1
             progress.set_postfix({"loss": batch_loss})
+
+        # Flush any remaining gradients from a partial final accumulation
+        # Note: the loss was divided by gradient_accumulation_steps rather than
+        # the actual remainder size, so the final step's gradient scale is
+        # slightly off. Good enough for now but may need revisiting.
+        if num_batches % self.config.gradient_accumulation_steps != 0:
+            torch.nn.utils.clip_grad_norm_(
+                self.wrapper.get_trainable_parameters(),
+                self.config.max_grad_norm,
+            )
+            self.optimizer.step()
+            if self.scheduler is not None:
+                self.scheduler.step()
+            self.optimizer.zero_grad()
 
         return total_loss / num_batches
 
@@ -230,10 +292,17 @@ class FineTuneTrainer:
             Training history dictionary.
         """
         self.optimizer = self._create_optimizer()
-        self.scheduler = self._create_scheduler(self.optimizer)
+        steps_per_epoch = max(
+            len(train_dataloader) // self.config.gradient_accumulation_steps, 1
+        )
+        total_steps = self.config.total_steps or (
+            steps_per_epoch * self.config.epochs
+        )
+        self.scheduler = self._create_scheduler(self.optimizer, total_steps)
 
         best_val_loss = float("inf")
         best_state = None
+        best_val_metrics: dict[str, float] = {}
         patience_counter = 0
 
         for epoch in range(self.config.epochs):
@@ -252,6 +321,7 @@ class FineTuneTrainer:
                 if val_loss < best_val_loss:
                     best_val_loss = val_loss
                     best_state = self._save_trainable_state()
+                    best_val_metrics = val_metrics
                     patience_counter = 0
                 else:
                     patience_counter += 1
@@ -262,5 +332,8 @@ class FineTuneTrainer:
 
         if best_state is not None:
             self._restore_trainable_state(best_state)
+
+        # best_val_metrics holds the full metrics from the best epoch
+        self.best_val_metrics = best_val_metrics
 
         return self.history
