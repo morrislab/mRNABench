@@ -11,6 +11,7 @@
 
 # set default value for force_recompute
 force_recompute="False"
+seeds="[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
 export OMP_NUM_THREADS=4
 export MKL_NUM_THREADS=4
@@ -24,6 +25,7 @@ while [[ "$#" -gt 0 ]]; do
         --task) task="$2"; shift ;;
         --target) target="$2"; shift ;;
         --split_type) split_type="$2"; shift ;;
+        --seeds) seeds="$2"; shift ;;
         --force_recompute) force_recompute="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -41,6 +43,7 @@ if [ "$force_recompute" == "True" ]; then
     --task "$task" \
     --target "$target" \
     --split_type "$split_type" \
+    --seeds "$seeds" \
     --force_recompute
 else
     python ../by_modelversion.py \
@@ -48,5 +51,6 @@ else
     --dataset_name "$dataset_name" \
     --task "$task" \
     --target "$target" \
-    --split_type "$split_type"
+    --split_type "$split_type" \
+    --seeds "$seeds"
 fi

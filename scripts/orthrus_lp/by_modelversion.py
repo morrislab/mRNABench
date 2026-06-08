@@ -29,23 +29,41 @@ if __name__ == "__main__":
 
     dataset = mb.load_dataset(args.dataset_name)
 
-    prober = (
-        LinearProbeBuilder(dataset_name=args.dataset_name)
-        .fetch_embedding_by_model_name(args.model_short_name)
-        .build_splitter(args.split_type, species=dataset.species, eval_all_splits=True)
-        .build_evaluator(args.task)
-        .set_target(args.target)
-        .use_persister()
-        .build()
-    )
+    if args.task == "zeroshot":
+        prober = (
+            LinearProbeBuilder(dataset_name=args.dataset_name)
+            .fetch_embedding_by_model_name(args.model_short_name)
+            .build_evaluator("zeroshot")
+            .set_target(args.target)
+            .use_persister()
+            .build()
+        )
 
-    seeds = eval(args.seeds)
+        if not args.force_recompute and prober.result_exists():
+            print("Results already computed, skipping.")
+        else:
+            print("Running zero-shot VEP.")
+            metrics = prober.run(persist=True)
+            print("Finished:", metrics)
 
-    for seed in seeds:
-        if not args.force_recompute and prober.persister.result_exists(seed):
-            print("Results already computed for seed:", seed)
-            continue
+    else:
+        prober = (
+            LinearProbeBuilder(dataset_name=args.dataset_name)
+            .fetch_embedding_by_model_name(args.model_short_name)
+            .build_splitter(args.split_type, species=dataset.metadata.species, eval_all_splits=True)
+            .build_evaluator(args.task)
+            .set_target(args.target)
+            .use_persister()
+            .build()
+        )
 
-        print("Running linear probe for seed:", seed)
-        metrics = prober.run_linear_probe(seed, persist=True)
-        print("Finished")
+        seeds = eval(args.seeds)
+
+        for seed in seeds:
+            if not args.force_recompute and prober.persister.result_exists(seed):
+                print("Results already computed for seed:", seed)
+                continue
+
+            print("Running linear probe for seed:", seed)
+            metrics = prober.run_linear_probe(seed, persist=True)
+            print("Finished")

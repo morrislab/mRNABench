@@ -12,6 +12,7 @@ split_types = list(SPLIT_CATALOG.keys())
 
 random_seeds = [2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]
 
+
 def get_step_from_ckpt(ckpt):
     """
     Extract the step number from the checkpoint filename.
@@ -21,6 +22,7 @@ def get_step_from_ckpt(ckpt):
 
     step = ckpt.split('-')[-1].split('=')[-1].split('.')[0]
     return int(step)
+
 
 def get_ckpts_from_dir(model_dir, choice=None, best_onward=False):
     """
@@ -56,6 +58,7 @@ def get_ckpts_from_dir(model_dir, choice=None, best_onward=False):
 
     return sorted([f.name for f in ckpt_files], key=lambda x: get_step_from_ckpt(x))
 
+
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="Submit jobs for custom model linear probing.")
@@ -67,6 +70,7 @@ if __name__ == "__main__":
     parser.add_argument("--dry_run", action='store_true', help="Only print the commands that would be run, without executing them.")
     parser.add_argument("--canonical_split", action='store_true', help="Use the canonical split for the dataset.")
     parser.add_argument("--filter_substr", type=str, help="Evaluate model versions by this substring. If not provided, all model versions will be considered.", default="")
+    parser.add_argument("--per_seed", action='store_true', help="Submit jobs per random seed.")
     args = parser.parse_args()
 
     if (args.best_only or args.last_only) and args.best_onward:
@@ -94,58 +98,113 @@ if __name__ == "__main__":
 
         for index, target_col in enumerate(target_cols):
 
-            for model_version in sorted(os.listdir(args.model_dir)):
+            for task in dataset_info["task"]:
 
-                if args.filter_substr and args.filter_substr not in model_version:
-                    continue
+                for model_version in sorted(os.listdir(args.model_dir)):
 
-                print("\tModel version:", model_version)
+                    if args.filter_substr and args.filter_substr not in model_version:
+                        continue
 
-                for ckpt in get_ckpts_from_dir(os.path.join(args.model_dir, model_version), choice, args.best_onward):
+                    # print("\tModel version:", model_version)
 
-                    model_short_name = (model_version + "_" + ckpt.replace(".ckpt", "")).replace("_", "-").replace("-track", "").replace("best-", "")
+                    for ckpt in get_ckpts_from_dir(os.path.join(args.model_dir, model_version), choice, args.best_onward):
 
-                    if args.canonical_split:
-                        valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
-                    elif "mrl-sample" in dataset_name:
-                        valid_split_types = ["default", "hard-kmer", "kmer"]
-                    elif "mrl-hl-lbkwk" in dataset_name:
-                        valid_split_types = ["default"]
-                    else:
-                        valid_split_types = split_types
+                        model_short_name = (model_version + "_" + ckpt.replace(".ckpt", "")).replace("_", "-").replace("-track", "").replace("best-", "")
 
-                    for split_type in valid_split_types:
+                        # ----------------------------
+                        # zeroshot VEP: single run, no splits, no seeds
+                        # ----------------------------
+                        if task == "zeroshot":
+                            if not args.force_recompute:
+                                persister = LinearProbePersister(
+                                    dataset,
+                                    model_short_name,
+                                    "zeroshot",
+                                    target_col,
+                                    "none",
+                                )
+                                if persister.result_exists("zeroshot"):
+                                    continue
 
-                        # print("\t\tSplit type: ", split_type)
+                            cmd = [
+                                "sbatch",
+                                "./modelversion_slurm.sh",
+                                "--model_short_name", model_short_name,
+                                "--dataset_name", dataset_name,
+                                "--task", "zeroshot",
+                                "--target", target_col,
+                                "--split_type", "none",
+                                "--seeds", '["zeroshot"]',
+                                "--force_recompute", str(args.force_recompute),
+                            ]
 
-                        if not args.force_recompute:
-                            persister = LinearProbePersister(
-                                dataset,
-                                model_short_name,
-                                dataset_info["task"][index],
-                                target_col,
-                                split_type,
-                            )
-                            if all(persister.result_exists(seed) for seed in random_seeds):
-                                # print("\t\tResults already computed. Skipping.")
-                                continue
+                            if args.dry_run:
+                                print(f"\t\tDry run: {' '.join(cmd)}")
+                            else:
+                                result = subprocess.run(cmd, capture_output=True, text=True)
+                                if result.stdout:
+                                    print('\t' + result.stdout.strip())
+                                if result.stderr:
+                                    print('\t' + result.stderr.strip())
+                            continue
 
-
-                        if args.dry_run:
-                            print(f"\t\tsbatch ./modelversion_slurm.sh --model_short_name {model_short_name} --dataset_name {dataset_name} --task {dataset_info['task'][index]} --target {target_col} --split_type {split_type} --force_recompute {args.force_recompute}")
+                        # ----------------------------
+                        # standard LP: splits + seeds
+                        # ----------------------------
+                        if args.canonical_split:
+                            valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
+                        elif "mrl-sample" in dataset_name:
+                            valid_split_types = ["default", "hard-kmer", "kmer"]
+                        elif "mrl-hl-lbkwk" in dataset_name:
+                            valid_split_types = ["default"]
                         else:
-                            result = subprocess.run(
-                                [
+                            valid_split_types = split_types
+
+                        for split_type in valid_split_types:
+
+                            # ----------------------------
+                            # decide seeds
+                            # ----------------------------
+                            seeds_to_run = random_seeds if args.per_seed else [random_seeds]
+
+                            for seed_block in seeds_to_run:
+
+                                seeds = [seed_block] if args.per_seed else seed_block
+
+                                if not args.force_recompute:
+                                    persister = LinearProbePersister(
+                                        dataset,
+                                        model_short_name,
+                                        task,
+                                        target_col,
+                                        split_type,
+                                    )
+                                    if all(persister.result_exists(seed) for seed in seeds):
+                                        continue
+
+                                seed_arg = f"[{seeds[0]}]" if args.per_seed else str(seeds)
+
+                                cmd = [
                                     "sbatch",
                                     "./modelversion_slurm.sh",
                                     "--model_short_name", model_short_name,
                                     "--dataset_name", dataset_name,
-                                    "--task", dataset_info["task"][index],
+                                    "--task", task,
                                     "--target", target_col,
                                     "--split_type", split_type,
+                                    "--seeds", seed_arg,
                                     "--force_recompute", str(args.force_recompute),
-                                ],
-                                capture_output=True,
-                                text=True
-                            )
-                            print("\t\t" + result.stdout.strip())
+                                ]
+
+                                if args.dry_run:
+                                    print(f"\t\tDry run: {' '.join(cmd)}")
+                                else:
+                                    result = subprocess.run(
+                                        cmd,
+                                        capture_output=True,
+                                        text=True
+                                    )
+                                    if result.stdout:
+                                        print("\t\t" + result.stdout.strip())
+                                    if result.stderr:
+                                        print("\t\t" + result.stderr.strip())
