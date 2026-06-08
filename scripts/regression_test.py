@@ -161,7 +161,7 @@ def run_regression_test(
 
     embedder = DatasetEmbedder(model, dataset)
     embeddings = embedder.embed_dataset()
-    embeddings = embeddings.detach().cpu().numpy()
+    embeddings = torch.stack(embeddings, dim=0).detach().cpu().numpy()
 
     if verbose:
         print("Embedding shape: {}".format(embeddings.shape))
