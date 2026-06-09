@@ -110,6 +110,32 @@ class GENERator(EmbeddingModel):
 
         self.max_length = 98_304  # based on technical report
 
+        # Chunk length must be a multiple of k (k-mer-aligned boundaries) and
+        # reserve 2 *tokens* for <s>/</s> so a full chunk fits max_pos_embeds.
+        self.k = self.tokenizer.k
+        self.max_chunk_length = ((self.max_length // self.k) - 2) * self.k
+
+    def _pad_to_kmer(self, chunks: list[str]) -> list[str]:
+        """Right-pad each chunk with 'A' so its length is a multiple of k.
+
+        GENERator's tokenizer maps any trailing sub-k-mer remainder to a
+        single uninformative <oov> token (and discards its bases). Padding the
+        remainder up to a full k-mer with 'A' preserves the leading bases.
+
+        Args:
+            chunks: Raw nucleotide chunks.
+
+        Returns:
+            Chunks right-padded with 'A' to the next multiple of k.
+        """
+        padded = []
+        for chunk in chunks:
+            remainder = len(chunk) % self.k
+            if remainder:
+                chunk = chunk + "A" * (self.k - remainder)
+            padded.append(chunk)
+        return padded
+
     def _forward_chunks(
         self,
         chunks: list[str]
@@ -124,7 +150,7 @@ class GENERator(EmbeddingModel):
             padding and special tokens (CLS/SEP).
         """
         toks = self.tokenizer(
-            chunks,
+            self._pad_to_kmer(chunks),
             add_special_tokens=True,
             return_tensors="pt",
             padding=True,
@@ -168,7 +194,7 @@ class GENERator(EmbeddingModel):
 
         return self._embed_with_chunking(
             sequences=sequences,
-            max_chunk_length=self.max_length - 2,
+            max_chunk_length=self.max_chunk_length,
             embed_fn=self._forward_chunks,
             agg_fn=agg_fn,
         )
@@ -202,7 +228,7 @@ class GENERator(EmbeddingModel):
 
         def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
             return self.tokenizer(  # type: ignore[return-value]
-                seqs,
+                self._pad_to_kmer(seqs),
                 add_special_tokens=True,
                 return_tensors="pt",
                 padding=False,
@@ -213,7 +239,7 @@ class GENERator(EmbeddingModel):
         return self._standard_hf_extract(
             sequences=sequences,
             tokenize_fn=tokenize,
-            max_chunk_length=self.max_length - 2,
+            max_chunk_length=self.max_chunk_length,
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,
