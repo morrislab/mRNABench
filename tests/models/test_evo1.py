@@ -4,8 +4,6 @@ pytest.importorskip("torch")
 
 import torch
 
-# The Evo1 HuggingFace ports load via ``AutoModel.from_pretrained`` and do not
-# require the ``evo`` package. The 7B model needs a CUDA device.
 if not torch.cuda.is_available():
     pytest.skip(
         "Evo1 7B integration test requires a CUDA GPU",
@@ -14,8 +12,6 @@ if not torch.cuda.is_available():
 
 from mrna_bench.models.evo1 import Evo1
 
-# Evo1-1-7B-8K: hidden_size = 4096. Embeddings use the final-layer hidden
-# state only (matching the original wrapper, which embedded the 'norm' layer).
 EVO1_VERSION = "Evo1-1-7B-8K"
 HIDDEN_DIM = 4096
 

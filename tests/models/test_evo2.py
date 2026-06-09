@@ -4,10 +4,6 @@ pytest.importorskip("torch")
 
 import torch
 
-# The Evo2 HuggingFace ports load via ``AutoModel.from_pretrained`` and do not
-# require the ``evo2``/``vortex``/TransformerEngine packages. The smallest
-# publicly runnable variant on non-Hopper GPUs is the 7B model (the 1B variant
-# uses FP8 input projections that require an H100), and it needs a CUDA device.
 if not torch.cuda.is_available():
     pytest.skip(
         "Evo2 7B integration test requires a CUDA GPU",
@@ -16,8 +12,6 @@ if not torch.cuda.is_available():
 
 from mrna_bench.models.evo2 import Evo2
 
-# Evo2-7B-8K: hidden_size = 4096; embeddings concatenate the middle block's
-# pre-norm representation with the final-layer hidden state -> 2 * 4096.
 EVO2_VERSION = "Evo2-7B-8K"
 HIDDEN_DIM = 4096
 CONCAT_DIM = HIDDEN_DIM * 2
