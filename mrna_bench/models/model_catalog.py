@@ -1,11 +1,11 @@
 from typing import Type
 
-from .aido import AIDORNA
+from .aido_rna import AIDORNA
 from .alphagenome import AlphaGenome
 from .borzoi import Borzoi
 from .carbon import Carbon
 from .codonbert import CodonBERT
-from .dnabert import DNABERT2
+from .dnabert2 import DNABERT2
 from .dnabert_kmer import DNABERT
 from .dnabert_s import DNABERTS
 from .enformer import Enformer

@@ -3,7 +3,7 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
-from mrna_bench.models.dnabert import DNABERT2
+from mrna_bench.models.dnabert2 import DNABERT2
 
 
 @pytest.fixture(scope="module")

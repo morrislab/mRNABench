@@ -5,7 +5,7 @@ from unittest.mock import patch
 pytest.importorskip("torch")
 
 import torch
-from mrna_bench.models.aido import AIDORNA
+from mrna_bench.models.aido_rna import AIDORNA
 
 
 @pytest.fixture(scope="module")
