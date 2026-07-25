@@ -167,6 +167,7 @@ class FineTuneTrainer:
         """
         self.wrapper.set_inference_mode()
         total_loss = 0.0
+        total_samples = 0
         all_preds = []
         all_targets = []
 
@@ -184,11 +185,12 @@ class FineTuneTrainer:
             output = self.wrapper.forward(sequences, cds, splice)
             loss = self.loss_fn(output, target)
             total_loss += loss.item() * len(sequences)
+            total_samples += len(sequences)
 
             all_preds.append(output.cpu())
             all_targets.append(target.cpu())
 
-        avg_loss = total_loss / len(dataloader.dataset)
+        avg_loss = total_loss / total_samples
         preds = torch.cat(all_preds, dim=0)
         targets = torch.cat(all_targets, dim=0)
 

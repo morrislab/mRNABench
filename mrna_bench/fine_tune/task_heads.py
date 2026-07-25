@@ -182,15 +182,15 @@ class TaskHead(nn.Module):
             Dictionary of metric name to value.
         """
         if self.task_type == "regression":
-            preds_np = logits.numpy().flatten()
-            targets_np = targets.numpy().flatten()
+            preds_np = logits.detach().cpu().numpy().flatten()
+            targets_np = targets.detach().cpu().numpy().flatten()
             return {
                 "pearson_r": float(pearsonr(preds_np, targets_np)[0]),
                 "spearman_r": float(spearmanr(preds_np, targets_np)[0]),
             }
 
-        scores_np = self.score(logits).numpy()
-        targets_np = targets.numpy()
+        scores_np = self.score(logits).detach().cpu().numpy()
+        targets_np = targets.detach().cpu().numpy()
         try:
             if self.task_type == "multilabel":
                 auroc = float(roc_auc_score(

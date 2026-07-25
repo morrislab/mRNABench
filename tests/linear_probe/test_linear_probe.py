@@ -157,7 +157,7 @@ def test_linear_probe_persister_no_persist(linear_probe_persister: LinearProbe):
 
         assert len(linear_probe_persister.models) == 1
 
-        linear_probe_persister.persister.persist_run_results.call_count == 0
+        assert linear_probe_persister.persister.persist_run_results.call_count == 0
 
 
 def test_linear_probe_no_persister_persist(linear_probe: LinearProbe):

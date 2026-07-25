@@ -125,7 +125,7 @@ def test_build_evaluator(mock_builder: LinearProbeBuilder):
 
 def test_use_persister(mock_builder: LinearProbeBuilder):
     """Check that use_persister sets persister."""
-    assert hasattr(mock_builder, "persister_flag") is False
+    assert mock_builder.persister_flag is False
 
     mock_builder.use_persister()
     assert mock_builder.persister_flag is True
@@ -136,6 +136,8 @@ def test_build(mock_builder: LinearProbeBuilder):
     mock_builder.embeddings = Mock()
     mock_builder.model_short_name = "test_model"
     mock_builder.target_col = "target"
+    mock_builder.data_df = Mock()
+    mock_builder.data_df.columns = ["target"]
     mock_builder.task = "task"
     mock_builder.splitter = Mock()
     mock_builder.split_type = "homology"
