@@ -24,7 +24,7 @@ dependencies = [
     "numpy==2.4.3",
     "pandas==3.0.1",
     "requests",
-    "pyarrow==20.0.0",
+    "pyarrow==23.0.1",
     "datasets>2.15.0",
     "fastparquet",
     "openpyxl",
