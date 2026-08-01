@@ -96,6 +96,14 @@ class DatasetEmbedder:
 
         return dataset_embeddings
 
+    @staticmethod
+    def _prepare_for_persistence(embedding: torch.Tensor) -> torch.Tensor:
+        """Move an embedding to CPU with a NumPy-compatible dtype."""
+        embedding = embedding.detach().cpu()
+        if embedding.dtype == torch.bfloat16:
+            embedding = embedding.float()
+        return embedding
+
     def persist_embeddings(self, embeddings: list[torch.Tensor]):
         """Persist embeddings at global data storage location.
 
@@ -110,7 +118,10 @@ class DatasetEmbedder:
             self.d_num_chunks
         )
 
-        embeddings = [emb.detach().cpu() for emb in embeddings]
+        embeddings = [
+            self._prepare_for_persistence(emb)
+            for emb in embeddings
+        ]
 
         if self.ragged_out:
             with h5py.File(out_path + ".h5", "w") as f:
