@@ -151,14 +151,13 @@ class NucleotideTransformerV3(EmbeddingModel):
             ))
             return
 
-        if species == "synthetic":
-            species = 'human'
-
+        if species in {"synthetic", "mixed"}:
             warnings.warn((
-                "Warning: 'synthetic' sequences not directly supported by "
-                "NucleotideTransformerV3 post-trained models. Using 'human' "
-                "species token instead."
+                f"'{species}' sequences do not map to a dedicated species "
+                "token in NucleotideTransformerV3 post-trained models. "
+                "Using the 'human' species token instead."
             ))
+            species = "human"
 
         if species not in self.valid_species:
             raise ValueError((

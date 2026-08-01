@@ -1,6 +1,6 @@
 import pytest
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 pytest.importorskip("torch")
 
@@ -104,6 +104,23 @@ def test_ntv3_posttrained_requires_species(device):
         assert any("species" in str(warning.message).lower() for warning in w)
 
     assert out[0].shape == (768,)
+
+
+@pytest.mark.parametrize("species", ["synthetic", "mixed"])
+def test_ntv3_maps_dataset_species_to_human(species):
+    """Map dataset-level non-species categories to the human token."""
+    model = NucleotideTransformerV3.__new__(NucleotideTransformerV3)
+    model.post_trained = True
+    model.valid_species = ["human"]
+    model.device = torch.device("cpu")
+    model.model = Mock()
+    model.model.encode_species.return_value = torch.tensor([7])
+
+    with pytest.warns(UserWarning, match="human"):
+        model.set_species(species)
+
+    model.model.encode_species.assert_called_once_with(["human"])
+    assert torch.equal(model.species_id, torch.tensor([7]))
 
 
 @torch.no_grad()
