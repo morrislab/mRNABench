@@ -34,8 +34,8 @@ if __name__ == "__main__":
     # We are assuming an H100 GPU is used for embedding. If using L40s,
     # reduce max length even further to deal with ultra long sequences.
     # these values were determined empirically and may need to be adjusted.
-    if args.model_name == "Evo2" and "eclip" in args.dataset_name:
-        if args.model_version == "evo2_40b":
+    if args.model_name == "Evo2":
+        if args.model_version == "Evo2-40B-1M":
             model.max_length = 20_000
         elif model.max_length > 8192:
             model.max_length = 75_000
@@ -71,9 +71,9 @@ if __name__ == "__main__":
         exit(0)
     else:
 
-        if args.model_name == "NucleotideTransformerV3" and \
-            "post" in args.model_version:
-            model.set_species(dataset.species)
+        if args.model_name == "NucleotideTransformerV3":
+            if "post" in args.model_version:
+                model.set_species(dataset.metadata.species)
 
         if Path(out_fn).exists() and not args.force_recompute:
             print(f"Embedding already computed: {out_fn}")

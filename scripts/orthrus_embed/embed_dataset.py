@@ -26,6 +26,7 @@ if __name__ == "__main__":
         checkpoint = args.checkpoint,
         device = device,
         model_repository = args.model_dir,
+        attn_implementation = None,
     )
 
     dataset = load_dataset(

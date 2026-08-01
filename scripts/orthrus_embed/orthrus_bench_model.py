@@ -18,7 +18,12 @@ class Orthrus(EmbeddingModel):
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
-        return model_version.replace("_", "-").replace("best-", "")
+        return (
+            model_version
+            .replace("_", "-")
+            .replace("-track", "")
+            .replace("best-", "")
+        )
 
     def __init__(self,
         model_version: str,
@@ -65,7 +70,7 @@ class Orthrus(EmbeddingModel):
         Returns:
             Orthrus embeddings with shape (batch_size, hidden_dim).
         """
-        if "6-track" in self.get_model_short_name(self.model_version):
+        if "6-track" in self.model_version.replace("_", "-"):
             if cds is None or splice is None:
                 raise ValueError(
                     "Orthrus 6-track model requires cds and splice tracks."

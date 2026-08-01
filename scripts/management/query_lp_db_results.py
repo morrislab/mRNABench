@@ -11,37 +11,37 @@ within the same flag, exclude filters are AND-combined (exclude all of them).
 Examples
 --------
 # All results for one model across every dataset
-python scripts/linear_probe/query_results.py --model orthrus-deep-4
+python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4
 
 # Multiple models at once
-python scripts/linear_probe/query_results.py --model orthrus-deep-4 rna-fm
+python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4 rna-fm
 
 # All results for a model on a specific task
-python scripts/linear_probe/query_results.py --model orthrus-deep-4 --task reg_ridge
+python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4 --task reg_ridge
 
 # Filter by dataset and split
-python scripts/linear_probe/query_results.py --dataset prot-loc --split-type homology
+python scripts/linear_probe/query_lp_db_results.py --dataset prot-loc --split-type homology
 
 # Exclude multiple datasets
-python scripts/linear_probe/query_results.py --model rna-fm --exclude-dataset rnahl eclip
+python scripts/linear_probe/query_lp_db_results.py --model rna-fm --exclude-dataset rnahl eclip
 
 # Show metric values inline
-python scripts/linear_probe/query_results.py --model rna-fm --metrics
+python scripts/linear_probe/query_lp_db_results.py --model rna-fm --metrics
 
 # Count matching rows only
-python scripts/linear_probe/query_results.py --model rna-fm --count
+python scripts/linear_probe/query_lp_db_results.py --model rna-fm --count
 
 # Delete all rows for a deprecated model (confirms before deleting)
-python scripts/linear_probe/query_results.py --model old-model-name --delete
+python scripts/linear_probe/query_lp_db_results.py --model old-model-name --delete
 
 # Find all incomplete (model, task, target_col, split_type) combos (missing from default seed set)
-python scripts/linear_probe/query_results.py --incomplete
+python scripts/linear_probe/query_lp_db_results.py --incomplete
 
 # Check incomplete combos for a specific dataset or model
-python scripts/linear_probe/query_results.py --incomplete --dataset mrl-sample --model naive
+python scripts/linear_probe/query_lp_db_results.py --incomplete --dataset mrl-sample --model naive
 
 # Check incomplete combos against a custom seed set
-python scripts/linear_probe/query_results.py --incomplete --expected-seeds 2541 413 411
+python scripts/linear_probe/query_lp_db_results.py --incomplete --expected-seeds 2541 413 411
 """
 
 import argparse
