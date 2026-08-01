@@ -83,14 +83,13 @@ class mRNABERT(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
 
-        self.config.attn_implementation = attn_implementation
-
         self.model = AutoModel.from_pretrained(
             hub_id,
             trust_remote_code=True,
             add_pooling_layer=False,
             cache_dir=get_model_weights_path(),
             config=self.config,
+            attn_implementation=self.attn_implementation,
         ).to(self.device)
         # ALiBi allows arbitrary lengths; model_max_length (from config) caps
         # the chunk size to avoid quadratic-memory OOM.
@@ -144,15 +143,13 @@ class mRNABERT(EmbeddingModel):
             return_special_tokens_mask=True,
         ).to(self.device)
 
-        special_tokens_mask = toks["special_tokens_mask"]
-        attention_mask = 1 - special_tokens_mask
+        attention_mask = toks["attention_mask"]
+        pooling_mask = attention_mask * (1 - toks["special_tokens_mask"])
 
         hidden_states = self.model(
             input_ids=toks["input_ids"],
             attention_mask=attention_mask,
         ).last_hidden_state
-
-        pooling_mask = attention_mask
 
         return hidden_states, pooling_mask
 
@@ -372,13 +369,10 @@ class mRNABERT(EmbeddingModel):
                 add_special_tokens=True,
                 padding=False,
                 return_tensors="pt",
-                return_special_tokens_mask=True,
             )
             return {
                 "input_ids": raw["input_ids"].to(self.device),
-                "attention_mask": (
-                    1 - raw["special_tokens_mask"]
-                ).to(self.device),
+                "attention_mask": raw["attention_mask"].to(self.device),
             }
 
         return self._standard_hf_extract(

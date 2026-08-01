@@ -41,17 +41,16 @@ def test_generator_embed_batch_ragged(model):
 
 
 def test_generator_excludes_special_tokens(model):
-    """Verify pooling mask excludes BOS/EOS special tokens."""
+    """Verify pooling excludes BOS while retaining the sequence k-mer."""
     with patch.object(model, "model") as mock_model:
         mock_model.return_value.hidden_states = [
-            torch.ones(1, 8, 3072, device=model.device)
+            torch.ones(1, 2, 3072, device=model.device)
         ]
 
         _, mask = model._forward_chunks(["ATGATG"])
 
-        # Mask should be 0 at special token positions (BOS, EOS)
         assert mask[0, 0].item() == 0  # BOS
-        assert mask[0, -1].item() == 0  # EOS
+        assert mask[0, 1:].sum().item() == 1
 
 
 @torch.no_grad()

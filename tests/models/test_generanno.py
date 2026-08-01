@@ -43,19 +43,16 @@ def test_generanno_embed_batch_ragged(model):
 
 
 def test_generanno_excludes_special_tokens(model):
-    """Verify pooling mask excludes CLS/SEP special tokens."""
+    """Verify pooling excludes BOS while retaining nucleotide tokens."""
     with patch.object(model, "model") as mock_model:
         mock_model.return_value.hidden_states = [
-            torch.ones(1, 8, 1280, device=model.device)
+            torch.ones(1, 7, 1280, device=model.device)
         ]
 
         _, mask = model._forward_chunks(["ATGATG"])
 
-        # Mask should be 0 at special token positions (CLS, SEP)
         assert mask[0, 0].item() == 0  # BOS
-        assert mask[0, -1].item() == 0  # EOS
-        # Nucleotide positions should be 1
-        assert mask[0, 1:-1].sum().item() == 6
+        assert mask[0, 1:].sum().item() == 6
 
 
 def test_generanno_chunking(model):

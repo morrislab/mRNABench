@@ -42,6 +42,40 @@ def test_mrnabert_forward(model):
     assert out.shape == (768,)
 
 
+def test_mrnabert_attention_implementation(model):
+    """Requested attention backend is passed through to the model."""
+    assert model.model.config._attn_implementation == "eager"
+
+
+def test_mrnabert_uses_separate_attention_and_pooling_masks(model):
+    """Special tokens attend normally but are excluded from pooling."""
+    transformed = ["ATG ATG", "GCG CGC GCG CGC"]
+    toks = model.tokenizer.batch_encode_plus(
+        transformed,
+        add_special_tokens=True,
+        padding="longest",
+        return_tensors="pt",
+        return_special_tokens_mask=True,
+    ).to(model.device)
+
+    with patch.object(model, "model") as mock_model:
+        mock_model.return_value.last_hidden_state = torch.ones(
+            (*toks["input_ids"].shape, 768),
+            device=model.device,
+        )
+
+        _, pooling_mask = model._forward_chunks_sixtrack(transformed)
+
+    assert torch.equal(
+        mock_model.call_args.kwargs["attention_mask"],
+        toks["attention_mask"],
+    )
+    expected_pooling_mask = (
+        toks["attention_mask"] * (1 - toks["special_tokens_mask"])
+    )
+    assert torch.equal(pooling_mask, expected_pooling_mask)
+
+
 def test_mrnabert_separate_utr_cds_single_codon(model):
     """UTR-CDS-UTR structure is spaced correctly for a single codon."""
     seq = "AACTGCGTG"
