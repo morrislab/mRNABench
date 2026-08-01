@@ -1,9 +1,11 @@
 from .benchmark_dataset import BenchmarkDataset
 
+from .apa_isoform import APAIsoform
 from .eclip_binding import eCLIPBindingK562, eCLIPBindingHepG2
 from .go_bio_proc import GOBiologicalProcess
 from .go_cell_comp import GOCellularComponent
 from .go_mol_func import GOMolecularFunction
+from .ires_classification import IRESClassification
 from .mirna_target import MiRNATarget
 from .mrl_hl_lbkwk import MRLHLLBKWK
 from .mrl_sample import (
@@ -25,11 +27,13 @@ from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 
 DATASET_CATALOG: dict[str, type[BenchmarkDataset]] = {
+    "apa-isoform": APAIsoform,
     "eclip-binding-k562": eCLIPBindingK562,
     "eclip-binding-hepg2": eCLIPBindingHepG2,
     "go-bp": GOBiologicalProcess,
     "go-cc": GOCellularComponent,
     "go-mf": GOMolecularFunction,
+    "ires-classification": IRESClassification,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,

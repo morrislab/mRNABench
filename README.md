@@ -205,6 +205,12 @@ The current datasets catalogued are:
 | Mean Ribosome Load & Half-life | <code>mrl&#8209;hl&#8209;lbkwk</code> | Joint prediction of ribosome load and RNA half-life from synthetic mRNA sequences in the Leppek et al. dataset. | `regression` | [paper](https://pubmed.ncbi.nlm.nih.gov/33821271/) |
 | Translation Efficiency (Human) | <code>translation&#8209;efficiency&#8209;human</code> | Translation efficiency of human transcripts measured using ribosome profiling. | `regression` | [paper](https://www.nature.com/articles/s41587-025-02712-x) |
 | Translation Efficiency (Mouse) | <code>translation&#8209;efficiency&#8209;mouse</code> | Translation efficiency of mouse transcripts measured using ribosome profiling. | `regression` | [paper](https://www.nature.com/articles/s41587-025-02712-x) |
+| IRES Classification | <code>ires&#8209;classification</code> | Classification of internal ribosome entry site activity across assayed and curated candidate sequences. | `classification` | [paper](https://doi.org/10.1038/s42256-024-00823-9) |
+
+### Alternative Polyadenylation
+| Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
+|---|---|---|---|---|
+| APA Isoform | <code>apa&#8209;isoform</code> | Proximal isoform usage measured across synthetic 3' UTR APA windows from the APARENT libraries distributed by BEACON. | `regression` | [paper](https://doi.org/10.1016/j.cell.2019.04.046) |
 
 ### RNA Stability
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
