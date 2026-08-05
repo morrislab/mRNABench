@@ -29,30 +29,30 @@ def load_model(
     """
     try:
         import torch
-        from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
-
-        if device is None:
-            device = torch.device(
-                "cuda" if torch.cuda.is_available() else "cpu"
-            )
-
-        model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
-
-        if model_version is None:
-            model_version = model_class.default_version
-
-        if attn_implementation is None:
-            attn_implementation = model_class.default_attn_implementation
-
-        model = model_class(
-            model_version, device, attn_implementation=attn_implementation
-        )
-        model.set_inference_mode()
-
     except ModuleNotFoundError:
         raise ModuleNotFoundError(
             "PyTorch not installed. Model benchmarking unavailable."
+        ) from None
+
+    from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
+
+    if device is None:
+        device = torch.device(
+            "cuda" if torch.cuda.is_available() else "cpu"
         )
+
+    model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
+
+    if model_version is None:
+        model_version = model_class.default_version
+
+    if attn_implementation is None:
+        attn_implementation = model_class.default_attn_implementation
+
+    model = model_class(
+        model_version, device, attn_implementation=attn_implementation
+    )
+    model.set_inference_mode()
 
     return model
 
