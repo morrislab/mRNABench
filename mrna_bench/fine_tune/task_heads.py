@@ -4,16 +4,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 from scipy.stats import pearsonr, spearmanr
-from sklearn.metrics import average_precision_score, roc_auc_score
+
+from mrna_bench.metrics import classification_metrics, multilabel_metrics
 
 
 @runtime_checkable
 class TaskHeadProtocol(Protocol):
-    """Interface that any fine-tuning head must implement.
-
-    Custom heads (CNN, attention, etc.) should satisfy this protocol
-    so the trainer can obtain the loss function and task type.
-    """
+    """Interface that any fine-tuning head must implement."""
 
     task_type: str
 
@@ -134,14 +131,7 @@ class TaskHead(nn.Module):
         return torch.from_numpy(targets).float()
 
     def predict(self, logits: torch.Tensor) -> torch.Tensor:
-        """Convert logits to discrete predictions.
-
-        Args:
-            logits: Raw output from forward pass.
-
-        Returns:
-            Predictions appropriate for task type.
-        """
+        """Convert logits to task-appropriate predictions."""
         if self.task_type == "regression":
             return logits
         elif self.task_type == "classification":
@@ -193,23 +183,12 @@ class TaskHead(nn.Module):
         targets_np = targets.numpy()
 
         if self.task_type == "classification":
-            pos_scores = scores_np[:, 1]
-        else:
-            pos_scores = scores_np
-
-        try:
-            auroc = float(roc_auc_score(
-                targets_np, pos_scores,
-                average="micro" if self.task_type == "multilabel" else None,
-            ))
-            auprc = float(average_precision_score(
-                targets_np, pos_scores,
-                average="micro" if self.task_type == "multilabel" else None,
-            ))
-        except ValueError as e:
-            if "Only one class" in str(e):
-                auroc = float("nan")
-                auprc = float("nan")
-            else:
-                raise
-        return {"auroc": auroc, "auprc": auprc}
+            return classification_metrics(
+                targets_np,
+                scores_np,
+                np.arange(scores_np.shape[1]),
+                missing_class_nan=True,
+            )
+        return multilabel_metrics(
+            targets_np, scores_np, missing_class_nan=True
+        )

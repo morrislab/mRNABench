@@ -1,6 +1,5 @@
 """Trainer for fine-tuning genomic foundation models."""
 
-from copy import deepcopy
 from dataclasses import dataclass
 
 from typing import Any, Callable
@@ -124,21 +123,20 @@ class FineTuneTrainer:
         Returns:
             Dictionary with LoRA and head state dicts.
         """
-        try:
-            from peft import get_peft_model_state_dict
-            lora_state = deepcopy(
-                get_peft_model_state_dict(
-                    self.wrapper.backbone.get_peft_target()
-                )
-            )
-        except ImportError:
-            _model = self.wrapper.backbone.get_peft_target()
-            lora_state = deepcopy({
-                k: v for k, v in _model.state_dict().items()
-                if v.requires_grad
-            })
-
-        head_state = deepcopy(self.wrapper.task_head.state_dict())
+        model = self.wrapper.backbone.get_peft_target()
+        trainable = {
+            name for name, parameter in model.named_parameters()
+            if parameter.requires_grad
+        }
+        lora_state = {
+            name: value.detach().clone()
+            for name, value in model.state_dict().items()
+            if name in trainable
+        }
+        head_state = {
+            name: value.detach().clone()
+            for name, value in self.wrapper.task_head.state_dict().items()
+        }
         return {"lora": lora_state, "head": head_state}
 
     def _restore_trainable_state(self, state: dict):
@@ -147,15 +145,9 @@ class FineTuneTrainer:
         Args:
             state: Dictionary with LoRA and head state dicts.
         """
-        try:
-            from peft import set_peft_model_state_dict
-            set_peft_model_state_dict(
-                self.wrapper.backbone.get_peft_target(), state["lora"]
-            )
-        except ImportError:
-            self.wrapper.backbone.get_peft_target().load_state_dict(
-                state["lora"], strict=False
-            )
+        self.wrapper.backbone.get_peft_target().load_state_dict(
+            state["lora"], strict=False
+        )
 
         self.wrapper.task_head.load_state_dict(state["head"])
 

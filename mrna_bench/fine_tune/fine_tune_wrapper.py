@@ -2,13 +2,12 @@
 
 from collections.abc import Callable
 from typing import cast
-from functools import partial
 
 import numpy as np
 import torch
 import torch.nn as nn
 
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import EmbeddingModel, mean_pool
 
 
 class FineTuneWrapper(nn.Module):
@@ -141,7 +140,7 @@ class FineTuneWrapper(nn.Module):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0),
+        agg_fn: Callable = mean_pool,
     ) -> torch.Tensor:
         """Forward pass through backbone and task head.
 

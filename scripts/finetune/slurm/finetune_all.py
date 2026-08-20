@@ -71,20 +71,16 @@ if __name__ == "__main__":
         ):
             continue
 
-        if dataset_info["vep"]:
+        if "embedding_vep" in dataset_info["evaluations"]:
             continue
 
-        target_cols = dataset_info["target_col"]
         dataset = mb.load_dataset(dataset_name)
 
         print("Dataset: {}".format(dataset_name))
 
-        for index, target_col in enumerate(target_cols):
-
-            if len(dataset_info["task"]) == 1:
-                task = dataset_info["task"][0]
-            else:
-                task = dataset_info["task"][index]
+        for task_spec in dataset.metadata.task_specs:
+            target_col = task_spec.target_col
+            task = task_spec.task
 
             for model_name, model_versions in MODEL_VERSION_MAP.items():
                 if model_name in SKIP_MODELS:
@@ -128,6 +124,7 @@ if __name__ == "__main__":
                                     split_type=split_type,
                                     learning_rate=lr,
                                     lora_rank=lora_rank,
+                                    lora_alpha=lora_alpha,
                                 )
 
                                 all_exists = True

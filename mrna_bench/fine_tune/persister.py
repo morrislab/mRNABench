@@ -18,6 +18,7 @@ class FineTunePersister:
         split_type: str,
         learning_rate: float,
         lora_rank: int | None = None,
+        lora_alpha: int | None = None,
         head_type: str = "mlp",
     ):
         """Initialize FineTunePersister.
@@ -30,6 +31,7 @@ class FineTunePersister:
             split_type: Type of data split used.
             learning_rate: Learning rate used for fine-tuning.
             lora_rank: LoRA rank used (None if full fine-tune).
+            lora_alpha: LoRA scaling factor.
             head_type: Type of task head used (e.g. "mlp", "cnn").
         """
         self.dataset = dataset
@@ -39,6 +41,7 @@ class FineTunePersister:
         self.split_type = split_type
         self.learning_rate = learning_rate
         self.lora_rank = lora_rank
+        self.lora_alpha = lora_alpha
         self.head_type = head_type
 
         self._result_dir = Path(dataset.dataset_path) / "ft_results"
@@ -62,6 +65,8 @@ class FineTunePersister:
 
         if self.lora_rank is not None:
             parts.append("lora-{}".format(self.lora_rank))
+        if self.lora_alpha is not None:
+            parts.append("alpha-{}".format(self.lora_alpha))
 
         parts.append("head-{}".format(self.head_type))
         parts.append("rs-{}".format(random_seed))
@@ -85,6 +90,7 @@ class FineTunePersister:
             "split_type": self.split_type,
             "learning_rate": self.learning_rate,
             "lora_rank": self.lora_rank,
+            "lora_alpha": self.lora_alpha,
             "head_type": self.head_type,
             "seed": random_seed,
         }

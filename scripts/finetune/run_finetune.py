@@ -20,7 +20,7 @@ from mrna_bench.models import MODEL_CATALOG
 default_seeds = "[0]"
 default_lrs = "[1e-5, 1e-4, 1e-3]"
 default_ranks = "[4, 8, 16]"
-default_alpha = "[16]"
+default_alphas = "[16]"
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_name", type=str, required=True)
@@ -31,7 +31,7 @@ parser.add_argument("--target", type=str, default=None)
 parser.add_argument("--split_type", type=str, default=None)
 parser.add_argument("--learning_rates", type=str, default=default_lrs)
 parser.add_argument("--lora_ranks", type=str, default=default_ranks)
-parser.add_argument("--lora_alpha", type=int, default=default_alpha)
+parser.add_argument("--lora_alphas", type=str, default=default_alphas)
 parser.add_argument("--epochs", type=int, default=15)
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--accumulation_steps", type=int, default=1)
@@ -127,7 +127,11 @@ def run_finetune(
         Tuple of (val_metrics, test_metrics, history).
     """
     attn_implementation = model_class.default_attn_implementation
-    model = model_class(model_version, device, attn_implementation=attn_implementation)
+    model = model_class(
+        model_version,
+        device,
+        attn_implementation=attn_implementation,
+    )
     model.set_inference_mode()
 
     emb_dim = get_embedding_dim(model, dataset)
@@ -171,6 +175,17 @@ def run_finetune(
 
 
 if __name__ == "__main__":
+    seeds = json.loads(args.seeds)
+    learning_rates = json.loads(args.learning_rates)
+    lora_ranks = json.loads(args.lora_ranks)
+    lora_alphas = json.loads(args.lora_alphas)
+    if len(lora_alphas) == 1:
+        lora_alphas *= len(lora_ranks)
+    elif len(lora_alphas) != len(lora_ranks):
+        raise ValueError(
+            "lora_alphas must contain one value or match lora_ranks."
+        )
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: {}".format(device))
 
@@ -180,10 +195,10 @@ if __name__ == "__main__":
 
     dataset = mb.load_dataset(args.dataset_name)
     metadata = dataset.metadata
+    default_task = metadata.task_specs[0]
 
-    _TASK_MAP = {"reg_lin": "regression", "reg_ridge": "regression"}
-    task = args.task or _TASK_MAP.get(metadata.task[0], metadata.task[0])
-    target = args.target or metadata.target_col[0]
+    task = args.task or default_task.task
+    target = args.target or default_task.target_col
     split_type = args.split_type or metadata.default_split_type
 
     print("Model: {}".format(model_short_name))
@@ -191,11 +206,6 @@ if __name__ == "__main__":
     print("Task: {}".format(task))
     print("Target: {}".format(target))
     print("Split type: {}".format(split_type))
-
-    seeds = json.loads(args.seeds)
-    learning_rates = json.loads(args.learning_rates)
-    lora_ranks = json.loads(args.lora_ranks)
-    lora_alphas = json.loads(args.lora_alphas)
 
     print("Learning rates: {}".format(learning_rates))
     print("LoRA ranks: {}".format(lora_ranks))
@@ -213,6 +223,7 @@ if __name__ == "__main__":
                 split_type=split_type,
                 learning_rate=lr,
                 lora_rank=lora_rank,
+                lora_alpha=lora_alpha,
             )
 
             for seed in seeds:
