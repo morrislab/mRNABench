@@ -71,6 +71,11 @@ if __name__ == "__main__":
     parser.add_argument("--canonical_split", action='store_true', help="Use the canonical split for the dataset.")
     parser.add_argument("--filter_substr", type=str, help="Evaluate model versions by this substring. If not provided, all model versions will be considered.", default="")
     parser.add_argument("--per_seed", action='store_true', help="Submit jobs per random seed.")
+    parser.add_argument(
+        "--regressor",
+        choices=["ols", "ridge"],
+        default="ols",
+    )
     args = parser.parse_args()
 
     if (args.best_only or args.last_only) and args.best_onward:
@@ -90,15 +95,21 @@ if __name__ == "__main__":
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
-        target_cols = dataset_info["target_col"]
-
         dataset = mb.load_dataset(dataset_name)
 
         print("Dataset name: ", dataset_name)
 
-        for index, target_col in enumerate(target_cols):
+        jobs = [
+            (spec.task, spec.target_col)
+            for spec in dataset.metadata.task_specs
+        ]
+        if "embedding_vep" in dataset_info["evaluations"]:
+            jobs.extend(
+                ("embedding_vep", target)
+                for target in dataset.metadata.target_col
+            )
 
-            for task in dataset_info["task"]:
+        for task, target_col in jobs:
 
                 for model_version in sorted(os.listdir(args.model_dir)):
 
@@ -112,18 +123,18 @@ if __name__ == "__main__":
                         model_short_name = (model_version + "_" + ckpt.replace(".ckpt", "")).replace("_", "-").replace("-track", "").replace("best-", "")
 
                         # ----------------------------
-                        # zeroshot VEP: single run, no splits, no seeds
+                        # embedding VEP: single run, no splits, no seeds
                         # ----------------------------
-                        if task == "zeroshot":
+                        if task == "embedding_vep":
                             if not args.force_recompute:
                                 persister = LinearProbePersister(
                                     dataset,
                                     model_short_name,
-                                    "zeroshot",
+                                    "embedding_vep",
                                     target_col,
                                     "none",
                                 )
-                                if persister.result_exists("zeroshot"):
+                                if persister.result_exists("embedding_vep"):
                                     continue
 
                             cmd = [
@@ -131,10 +142,10 @@ if __name__ == "__main__":
                                 "./modelversion_slurm.sh",
                                 "--model_short_name", model_short_name,
                                 "--dataset_name", dataset_name,
-                                "--task", "zeroshot",
+                                "--task", "embedding_vep",
                                 "--target", target_col,
                                 "--split_type", "none",
-                                "--seeds", '["zeroshot"]',
+                                "--seeds", '["embedding_vep"]',
                                 "--force_recompute", str(args.force_recompute),
                             ]
 
@@ -178,6 +189,7 @@ if __name__ == "__main__":
                                         task,
                                         target_col,
                                         split_type,
+                                        regressor=args.regressor,
                                     )
                                     if all(persister.result_exists(seed) for seed in seeds):
                                         continue
@@ -190,6 +202,7 @@ if __name__ == "__main__":
                                     "--model_short_name", model_short_name,
                                     "--dataset_name", dataset_name,
                                     "--task", task,
+                                    "--regressor", args.regressor,
                                     "--target", target_col,
                                     "--split_type", split_type,
                                     "--seeds", seed_arg,

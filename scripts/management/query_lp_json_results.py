@@ -73,13 +73,13 @@ _DEFAULT_SEEDS = ["2541", "413", "411", "412", "2547", "321", "421", "311", "251
 _COLUMNS = ("dataset", "model", "task", "target_col", "split_type", "seed")
 _INCOMPLETE_COLUMNS = ("dataset", "model", "task", "target_col", "split_type", "have", "missing")
 
-_TASKS = ("reg_ridge", "reg_lin", "regression", "classification", "multilabel", "zeroshot")
+_TASKS = ("reg_ridge", "reg_lin", "regression", "classification", "multilabel")
 
 _FILENAME_RE = re.compile(
     r"^result_lp_"
     r"(?P<dataset>[^_]+)"
     r"_(?P<model>.+)"
-    r"_(?P<task>reg_ridge|reg_lin|regression|classification|multilabel|zeroshot)"
+    r"_(?P<task>reg_ridge|reg_lin|regression|classification|multilabel)"
     r"_tcol-(?P<target_col>.+)"
     r"_split-(?P<split_type>[^_]+)"
     r"_rs-(?P<seed>[^_]+)"
@@ -271,15 +271,12 @@ def _run_incomplete(data_dir: Path, args) -> None:
     args_no_seed = copy.copy(args)
     args_no_seed.seed = None
     args_no_seed.exclude_seed = None
-    # Don't filter out zeroshot here — that's handled below
     all_records = _collect_records(data_dir, args_no_seed)
 
     # Group by (dataset, model, task, target_col, split_type)
     from collections import defaultdict
     groups: dict[tuple, set[str]] = defaultdict(set)
     for rec in all_records:
-        if rec.task == "zeroshot":
-            continue
         key = (rec.dataset, rec.model, rec.task, rec.target_col, rec.split_type)
         groups[key].add(rec.seed)
 
@@ -314,7 +311,7 @@ def _run_rename(data_dir: Path, args, records: list[LPRecord]) -> None:
 
     ds_with_old = sorted({r.dataset for r in to_rename})
     action = "Would rename" if dry_run else "Renaming"
-    print(f"{action} model '{old_name}' → '{new_name}' "
+    print(f"{action} model '{old_name}' -> '{new_name}' "
           f"({len(to_rename)} file(s) across {len(ds_with_old)} dataset(s)):")
     for ds in ds_with_old:
         n = sum(1 for r in to_rename if r.dataset == ds)
@@ -334,7 +331,7 @@ def _run_rename(data_dir: Path, args, records: list[LPRecord]) -> None:
         new_path = rec.path.parent / new_filename
         if dry_run:
             print(f"  would rename: {rec.path.name}")
-            print(f"             → {new_filename}")
+            print(f"             -> {new_filename}")
             renamed += 1
         else:
             try:

@@ -7,6 +7,11 @@ from mrna_bench.datasets.dataset_catalog import DATASET_CATALOG
 parser = argparse.ArgumentParser()
 parser.add_argument("--dataset", type=str)
 parser.add_argument("--task", type=str)
+parser.add_argument(
+    "--regressor",
+    choices=["ols", "ridge"],
+    default="ols",
+)
 parser.add_argument("--target", type=str, default="target")
 args = parser.parse_args()
 
@@ -21,5 +26,6 @@ if __name__ == "__main__":
             args.dataset,
             args.task,
             args.target,
-            "homology"
+            "homology",
+            args.regressor,
         ])

@@ -11,6 +11,7 @@
 
 # set default value for force_recompute
 force_recompute="False"
+regressor="ols"
 seeds="[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
 export OMP_NUM_THREADS=4
@@ -23,6 +24,7 @@ while [[ "$#" -gt 0 ]]; do
         --model_short_name) model_short_name="$2"; shift ;;
         --dataset_name) dataset_name="$2"; shift ;;
         --task) task="$2"; shift ;;
+        --regressor) regressor="$2"; shift ;;
         --target) target="$2"; shift ;;
         --split_type) split_type="$2"; shift ;;
         --seeds) seeds="$2"; shift ;;
@@ -41,6 +43,7 @@ if [ "$force_recompute" == "True" ]; then
     --model_short_name "$model_short_name" \
     --dataset_name "$dataset_name" \
     --task "$task" \
+    --regressor "$regressor" \
     --target "$target" \
     --split_type "$split_type" \
     --seeds "$seeds" \
@@ -50,6 +53,7 @@ else
     --model_short_name "$model_short_name" \
     --dataset_name "$dataset_name" \
     --task "$task" \
+    --regressor "$regressor" \
     --target "$target" \
     --split_type "$split_type" \
     --seeds "$seeds"

@@ -4,6 +4,7 @@ import argparse
 import mrna_bench as mb
 from mrna_bench.datasets.dataset_catalog import DATASET_INFO
 from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.models import ModelBehavior
 from mrna_bench.models.model_catalog import MODEL_VERSION_MAP, MODEL_CATALOG
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
 
@@ -25,17 +26,30 @@ if __name__ == "__main__":
     parser.add_argument("--dry_run", action='store_true', help="Print commands without executing.")
     parser.add_argument("--canonical_split", action='store_true', help="Use canonical split for each dataset.")
     parser.add_argument("--per_seed", action='store_true', help="Submit jobs per random seed.")
+    parser.add_argument(
+        "--likelihood_vep",
+        action="store_true",
+        help="Submit GPU likelihood-VEP jobs for VEP datasets.",
+    )
+    parser.add_argument(
+        "--likelihood_attn",
+        choices=["eager", "sdpa", "flash_attention_2"],
+        default=None,
+        help="Override each likelihood model's default attention backend.",
+    )
+    parser.add_argument("--score_batch_size", type=int, default=16)
+    parser.add_argument(
+        "--regressor",
+        choices=["ols", "ridge"],
+        default="ols",
+    )
     args = parser.parse_args()
 
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
-        if dataset_info["vep"]:
-            continue
-
         print("Dataset name: ", dataset_name)
 
-        target_cols = dataset_info["target_col"]
         dataset = mb.load_dataset(dataset_name)
 
         skip_model_keys = [
@@ -43,8 +57,31 @@ if __name__ == "__main__":
             "replicate" # skip the borzoi and flashzoi replicate models
         ]
 
-        for index, target_col in enumerate(target_cols):
-            for task in dataset_info["task"]:
+        jobs = [
+            (spec.task, spec.target_col)
+            for spec in dataset.metadata.task_specs
+        ]
+        if "embedding_vep" in dataset_info["evaluations"]:
+            jobs.extend(
+                ("embedding_vep", target)
+                for target in dataset.metadata.target_col
+            )
+        if (
+            args.likelihood_vep
+            and "likelihood_vep" in dataset_info["evaluations"]
+        ):
+            jobs.extend(
+                ("likelihood_vep", target)
+                for target in dataset.metadata.target_col
+            )
+
+        for target_col in dataset.metadata.target_col:
+            tasks = [
+                task
+                for task, job_target in jobs
+                if job_target == target_col
+            ]
+            for task in tasks:
                 for model_name, model_versions in MODEL_VERSION_MAP.items():
                     for model_version in model_versions:
 
@@ -53,10 +90,110 @@ if __name__ == "__main__":
                         if sum([k in model_short_name for k in skip_model_keys]) > 0:
                             continue
 
+                        if task == "likelihood_vep":
+                            model_class = MODEL_CATALOG[model_name]
+                            if (
+                                args.likelihood_attn is not None
+                                and (
+                                    model_class.valid_attn_implementations
+                                    is None
+                                    or args.likelihood_attn not in
+                                    model_class.valid_attn_implementations
+                                )
+                            ):
+                                continue
+                            scope = getattr(
+                                model_class, "sequence_score_scope", "full"
+                            )
+                            region = dataset.metadata.variant_region
+                            if scope != "full" and scope != region:
+                                continue
+                            behaviors = model_class.behaviors_for_version(
+                                model_version
+                            )
+                            methods = []
+                            if ModelBehavior.CAUSAL_LIKELIHOOD in behaviors:
+                                methods.append("causal_likelihood")
+                            if ModelBehavior.PSEUDO_LIKELIHOOD in behaviors:
+                                methods.extend([
+                                    "pseudo_likelihood",
+                                    "masked_marginal",
+                                ])
+                            for method in methods:
+                                effective_attn = (
+                                    args.likelihood_attn
+                                    if args.likelihood_attn is not None
+                                    else (
+                                        model_class
+                                        .default_attn_implementation
+                                    )
+                                )
+                                result_key = "{}-sum-attn-{}".format(
+                                    method,
+                                    effective_attn or "none",
+                                )
+                                persister = LinearProbePersister(
+                                    dataset,
+                                    model_short_name,
+                                    "likelihood_vep",
+                                    target_col,
+                                    "none",
+                                )
+                                if (
+                                    not args.force_recompute
+                                    and persister.result_exists(result_key)
+                                ):
+                                    continue
+                                cmd = [
+                                    "sbatch",
+                                    "./likelihood_vep_slurm.sh",
+                                    "--model_name", model_name,
+                                    "--model_version", model_version,
+                                    "--dataset_name", dataset_name,
+                                    "--target", target_col,
+                                    "--score_method", method,
+                                    "--normalization", "sum",
+                                    "--score_batch_size",
+                                    str(args.score_batch_size),
+                                    "--force_recompute",
+                                    str(args.force_recompute),
+                                ]
+                                if args.likelihood_attn is not None:
+                                    cmd.extend([
+                                        "--attn_implementation",
+                                        args.likelihood_attn,
+                                    ])
+                                if args.dry_run:
+                                    print(
+                                        "\t\tDry run:", " ".join(cmd)
+                                    )
+                                else:
+                                    result = subprocess.run(
+                                        cmd,
+                                        capture_output=True,
+                                        text=True,
+                                    )
+                                    if result.stdout:
+                                        print(
+                                            "\t" + result.stdout.strip()
+                                        )
+                                    if result.stderr:
+                                        print(
+                                            "\t" + result.stderr.strip()
+                                        )
+                            continue
+
                         # ----------------------------
-                        # zeroshot VEP: single run, no splits, no seeds
+                        # embedding VEP: single run, no splits, no seeds
                         # ----------------------------
-                        if task == "zeroshot":
+                        if task == "embedding_vep":
+                            model_class = MODEL_CATALOG[model_name]
+                            scope = getattr(
+                                model_class, "sequence_score_scope", "full"
+                            )
+                            region = dataset.metadata.variant_region
+                            if scope != "full" and scope != region:
+                                continue
                             if "NaiveBaseline" in model_name and model_short_name in MODEL_FEATURE_COMBOS:
                                 combos = MODEL_FEATURE_COMBOS[model_short_name]
                             else:
@@ -72,11 +209,13 @@ if __name__ == "__main__":
                                     persister = LinearProbePersister(
                                         dataset,
                                         check_name,
-                                        "zeroshot",
+                                        "embedding_vep",
                                         target_col,
                                         "none",
                                     )
-                                    if persister.result_exists("zeroshot"):
+                                    if persister.result_exists(
+                                        "embedding_vep"
+                                    ):
                                         continue
 
                                 cmd = [
@@ -85,11 +224,11 @@ if __name__ == "__main__":
                                     "--model_name", model_name,
                                     "--model_version", model_version,
                                     "--dataset_name", dataset_name,
-                                    "--task", "zeroshot",
+                                    "--task", "embedding_vep",
                                     "--target", target_col,
                                     "--split_type", "none",
                                     "--combo", combo,
-                                    "--seeds", '["zeroshot"]',
+                                    "--seeds", '["embedding_vep"]',
                                     "--force_recompute", str(args.force_recompute),
                                 ]
 
@@ -150,6 +289,7 @@ if __name__ == "__main__":
                                             task,
                                             target_col,
                                             split_type,
+                                            regressor=args.regressor,
                                         )
                                         if all(persister.result_exists(seed) for seed in seeds):
                                             continue
@@ -163,6 +303,7 @@ if __name__ == "__main__":
                                         "--model_version", model_version,
                                         "--dataset_name", dataset_name,
                                         "--task", task,
+                                        "--regressor", args.regressor,
                                         "--target", target_col,
                                         "--split_type", split_type,
                                         "--combo", combo,

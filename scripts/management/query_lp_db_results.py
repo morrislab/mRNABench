@@ -17,7 +17,7 @@ python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4
 python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4 rna-fm
 
 # All results for a model on a specific task
-python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4 --task reg_ridge
+python scripts/management/query_lp_db_results.py --model orthrus-deep-4 --task regression_ridge
 
 # Filter by dataset and split
 python scripts/linear_probe/query_lp_db_results.py --dataset prot-loc --split-type homology
@@ -173,7 +173,9 @@ def _query_incomplete(
     extra_where/extra_params come from _build_where but with seed filters
     stripped (seed completeness is the whole point here).
     """
-    clauses = ["task != 'zeroshot'"]
+    clauses = [
+        "task NOT IN ('zeroshot', 'embedding_vep', 'likelihood_vep')"
+    ]
     params: list = []
     if extra_where:
         clauses.append(extra_where[len("WHERE "):])

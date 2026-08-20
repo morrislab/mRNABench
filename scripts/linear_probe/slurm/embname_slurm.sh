@@ -6,5 +6,10 @@
 #SBATCH --mem=64G
 #SBATCH --time=6:00:00
 
-python ../by_embname.py --embedding_fn $1 --dataset_name $2 --task $3 \
-    --target_col $4 --split_type $5
+python ../by_embname.py \
+    --embedding_fn "$1" \
+    --dataset_name "$2" \
+    --task "$3" \
+    --target "$4" \
+    --split_type "$5" \
+    --regressor "${6:-ols}"

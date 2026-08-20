@@ -122,6 +122,44 @@ prober = (LinearProbeBuilder(dataset)
 )
 ```
 
+Regression datasets keep the biological task name `regression`; choose the
+estimator with `.set_regressor("ols")` or `.set_regressor("ridge")`. Results
+are stored as `regression_ols` and `regression_ridge`. Legacy mRNABench
+results stored under the `regression` name used RidgeCV.
+
+The default homology split lazily extracts only the requested species from the
+published homology map archive from the [Orthrus publication Zenodo](https://zenodo.org/records/13910050).
+Custom thresholds query Ensembl Compara with the published grouping procedure;
+the result is built once and cached by origin and threshold at
+`homology_maps/ensembl-<version>/sim-<threshold>pct/<species>.csv`:
+
+```python
+from mrna_bench.data_splitter.homology_split import HomologySplitter
+
+published = HomologySplitter(species="human")
+ablated = HomologySplitter(
+    species="human",
+    similarity_threshold=50,
+)
+new_release = HomologySplitter(
+    species="human",
+    ensembl_version=115,
+)
+```
+
+The published archive contains ten species. Their exact release-specific
+paralog tables come from Ensembl Compara. Arbitrary species use their Ensembl
+production name, for example `species="xenopus_tropicalis"`. The published maps
+use Ensembl 110 and a strict 35% identity threshold. Raw paralog tables are
+cached independently of threshold at
+`homology_maps/ensembl-<version>/<species>.tsv`, so ablations reuse one download.
+
+
+> [!CAUTION]
+> Custom datasets must use gene names from the same Ensembl release as the
+> Compara map (Ensembl 110 by default); unmatched names are treated as unrelated
+> genes.
+
 > [!NOTE]
 > If you instantiate a model class directly (without `mb.load_model()`), call `model.set_inference_mode()` before embedding to ensure deterministic outputs. Call `model.set_train_mode()` when you need gradients, e.g. for fine-tuning.
 > ```python
@@ -185,7 +223,7 @@ The models supported by the `base_models` installation are catalogued below.
 | **NaiveMamba** | `naive-mamba` | Randomly initialized Mamba model serving as an untrained baseline. Uses 6-track input (sequence + CDS + splice information) with fixed random seed for reproducible comparisons. | N/A |
 
 ### Adding a new model
-All models should inherit from the template `EmbeddingModel`. Each model file should lazily load dependencies within its `__init__` methods so each model can be used individually without install all other models. Models must implement `get_model_short_name(model_version)` which fetches the internal name for the model. This must be unique for every model version and must not contain underscores. Models should implement either `embed_sequence` or `embed_sequence_sixtrack` (see code for method signature). New models should be added to `MODEL_CATALOG`.
+All models should inherit from `EmbeddingModel`. Each model file should lazily load dependencies within `__init__` so models remain independently installable. Models implement `embed()` and declare concrete `ModelBehavior` values; likelihood models expose `logits()` and `sequence_score()` with optional aligned `cds` and `splice` tracks, while sequence-to-function models can expose `predict_tracks()`. Pseudo-likelihood models also expose `masked_marginal_llr()`, which masks every tokenizer position changed by a substitution, including overlapping k-mer or codon tokens. FlashAttention wrappers use FP16 by default (with model-specific overrides where FP16 is unstable), and default mean pooling is performed in FP32. New models should be added to `MODEL_CATALOG`.
 
 ## Dataset Catalog
 The current datasets catalogued are:
@@ -246,6 +284,39 @@ The current datasets catalogued are:
 | VEP TraitGym (Mendelian) | <code>vep&#8209;traitgym&#8209;mendelian</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with Mendelian diseases. | `classification` | [paper](https://www.biorxiv.org/content/10.1101/2025.02.11.637758v1) |
 | VEP TraitGym (Complex) | <code>vep&#8209;traitgym&#8209;complex</code> | Pathogenicity prediction for genetic variants in 3'UTR and 5'UTR regions associated with complex traits. | `classification` | [paper](https://www.biorxiv.org/content/10.1101/2025.02.11.637758v1) |
 | UTR Variants (Bohn) | <code>utr&#8209;variants&#8209;bohn&#8209;utr5</code><br><code>utr&#8209;variants&#8209;bohn&#8209;utr3</code> | Variant effect prediction for 5'UTR and 3'UTR variants from Bohn et al. | `classification` | [paper](https://www.frontiersin.org/journals/molecular-biosciences/articles/10.3389/fmolb.2023.1257550/full) |
+
+#### Embedding-based VEP
+
+Variant effects can be scored in several ways, including likelihood ratios,
+masked-marginal scores, and differences between reference and alternate
+embeddings. The default mRNABench embedding score is the L2 norm of the pooled
+alternate minus reference embedding.
+
+Embedding differences can be sensitive to small floating-point changes because
+they subtract two nearly identical vectors. In our checks, AIDO.DNA, DNABERT2,
+GENERanno, RiNALMo, mRNABERT, and Evo1 showed meaningful score changes between
+attention backends. This does not mean that one backend is always better, but
+it does mean that attention backend, dtype, and pooling are part of the VEP
+method. Before running embedding-based VEP at scale, compare the available
+backends on a representative subset and check that variant rankings and
+metrics are stable. Reference and alternate embeddings should always be
+generated with the same settings.
+
+Likelihood-based VEP is available through
+`scripts/linear_probe/by_modelname.py --task likelihood_vep` with
+`--score_method causal_likelihood`, `pseudo_likelihood`, or
+`masked_marginal`. Row-wise VEP datasets are paired with their wild-type
+transcripts automatically, and results are stored in `results.db` under the
+`likelihood_vep` task with a method-and-normalization-specific key. The
+database stores aggregate metrics, not raw logits or per-variant scores.
+
+PLLR masks every non-special model token and can therefore be expensive on
+long sequences; `--score_batch_size` controls how many masked inputs are
+evaluated together. Long sequences are supported through chunking, but chunks
+are scored independently without cross-chunk context. Masked-marginal scoring
+is intended for substitutions and excludes indels with a warning. Causal and
+pseudo likelihood ratios default to summed log probabilities; use
+`--normalization mean` only when a length-normalized score is desired.
 
 ### Adding a new dataset
 New datasets should inherit from `BenchmarkDataset`. Dataset names cannot contain underscores. Each new dataset should download raw data and process it into a dataframe by overriding `process_raw_data`. This dataframe should store transcript as rows, using string encoding in the `sequence` column. If homology splitting is required, a column `gene` containing gene names is required. Six track embedding also requires columns `cds` and `splice`. The target column can have any name, as it is specified at time of probing. New datasets should be added to `DATASET_CATALOG`.

@@ -21,6 +21,7 @@ export NUMEXPR_NUM_THREADS=4
 # set default value for force_recompute
 force_recompute="False"
 combo=""
+regressor="ols"
 seeds="[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
 while [[ "$#" -gt 0 ]]; do
@@ -29,6 +30,7 @@ while [[ "$#" -gt 0 ]]; do
         --model_version) model_version="$2"; shift ;;
         --dataset_name) dataset_name="$2"; shift ;;
         --task) task="$2"; shift ;;
+        --regressor) regressor="$2"; shift ;;
         --target) target="$2"; shift ;;
         --split_type) split_type="$2"; shift ;;
         --combo) combo="$2"; shift ;;
@@ -46,6 +48,7 @@ if [ "$force_recompute" == "True" ]; then
     --model_version "$model_version" \
     --dataset_name "$dataset_name" \
     --task "$task" \
+    --regressor "$regressor" \
     --target "$target" \
     --split_type "$split_type" \
     --combo "$combo" \
@@ -57,6 +60,7 @@ else
     --model_version "$model_version" \
     --dataset_name "$dataset_name" \
     --task "$task" \
+    --regressor "$regressor" \
     --target "$target" \
     --split_type "$split_type" \
     --combo "$combo" \

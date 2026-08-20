@@ -36,6 +36,9 @@ python query_lp_db_results.py --rename-model OLD NEW            # exact match on
 Key flags: `--dataset`, `--model`, `--task`, `--target-col`, `--split-type`,
 `--seed`, `--exclude-*` variants, `--exact`, `--expected-seeds`.
 
+Current regression rows use task identities `regression_ols` and
+`regression_ridge`. Legacy unqualified `regression` rows used RidgeCV.
+
 ### `query_lp_json_results.py` — query v1.3 JSON results (legacy)
 
 Same interface as `query_lp_db_results.py` but reads filenames under
@@ -61,7 +64,7 @@ python manage_embeddings.py --rename-model OLD NEW       # exact match on OLD
 
 `--rename-model` always does an exact match on OLD regardless of `--exact`.
 
-### `migrate_json_to_sqlite.py` — one-time v1.3 → v2.0 migration
+### `migrate_json_to_sqlite.py` — one-time v1.3 -> v2.0 migration
 
 Reads all `lp_results/*.json` files and upserts them into `results.db`.
 Old JSON files are not deleted.  Safe to re-run (uses `INSERT OR REPLACE`).
@@ -87,9 +90,9 @@ If the old and new names are a direct swap of two existing names, use a
 ```bash
 # Step 1 — move A out of the way
 python <script>.py --rename-model A A-SWAP
-# Step 2 — rename B → A
+# Step 2 — rename B -> A
 python <script>.py --rename-model B A
-# Step 3 — rename temp → B
+# Step 3 — rename temp -> B
 python <script>.py --rename-model A-SWAP B
 ```
 

@@ -1,9 +1,14 @@
 """Run linear probing for dataset using embeddings from given model."""
 
 import argparse
+import ast
 
+import numpy as np
 import mrna_bench as mb
+from mrna_bench.embedder import get_embedding_filepath
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
+from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.zeroshot import ZeroShotVEP
 
 default_seeds = "[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
@@ -11,6 +16,11 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--model_short_name", type=str)
 parser.add_argument("--dataset_name", type=str)
 parser.add_argument("--task", type=str)
+parser.add_argument(
+    "--regressor",
+    choices=["ols", "ridge"],
+    default="ols",
+)
 parser.add_argument("--target", type=str, default="target")
 parser.add_argument("--split_type", type=str, default="default")
 parser.add_argument("--seeds", type=str, default=default_seeds)
@@ -29,20 +39,30 @@ if __name__ == "__main__":
 
     dataset = mb.load_dataset(args.dataset_name)
 
-    if args.task == "zeroshot":
-        prober = (
-            LinearProbeBuilder(dataset_name=args.dataset_name)
-            .fetch_embedding_by_model_name(args.model_short_name)
-            .build_evaluator("zeroshot")
-            .set_target(args.target)
-            .use_persister()
-            .build()
+    if args.task == "embedding_vep":
+        path = get_embedding_filepath(
+            dataset.embedding_dir,
+            args.model_short_name,
+            dataset.dataset_name,
+        ) + ".npz"
+        persister = LinearProbePersister(
+            dataset,
+            args.model_short_name,
+            "embedding_vep",
+            args.target,
+            "none",
+        )
+        prober = ZeroShotVEP.from_embeddings(
+            dataset,
+            np.load(path)["embedding"],
+            target_col=args.target,
+            persister=persister,
         )
 
         if not args.force_recompute and prober.result_exists():
             print("Results already computed, skipping.")
         else:
-            print("Running zero-shot VEP.")
+            print("Running embedding VEP.")
             metrics = prober.run(persist=True)
             print("Finished:", metrics)
 
@@ -52,12 +72,13 @@ if __name__ == "__main__":
             .fetch_embedding_by_model_name(args.model_short_name)
             .build_splitter(args.split_type, species=dataset.metadata.species, eval_all_splits=True)
             .build_evaluator(args.task)
+            .set_regressor(args.regressor)
             .set_target(args.target)
             .use_persister()
             .build()
         )
 
-        seeds = eval(args.seeds)
+        seeds = ast.literal_eval(args.seeds)
 
         for seed in seeds:
             if not args.force_recompute and prober.persister.result_exists(seed):
