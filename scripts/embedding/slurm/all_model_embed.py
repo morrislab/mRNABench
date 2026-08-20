@@ -16,7 +16,16 @@ DATASET_CHUNKINGS = {
     "eclip-binding-k562": 3,
 }
 
-def make_and_run_command(model_name, model_version, dataset_name, d_chunk_ind, d_num_chunks, dry_run=False, force_recompute=False):
+def make_and_run_command(
+    model_name,
+    model_version,
+    dataset_name,
+    d_chunk_ind,
+    d_num_chunks,
+    batch_size,
+    dry_run=False,
+    force_recompute=False,
+):
 
     cmd = [
         "sbatch",
@@ -26,6 +35,7 @@ def make_and_run_command(model_name, model_version, dataset_name, d_chunk_ind, d
         "--dataset_name", dataset_name,
         "--d_chunk_ind", str(d_chunk_ind),
         "--d_num_chunks", str(d_num_chunks),
+        "--batch_size", str(batch_size),
         "--force_recompute", str(force_recompute),
     ]
 
@@ -44,6 +54,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Submit jobs for model embedding.")
     parser.add_argument("--force_recompute", action='store_true', help="Force recomputation of results.")
     parser.add_argument("--dry_run", action='store_true', help="Print commands without executing.")
+    parser.add_argument("--batch_size", type=int, default=1)
     args = parser.parse_args()
 
     for dataset_name in DATASET_CATALOG.keys():
@@ -86,6 +97,7 @@ if __name__ == "__main__":
                                 dataset_name,
                                 d_chunk_ind,
                                 d_num_chunks,
+                                args.batch_size,
                                 dry_run=args.dry_run,
                                 force_recompute=args.force_recompute
                             )
@@ -98,7 +110,7 @@ if __name__ == "__main__":
                     dataset_name,
                     0,
                     0,
+                    args.batch_size,
                     dry_run=args.dry_run,
                     force_recompute=args.force_recompute
                 )
-

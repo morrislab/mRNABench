@@ -60,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--best_onward", action='store_true', help="Use the best checkpoint and all checkpoints after it.")
     parser.add_argument("--force_recompute", action='store_true', help="Force recompute the embeddings even if they already exist.")
     parser.add_argument("--dry_run", action='store_true', help="Only print the commands that would be run, without executing them.")
+    parser.add_argument("--batch_size", type=int, default=1)
     parser.add_argument("--filter_substr", type=str, help="Evaluate model versions by this substring. If not provided, all model versions will be considered.", default="")
     args = parser.parse_args()
 
@@ -104,7 +105,7 @@ if __name__ == "__main__":
 
 
                 if args.dry_run:
-                    print(f"\t\tsbatch ./slurm_script.sh --model_dir {args.model_dir} --model_version {model_version} --checkpoint {ckpt} --dataset_name {dataset_name} --force_recompute {args.force_recompute}")
+                    print(f"\t\tsbatch ./slurm_script.sh --model_dir {args.model_dir} --model_version {model_version} --checkpoint {ckpt} --dataset_name {dataset_name} --batch_size {args.batch_size} --force_recompute {args.force_recompute}")
                 else:
                     result = subprocess.run(
                         [
@@ -114,6 +115,7 @@ if __name__ == "__main__":
                             "--model_version", model_version,
                             "--checkpoint", ckpt,
                             "--dataset_name", dataset_name,
+                            "--batch_size", str(args.batch_size),
                             "--force_recompute", str(args.force_recompute),
                         ],
                         capture_output=True,

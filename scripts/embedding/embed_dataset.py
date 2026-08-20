@@ -13,6 +13,7 @@ parser.add_argument("--model_version", type=str)
 parser.add_argument("--dataset_name", type=str)
 parser.add_argument("--d_chunk_ind", type=int, default=0)
 parser.add_argument("--d_num_chunks", type=int, default=0)
+parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--force_recompute", action="store_true")
 args = parser.parse_args()
 
@@ -63,7 +64,8 @@ if __name__ == "__main__":
         model=model,
         dataset=dataset,
         d_chunk_ind=args.d_chunk_ind,
-        d_num_chunks=args.d_num_chunks
+        d_num_chunks=args.d_num_chunks,
+        batch_size=args.batch_size,
     )
 
     if Path(out_fn_full).exists() and not args.force_recompute:

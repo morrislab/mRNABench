@@ -12,6 +12,7 @@
 
 # set default value for force_recompute
 force_recompute="False"
+batch_size=1
 
 while [[ "$#" -gt 0 ]]; do
     case $1 in
@@ -19,6 +20,7 @@ while [[ "$#" -gt 0 ]]; do
         --model_version) model_version="$2"; shift ;;
         --checkpoint) checkpoint="$2"; shift ;;
         --dataset_name) dataset_name="$2"; shift ;;
+        --batch_size) batch_size="$2"; shift ;;
         --force_recompute) force_recompute="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -38,11 +40,13 @@ if [ "$force_recompute" == "True" ]; then
     --model_version "$model_version" \
     --checkpoint "$checkpoint" \
     --dataset_name "$dataset_name" \
+    --batch_size "$batch_size" \
     --force_recompute
 else
     python ../embed_dataset.py \
     --model_dir "$model_dir" \
     --model_version "$model_version" \
     --checkpoint "$checkpoint" \
-    --dataset_name "$dataset_name"
+    --dataset_name "$dataset_name" \
+    --batch_size "$batch_size"
 fi

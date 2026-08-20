@@ -1,6 +1,5 @@
 from pathlib import Path
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import pandas as pd
@@ -9,7 +8,7 @@ import h5py
 
 import torch
 
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, mean_pool
 from mrna_bench.datasets import BenchmarkDataset, DatasetMetadata
 from mrna_bench.embedder.embedder_utils import get_embedding_filepath
 
@@ -29,8 +28,9 @@ class DatasetEmbedder:
         dataset: BenchmarkDataset,
         d_chunk_ind: int = 0,
         d_num_chunks: int = 0,
-        agg_fn: Callable = partial(torch.mean, dim=0),
-        ragged_out: bool = False
+        agg_fn: Callable = mean_pool,
+        ragged_out: bool = False,
+        batch_size: int = 1,
     ):
         """Initialize DatasetEmbedder.
 
@@ -41,6 +41,7 @@ class DatasetEmbedder:
             d_num_chunks: Total number of chunks to divide dataset into.
             agg_fn: Aggregation function to apply to sequence embeddings.
             ragged_out: Whether the model produces ragged output under agg_fn.
+            batch_size: Number of dataset rows passed to model.embed at once.
 
         """
         self.model = model
@@ -49,6 +50,9 @@ class DatasetEmbedder:
 
         self.d_chunk_ind = d_chunk_ind
         self.d_num_chunks = d_num_chunks
+        if batch_size < 1:
+            raise ValueError("batch_size must be at least 1.")
+        self.batch_size = batch_size
 
         self.agg_fn = agg_fn
         self.ragged_out = ragged_out
@@ -84,15 +88,38 @@ class DatasetEmbedder:
         dataset_chunk = self.get_dataset_chunk()
         self.model.set_inference_mode()
 
-        dataset_embeddings = []
-        for _, row in tqdm(dataset_chunk.iterrows(), total=len(dataset_chunk)):
-            embedding = self.model.embed(
-                [row["sequence"]],
-                cds=[row["cds"].astype(np.int32)],
-                splice=[row["splice"].astype(np.int32)],
-                agg_fn=self.agg_fn
-            )
-            dataset_embeddings.extend(embedding)
+        dataset_embeddings: list[torch.Tensor] = []
+        num_batches = (
+            len(dataset_chunk) + self.batch_size - 1
+        ) // self.batch_size
+        with torch.inference_mode():
+            for start in tqdm(
+                range(0, len(dataset_chunk), self.batch_size),
+                total=num_batches,
+            ):
+                batch = dataset_chunk.iloc[start:start + self.batch_size]
+                cds = (
+                    [np.asarray(track, dtype=np.int32)
+                     for track in batch["cds"]]
+                    if "cds" in batch.columns else None
+                )
+                splice = (
+                    [np.asarray(track, dtype=np.int32)
+                     for track in batch["splice"]]
+                    if "splice" in batch.columns else None
+                )
+                embeddings = self.model.embed(
+                    batch["sequence"].tolist(),
+                    cds=cds,
+                    splice=splice,
+                    agg_fn=self.agg_fn
+                )
+                if len(embeddings) != len(batch):
+                    raise RuntimeError(
+                        "model.embed returned {} embeddings for {} sequences."
+                        .format(len(embeddings), len(batch))
+                    )
+                dataset_embeddings.extend(embeddings)
 
         return dataset_embeddings
 
@@ -100,7 +127,7 @@ class DatasetEmbedder:
     def _prepare_for_persistence(embedding: torch.Tensor) -> torch.Tensor:
         """Move an embedding to CPU with a NumPy-compatible dtype."""
         embedding = embedding.detach().cpu()
-        if embedding.dtype == torch.bfloat16:
+        if embedding.is_floating_point() and embedding.dtype != torch.float32:
             embedding = embedding.float()
         return embedding
 
@@ -233,6 +260,39 @@ class DatasetEmbedder:
         for file in processed_files_paths:
             Path(file).unlink()
 
+    @classmethod
+    def from_dataframe(
+        cls,
+        model: EmbeddingModel,
+        data_df: pd.DataFrame,
+    ) -> "DatasetEmbedder":
+        """Create a DatasetEmbedder from a custom sequence dataframe."""
+        if "sequence" not in data_df:
+            raise ValueError("DataFrame is missing required column: sequence")
+
+        class MinimalBenchmarkDataset(BenchmarkDataset):
+            METADATA = DatasetMetadata(
+                dataset_name="custom",
+                species="custom",
+                task=["regression"],
+                target_col=["target"],
+                default_split_type="default",
+                benchmark_set="extended",
+                evaluations=("linear_probe",),
+            )
+
+            def __init__(self, dataframe: pd.DataFrame):
+                self.data_df = dataframe
+                self.dataset_name = "custom"
+                self.dataset_path = "custom"
+                self.embedding_dir = "custom"
+                self.metadata = self.METADATA
+
+            def _get_data_from_raw(self) -> pd.DataFrame:
+                raise NotImplementedError
+
+        return cls(model=model, dataset=MinimalBenchmarkDataset(data_df))
+
     def _merge_npz(self, processed_files_paths):
         """Merge .npz embedding files.
 
@@ -256,64 +316,3 @@ class DatasetEmbedder:
 
         for file in processed_files_paths:
             Path(file).unlink()
-
-    @classmethod
-    def from_dataframe(
-        cls,
-        model: EmbeddingModel,
-        data_df: pd.DataFrame,
-    ) -> "DatasetEmbedder":
-        """Create a DatasetEmbedder instance from a custom dataframe.
-
-        Args:
-            model: Model used to embed sequences.
-            data_df: DataFrame containing sequences and required columns:
-                - sequence: RNA sequence
-                - cds: CDS track information (as int32)
-                - splice: Splice track information (as int32)
-
-        Returns:
-            Initialized DatasetEmbedder.
-
-        Raises:
-            ValueError: If required columns are missing from the dataframe.
-        """
-        # Check for required columns
-        required_cols = ["sequence", "cds", "splice"]
-        missing_cols = [
-            col for col in required_cols if col not in data_df.columns
-        ]
-        if missing_cols:
-            raise ValueError(
-                f"DataFrame is missing required columns: {missing_cols}"
-            )
-
-        # Create a minimal BenchmarkDataset instance
-        class MinimalBenchmarkDataset(BenchmarkDataset):
-            METADATA = DatasetMetadata(
-                dataset_name="custom",
-                species="custom",
-                task=["regression"],
-                target_col=["target"],
-                default_split_type="default",
-                benchmark_set="extended",
-                vep=False,
-            )
-
-            def __init__(self, data_df: pd.DataFrame):
-                self.data_df = data_df
-                self.dataset_name = "custom"
-                self.dataset_path = "custom"
-                self.embedding_dir = "custom"
-                self.metadata = self.METADATA
-
-            def _get_data_from_raw(self) -> pd.DataFrame:
-                """Abstract method - not used for custom datasets."""
-                raise NotImplementedError
-
-        dataset = MinimalBenchmarkDataset(data_df)
-
-        return cls(
-            model=model,
-            dataset=dataset,
-        )

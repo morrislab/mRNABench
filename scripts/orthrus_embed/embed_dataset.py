@@ -12,6 +12,7 @@ parser.add_argument("--model_dir", type=str)
 parser.add_argument("--model_version", type=str)
 parser.add_argument("--dataset_name", type=str)
 parser.add_argument("--checkpoint", type=str)
+parser.add_argument("--batch_size", type=int, default=1)
 parser.add_argument("--force_recompute", action="store_true")
 args = parser.parse_args()
 
@@ -47,7 +48,8 @@ if __name__ == "__main__":
             model=model,
             dataset=dataset,
             d_chunk_ind=0,
-            d_num_chunks=0
+            d_num_chunks=0,
+            batch_size=args.batch_size,
         )
 
         embedder.persist_embeddings(embedder.embed_dataset())

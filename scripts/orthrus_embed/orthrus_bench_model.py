@@ -1,10 +1,9 @@
 import os
 import torch
 import numpy as np
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 from collections.abc import Callable
 from mrna_bench.datasets.dataset_utils import str_to_ohe
-from functools import partial
 from orthrus_src import load_model
 
 class Orthrus(EmbeddingModel):
@@ -12,6 +11,7 @@ class Orthrus(EmbeddingModel):
     valid_attn_implementations = None
     default_attn_implementation = None
     hookable_layer_patterns = [r"layers\.\d+"]
+    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
     lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
 
@@ -53,7 +53,7 @@ class Orthrus(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using Orthrus.
 
@@ -82,7 +82,7 @@ class Orthrus(EmbeddingModel):
     def _embed_fourtrack(
         self,
         sequences: list[str],
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using 4-track Orthrus.
 
@@ -141,7 +141,7 @@ class Orthrus(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray],
         splice: list[np.ndarray],
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using 6-track Orthrus.
 
