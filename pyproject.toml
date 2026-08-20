@@ -65,7 +65,6 @@ fine_tune = [
 requires = [
     "setuptools",
     "wheel",
-    "pip"
 ]
 build-backend = "setuptools.build_meta"
 
