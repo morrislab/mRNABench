@@ -3,6 +3,17 @@ import gc
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def batch_tests_use_inference_mode(request):
+    """Batch comparisons mirror DatasetEmbedder inference."""
+    import torch
+    if "embed_batch" in request.node.name:
+        with torch.inference_mode():
+            yield
+    else:
+        yield
+
+
 @pytest.fixture(autouse=True, scope="module")
 def free_gpu_memory_between_modules():
     """Force GPU memory release after every test module.

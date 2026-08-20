@@ -1,12 +1,15 @@
 from collections.abc import Callable
-from functools import partial
 import math
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import (
+    EmbeddingModel,
+    ModelBehavior,
+    TrackOutput,
+)
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 
 
@@ -31,6 +34,10 @@ class Enformer(EmbeddingModel):
     valid_versions = ["enformer-official-rough"]
     default_attn_implementation = "eager"
     valid_attn_implementations = ["eager"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.TRACKS,
+    })
     # stem (1) -> conv_tower blocks (6) -> transformer blocks (11)
     hookable_layer_patterns = [
         r"stem",
@@ -80,74 +87,14 @@ class Enformer(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device)
 
-    def embed_sequence(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
-        """Embed sequence using Enformer, excluding padded regions.
-
-        Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
-
-        Returns:
-            Tensor representing embedded sequence.
-        """
-        _, _ = cds, splice
-
-        def center_padding(seq: str, length: int) -> tuple[str, int]:
-            """Center pad sequence to a given length."""
-            padding_left = (length - len(seq)) // 2
-            padding_right = length - len(seq) - padding_left
-
-            return "N" * padding_left + seq + "N" * padding_right, padding_left
-
-        chunks = self.chunk_sequence(sequence, self.max_length)
-
-        embedding_chunks = []
-
-        for chunk in chunks:
-            padded_chunk, padding_left = center_padding(chunk, self.max_length)
-
-            # first OHE sequence chunk
-            batch = torch.tensor(
-                str_to_ohe(padded_chunk),
-                dtype=torch.float32
-            ).unsqueeze(0).to(self.device)
-
-            _, embedded_chunk = self.model(
-                batch,
-                return_embeddings=True,
-                target_length=-1
-            )
-
-            # extract embedding portion corresponding to original unpadded seq
-            start_bin = padding_left // self.bin_size
-            end_bin = math.ceil((padding_left + len(chunk)) / self.bin_size)
-
-            embedding = embedded_chunk[:, start_bin:end_bin, :]
-
-            embedding_chunks.append(embedding)
-
-        embedding = torch.cat(embedding_chunks, dim=1).squeeze(0)
-
-        aggregate_embedding = agg_fn(embedding).unsqueeze(0)
-        return aggregate_embedding
-
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
-        """Embed sequences using Enformer.
-
-        Processes sequences one at a time due to memory constraints
-        at 196k bp sequence lengths.
+        """Embed sequences using Enformer in one fixed-length model batch.
 
         Args:
             sequences: List of sequences to embed.
@@ -158,16 +105,109 @@ class Enformer(EmbeddingModel):
         Returns:
             Embeddings with item shape depending on agg_fn.
             - default (mean): (3072,)
-
         """
         _, _ = cds, splice
+        if not sequences:
+            return []
 
-        all_embeddings = []
+        records = []
+        for sequence_idx, sequence in enumerate(sequences):
+            for chunk_idx, chunk in enumerate(
+                self.chunk_sequence(sequence, self.max_length)
+            ):
+                padding_total = self.max_length - len(chunk)
+                padding_left = (
+                    padding_total // 2 // self.bin_size * self.bin_size
+                )
+                padding_right = self.max_length - len(chunk) - padding_left
+                padded = "N" * padding_left + chunk + "N" * padding_right
+                records.append(
+                    (sequence_idx, chunk_idx, chunk, padding_left, padded)
+                )
+
+        chunks_by_sequence: list[list[tuple[int, torch.Tensor]]] = [
+            [] for _ in sequences
+        ]
+        for batch_records in self.chunk_tokens(
+            records, max(1, len(sequences))
+        ):
+            batch = torch.stack([
+                torch.tensor(str_to_ohe(padded), dtype=torch.float32)
+                for _, _, _, _, padded in batch_records
+            ]).to(self.device)
+            _, embedded = self.model(
+                batch,
+                return_embeddings=True,
+                target_length=-1,
+            )
+            for batch_idx, (
+                sequence_idx, chunk_idx, chunk, padding_left, _
+            ) in enumerate(batch_records):
+                start_bin = padding_left // self.bin_size
+                end_bin = math.ceil(
+                    (padding_left + len(chunk)) / self.bin_size
+                )
+                chunks_by_sequence[sequence_idx].append(
+                    (chunk_idx, embedded[batch_idx, start_bin:end_bin])
+                )
+
+        return [
+            agg_fn(torch.cat([
+                chunk for _, chunk in sorted(chunks, key=lambda item: item[0])
+            ], dim=0))
+            for chunks in chunks_by_sequence
+        ]
+
+    def predict_tracks(
+        self,
+        sequences: list[str],
+        species: str = "human",
+    ) -> list[TrackOutput]:
+        """Return Enformer's native human or mouse tracks.
+
+        Args:
+            sequences: Genomic sequences to predict.
+            species: Species-specific prediction head to use.
+
+        Returns:
+            Model-native tracks aligned to each input sequence.
+        """
+        if species not in {"human", "mouse"}:
+            raise ValueError("species must be 'human' or 'mouse'.")
+        if any(len(sequence) > self.max_length for sequence in sequences):
+            raise ValueError(
+                "predict_tracks accepts one Enformer window per sequence."
+            )
+
+        outputs = []
         for sequence in sequences:
-            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding.squeeze(0))
-
-        return all_embeddings
+            padding_total = self.max_length - len(sequence)
+            padding_left = (
+                padding_total // 2 // self.bin_size * self.bin_size
+            )
+            padding_right = self.max_length - len(sequence) - padding_left
+            padded = (
+                "N" * padding_left + sequence + "N" * padding_right
+            )
+            batch = torch.tensor(
+                str_to_ohe(padded),
+                dtype=torch.float32,
+            ).unsqueeze(0).to(self.device)
+            predictions = self.model(
+                batch,
+                head=species,
+                target_length=-1,
+            )
+            start = padding_left // self.bin_size
+            end = math.ceil(
+                (padding_left + len(sequence)) / self.bin_size
+            )
+            outputs.append(TrackOutput(
+                {species: predictions[0, start:end]},
+                0,
+                self.bin_size,
+            ))
+        return outputs
 
     def extract(
         self,
@@ -225,7 +265,8 @@ class Enformer(EmbeddingModel):
         }
 
         def center_padding(seq: str, length: int) -> tuple[str, int]:
-            padding_left = (length - len(seq)) // 2
+            centered = (length - len(seq)) // 2
+            padding_left = centered // self.bin_size * self.bin_size
             padding_right = length - len(seq) - padding_left
             return "N" * padding_left + seq + "N" * padding_right, padding_left
 
@@ -289,7 +330,7 @@ class Enformer(EmbeddingModel):
 
                 for path in attn_paths:
                     if score_store[path]:
-                        w = score_store[path][0][0]  # (1,H,T,T) → (H,T,T)
+                        w = score_store[path][0][0]  # (1,H,T,T) -> (H,T,T)
                         seq_score[path].append(
                             w.cpu() if offload_to_cpu else w)
 

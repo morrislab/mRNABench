@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from functools import partial
 import math
 import re
 from typing import Any
@@ -9,7 +8,11 @@ import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import (
+    EmbeddingModel,
+    ModelBehavior,
+    TrackOutput,
+)
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 from huggingface_hub import hf_hub_download
 
@@ -34,6 +37,10 @@ class AlphaGenome(EmbeddingModel):
     valid_versions = ["alphagenome"]
     default_attn_implementation = "eager"
     valid_attn_implementations = ["eager"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.TRACKS,
+    })
     # encoder down blocks (0-5) -> transformer block MLPs (tower.blocks.N.mlp,
     # the last op in each block, since the block container is a ModuleDict with
     # no forward) -> decoder up blocks (0-6).
@@ -110,74 +117,17 @@ class AlphaGenome(EmbeddingModel):
 
         self.species = 0 if species == "human" else 1
 
-    def embed_sequence(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
-        """Embed a single sequence using AlphaGenome.
-
-        Sequences longer than max_length are split into chunks.
-        Each chunk is padded to a multiple of 2048 and passed separately
-        via model.encode(), then the original-sequence portion is sliced out
-        before aggregation.
-
-        Args:
-            sequence: Nucleotide sequence to embed.
-            cds: Unused.
-            splice: Unused.
-            agg_fn: Aggregation function applied along the length dimension.
-
-        Returns:
-            Tensor of shape (1, 1536) with default mean aggregation.
-        """
-        _, _ = cds, splice
-
-        def pad_to_multiple(seq: str, multiple: int = 2048) -> str:
-            """Right-pad sequence to the next multiple of `multiple`."""
-            target = math.ceil(len(seq) / multiple) * multiple
-            return seq + "N" * (target - len(seq))
-
-        chunks = self.chunk_sequence(sequence, self.max_length)
-        embedding_chunks = []
-
-        for chunk in chunks:
-            padded_chunk = pad_to_multiple(chunk)
-
-            batch = torch.tensor(
-                str_to_ohe(padded_chunk),
-                dtype=torch.float32
-            ).unsqueeze(0).to(self.device)
-
-            organism_index = torch.tensor(
-                [self.species], dtype=torch.long, device=self.device
-            )
-            model: Any = self.model
-            result = model.encode(
-                batch, organism_index, resolutions=(1,)
-            )
-
-            # embeddings_1bp: (1, L, 1536)
-            embedding = result['embeddings_1bp'][:, :len(chunk), :]
-            embedding_chunks.append(embedding)
-
-        embedding = torch.cat(embedding_chunks, dim=1).squeeze(0)
-        aggregate_embedding = agg_fn(embedding).unsqueeze(0)
-        return aggregate_embedding
-
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using AlphaGenome.
 
-        Processes sequences one at a time due to memory constraints at
-        long sequence lengths.
+        Chunks with the same natural 2048-base padded length share a model
+        call so padding does not change the representation contract.
 
         Args:
             sequences: List of nucleotide sequences to embed.
@@ -189,13 +139,113 @@ class AlphaGenome(EmbeddingModel):
             List of embeddings; default shape per sequence: (1536,).
         """
         _, _ = cds, splice
+        if not sequences:
+            return []
 
-        all_embeddings = []
+        buckets: dict[int, list[tuple[int, int, str]]] = {}
+        for sequence_idx, sequence in enumerate(sequences):
+            for chunk_idx, chunk in enumerate(
+                self.chunk_sequence(sequence, self.max_length)
+            ):
+                padded_length = math.ceil(len(chunk) / 2048) * 2048
+                buckets.setdefault(padded_length, []).append(
+                    (sequence_idx, chunk_idx, chunk)
+                )
+
+        chunks_by_sequence: list[list[tuple[int, torch.Tensor]]] = [
+            [] for _ in sequences
+        ]
+        model: Any = self.model
+        for padded_length, records in buckets.items():
+            for batch_records in self.chunk_tokens(
+                records, max(1, len(sequences))
+            ):
+                batch = torch.stack([
+                    torch.tensor(
+                        str_to_ohe(
+                            chunk + "N" * (padded_length - len(chunk))
+                        ),
+                        dtype=torch.float32,
+                    )
+                    for _, _, chunk in batch_records
+                ]).to(self.device)
+                organism_index = torch.full(
+                    (len(batch_records),),
+                    self.species,
+                    dtype=torch.long,
+                    device=self.device,
+                )
+                embeddings = model.encode(
+                    batch, organism_index, resolutions=(1,)
+                )["embeddings_1bp"]
+
+                for batch_idx, (
+                    sequence_idx, chunk_idx, chunk
+                ) in enumerate(batch_records):
+                    chunks_by_sequence[sequence_idx].append(
+                        (chunk_idx, embeddings[batch_idx, :len(chunk)])
+                    )
+
+        return [
+            agg_fn(torch.cat([
+                chunk for _, chunk in sorted(chunks, key=lambda item: item[0])
+            ], dim=0))
+            for chunks in chunks_by_sequence
+        ]
+
+    def predict_tracks(
+        self,
+        sequences: list[str],
+        heads: tuple[str, ...] | None = None,
+        resolution: int = 1,
+    ) -> list[TrackOutput]:
+        """Return AlphaGenome's native genomic tracks.
+
+        Args:
+            sequences: Genomic sequences to predict.
+            heads: Optional output heads to return. Defaults to every head
+                supporting the requested resolution.
+            resolution: Output resolution in nucleotides.
+
+        Returns:
+            Model-native tracks aligned to each input sequence.
+        """
+        if resolution not in {1, 128}:
+            raise ValueError("resolution must be 1 or 128.")
+        if any(len(sequence) > self.max_length for sequence in sequences):
+            raise ValueError(
+                "predict_tracks accepts one AlphaGenome window per sequence."
+            )
+
+        model: Any = self.model
+        selected_heads = heads or tuple(
+            name for name, head in model.heads.items()
+            if resolution in head.resolutions
+        )
+        outputs = []
         for sequence in sequences:
-            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding.squeeze(0))
-
-        return all_embeddings
+            padded_length = math.ceil(len(sequence) / 2048) * 2048
+            padded = sequence + "N" * (padded_length - len(sequence))
+            batch = torch.tensor(
+                str_to_ohe(padded),
+                dtype=torch.float32,
+            ).unsqueeze(0).to(self.device)
+            organism = torch.tensor(
+                [self.species], dtype=torch.long, device=self.device
+            )
+            predictions = model.predict(
+                batch,
+                organism,
+                resolutions=(resolution,),
+                heads=selected_heads,
+            )
+            length = math.ceil(len(sequence) / resolution)
+            values = {
+                head: predictions[head][resolution][0, :length]
+                for head in selected_heads
+            }
+            outputs.append(TrackOutput(values, 0, resolution))
+        return outputs
 
     def extract(
         self,

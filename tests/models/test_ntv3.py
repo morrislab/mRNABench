@@ -1,10 +1,17 @@
 import pytest
 
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 pytest.importorskip("torch")
 
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.nucleotide_transformer_v3 import NucleotideTransformerV3
 
 
@@ -25,7 +32,7 @@ def model(device) -> NucleotideTransformerV3:
 
 def test_ntv3_forward(model):
     """Test NucleotideTransformerV3 initialization and forward pass."""
-    out = model.embed_sequence("ATGATG")
+    out = embed_one(model, "ATGATG")
     assert out.shape == (1, 256)
 
 
@@ -34,22 +41,32 @@ def test_ntv3_forward_posttrained(device):
     m = NucleotideTransformerV3("v3_100M_post", device, "eager")
     m.set_species("human")
 
-    out = m.embed_sequence("ATGATG")
+    out = embed_one(m, "ATGATG")
+    tracks = m.predict_tracks(["ATGATG"])[0]
     assert out.shape == (1, 768)
+    assert tracks.values["bigwig"].shape[0] > 0
 
 
 def test_ntv3_forward_non_128(model):
     """Test NucleotideTransformerV3 forward pass with non-multiple of 128 length."""
     long_sequence = "ATGC" * 33  # 132 nucleotides
-    out = model.embed_sequence(long_sequence)
+    out = embed_one(model, long_sequence)
     assert out.shape == (1, 256)
 
 
-def test_ntv3_embed_batch(model):
-    """Test NucleotideTransformerV3 batch embedding."""
-    sequences = ["ATGATG", "GCGCGC", "AAACCC"]
-    out = torch.stack(model.embed(sequences))
-    assert out.shape == (3, 256)
+def test_ntv3_sequence_score_pads_to_128(model):
+    """Pseudo-likelihood supports inputs shorter than the U-Net minimum."""
+    score = model.sequence_score(["ATGATG"])[0]
+    logits = model.logits(["ATGATG"])[0]
+
+    assert isinstance(score, float)
+    assert logits.shape[0] == 6
+
+
+def test_ntv3_rejects_invalid_behavior_version():
+    """Version-specific behavior lookup validates checkpoint names."""
+    with pytest.raises(ValueError, match="Invalid model version"):
+        NucleotideTransformerV3.behaviors_for_version("not-a-version")
 
 
 @torch.no_grad()
@@ -62,14 +79,7 @@ def test_ntv3_embed_batch_ragged(model):
         "ACTG" * 10,
     ]
 
-    batch_out = torch.stack(model.embed(sequences)).cpu()
-    assert batch_out.shape == (4, 256)
-
-    for i, seq in enumerate(sequences):
-        single_out = torch.stack(model.embed([seq])).cpu()
-        assert torch.allclose(
-            batch_out[i:i + 1], single_out, atol=1e-5
-        ), f"Mismatch at sequence {i} (len {len(seq)})"
+    assert_pooled_batch_matches_single(model, sequences)
 
 
 def test_ntv3_excludes_special_tokens(model):
@@ -106,9 +116,9 @@ def test_ntv3_posttrained_requires_species(device):
     assert out[0].shape == (768,)
 
 
-@pytest.mark.parametrize("species", ["synthetic", "mixed"])
+@pytest.mark.parametrize("species", ["synthetic", "mixed", "virus"])
 def test_ntv3_maps_dataset_species_to_human(species):
-    """Map dataset-level non-species categories to the human token."""
+    """Map any unsupported dataset species to the human token."""
     model = NucleotideTransformerV3.__new__(NucleotideTransformerV3)
     model.post_trained = True
     model.valid_species = ["human"]
@@ -123,11 +133,42 @@ def test_ntv3_maps_dataset_species_to_human(species):
     assert torch.equal(model.species_id, torch.tensor([7]))
 
 
+def test_ntv3_predict_tracks_center_alignment():
+    """Return the post-trained center track window with input coordinates."""
+    class Tokenizer:
+        pad_token_id = 0
+
+        def __call__(self, sequence, **kwargs):
+            return {
+                "input_ids": torch.ones(
+                    1, len(sequence), dtype=torch.long
+                )
+            }
+
+    model = NucleotideTransformerV3.__new__(NucleotideTransformerV3)
+    model.post_trained = True
+    model.max_length = 1_000_064
+    model.device = torch.device("cpu")
+    model.tokenizer = Tokenizer()
+    model.species_id = torch.tensor([7])
+    model.model = Mock(return_value=SimpleNamespace(
+        bigwig_tracks_logits=torch.ones(1, 48, 3),
+        bed_tracks_logits=None,
+    ))
+
+    output = model.predict_tracks(["A" * 64])[0]
+
+    assert output.start == 8
+    assert output.bin_size == 1
+    assert output.values["bigwig"].shape == (48, 3)
+
+
 @torch.no_grad()
 def test_ntv3_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
@@ -164,6 +205,7 @@ def test_ntv3_extract_structure(model):
     layer = next(iter(h))
     assert h[layer][0][0].dim() == 2
     assert h[layer][0][0].device.type == "cpu"
+    assert not h[layer][0][0].requires_grad
 
 
 def test_ntv3_extract_layer_selection(model):

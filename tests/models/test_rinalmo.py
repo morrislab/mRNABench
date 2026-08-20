@@ -6,6 +6,12 @@ from functools import partial
 pytest.importorskip("torch")
 import torch
 
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
+
 from mrna_bench.models.rinalmo import RiNALMo
 
 
@@ -45,7 +51,7 @@ def test_rinalmo_forward(rinalmo):
     model, embed_dim = rinalmo
 
     text = "ACTTTGGCCA"
-    output = model.embed_sequence(
+    output = embed_one(model,
         text,
         agg_fn=partial(torch.mean, dim=0)
     ).cpu()
@@ -55,7 +61,7 @@ def test_rinalmo_forward(rinalmo):
 def test_rinalmo_giga_output(rinalmo_giga):
     """Test RiNALMo giga produces expected output."""
     text = "ACTTTGGCCA"
-    output = rinalmo_giga.embed_sequence(
+    output = embed_one(rinalmo_giga,
         text,
         agg_fn=partial(torch.mean, dim=0)
     ).cpu()
@@ -65,7 +71,7 @@ def test_rinalmo_giga_output(rinalmo_giga):
     assert torch.allclose(
         torch.Tensor([-0.00032]),
         torch.mean(output),
-        atol=0.0001
+        atol=1e-4
     )
 
 
@@ -78,7 +84,7 @@ def test_rinalmo_converts_t_to_u(rinalmo):
         "tokenizer",
         side_effect=model.tokenizer
     ) as mock:
-        model.embed_sequence(text)
+        embed_one(model, text)
         mock.assert_called_once_with(
             ["ACUUUGGCCA"],
             return_tensors="pt",
@@ -86,35 +92,19 @@ def test_rinalmo_converts_t_to_u(rinalmo):
         )
 
 
-def test_rinalmo_embed_batch(rinalmo):
-    """Test RiNALMo batch embedding."""
-    model, embed_dim = rinalmo
-    sequences = ["ACTTTGGCCA", "GGCCAATTGG", "AAAAACCCCC"]
-    output = torch.stack(model.embed(sequences)).cpu()
-    assert output.shape == (3, embed_dim)
-
-
-def test_rinalmo_embed_batch_single_equals_embed_sequence(rinalmo):
-    """Test that embed_batch with single sequence matches embed_sequence."""
-    model, _ = rinalmo
-    text = "ACTTTGGCCA"
-    single_output = model.embed_sequence(text).cpu()
-    batch_output = torch.stack(model.embed([text])).cpu()
-    assert torch.allclose(single_output, batch_output, atol=1e-5)
-
-
 @torch.no_grad()
-def test_rinalmo_embed_batch_with_chunking(rinalmo):
+def test_rinalmo_embed_batch_with_chunking(rinalmo, monkeypatch):
     """Test batch embedding with sequences requiring chunking."""
     model, embed_dim = rinalmo
-    short_seq = "ACTG" * 100
-    long_seq = "ACTG" * 3000
+    monkeypatch.setattr(model, "max_length", 128)
+    short_seq = "ACTG" * 25
+    long_seq = "ACTG" * 150
 
     output = torch.stack(model.embed([short_seq, long_seq])).cpu()
     assert output.shape == (2, embed_dim)
 
-    single_short = model.embed_sequence(short_seq).cpu()
-    single_long = model.embed_sequence(long_seq).cpu()
+    single_short = embed_one(model, short_seq).cpu()
+    single_long = embed_one(model, long_seq).cpu()
 
     assert torch.allclose(output[0:1], single_short, atol=1e-5)
     assert torch.allclose(output[1:2], single_long, atol=1e-5)
@@ -123,7 +113,7 @@ def test_rinalmo_embed_batch_with_chunking(rinalmo):
 @torch.no_grad()
 def test_rinalmo_embed_batch_ragged(rinalmo):
     """Test ragged batches match individual embeddings."""
-    model, embed_dim = rinalmo
+    model, _ = rinalmo
     sequences = [
         "ACTG" * 5,
         "ACTG" * 50,
@@ -131,16 +121,7 @@ def test_rinalmo_embed_batch_ragged(rinalmo):
         "ACTG" * 10,
     ]
 
-    batch_output = torch.stack(model.embed(sequences)).cpu()
-    assert batch_output.shape == (4, embed_dim)
-
-    for i, seq in enumerate(sequences):
-        single_output = model.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-5
-        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+    assert_pooled_batch_matches_single(model, sequences)
 
 
 @torch.no_grad()
@@ -160,7 +141,7 @@ def test_rinalmo_excludes_special_tokens(rinalmo):
     mean_no_special = hidden_states[:, 1:-1, :].mean(dim=1).cpu()
 
     # Model output should match mean_no_special, not mean_all
-    output = model.embed_sequence(text).cpu()
+    output = embed_one(model, text).cpu()
 
     assert torch.allclose(output, mean_no_special, atol=1e-5), \
         "Output should exclude CLS/EOS tokens"
@@ -172,7 +153,7 @@ def test_rinalmo_excludes_special_tokens(rinalmo):
 def test_rinalmo_single_nucleotide(rinalmo):
     """Test embedding a single nucleotide."""
     model, embed_dim = rinalmo
-    output = model.embed_sequence("A").cpu()
+    output = embed_one(model, "A").cpu()
     assert output.shape == (1, embed_dim)
     assert not torch.isnan(output).any()
 
@@ -185,12 +166,12 @@ def test_rinalmo_max_length_boundary(rinalmo):
 
     # Exactly at boundary (1 chunk)
     seq_at_boundary = "ACUG" * (effective_max // 4)
-    output1 = model.embed_sequence(seq_at_boundary).cpu()
+    output1 = embed_one(model, seq_at_boundary).cpu()
     assert output1.shape == (1, embed_dim)
 
     # One over boundary (2 chunks)
     seq_over_boundary = seq_at_boundary + "A"
-    output2 = model.embed_sequence(seq_over_boundary).cpu()
+    output2 = embed_one(model, seq_over_boundary).cpu()
     assert output2.shape == (1, embed_dim)
 
     # Outputs should be different
@@ -202,6 +183,7 @@ def test_rinalmo_embed_ragged_agg(rinalmo_giga):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = rinalmo_giga.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(rinalmo_giga, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

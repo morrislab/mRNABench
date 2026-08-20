@@ -1,12 +1,11 @@
 from collections.abc import Callable
-from functools import partial
 import warnings
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class CodonBERT(EmbeddingModel):
@@ -30,6 +29,11 @@ class CodonBERT(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
+    sequence_score_scope = "cds"
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -59,7 +63,7 @@ class CodonBERT(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import AutoModelForMaskedLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional_dependency to use CodonBERT."
@@ -73,20 +77,18 @@ class CodonBERT(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
+        dtype = self._get_inference_dtype()
 
-        self.model = AutoModel.from_pretrained(
+        language_model = AutoModelForMaskedLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
             dtype=dtype,
         ).to(self.device)
+        self._set_logits_model(language_model)
         self.max_length = self.tokenizer.model_max_length
+        self.sequence_score_chunk_length = (self.max_length - 2) * 3
 
     @staticmethod
     def _nt_to_codons(sequence: str) -> str:
@@ -103,6 +105,33 @@ class CodonBERT(EmbeddingModel):
         """
         n = len(sequence) - len(sequence) % 3
         return " ".join(sequence[i:i + 3] for i in range(0, n, 3))
+
+    def _tokenize_for_logits(
+        self,
+        sequence: str,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """Tokenize codons for masked scoring."""
+        _ = cds, splice
+        return self.tokenizer(  # type: ignore[no-any-return]
+            self._nt_to_codons(sequence.replace("T", "U")),
+            return_tensors="pt",
+            add_special_tokens=add_special_tokens,
+        )
+
+    def _prepare_sequence_for_scoring(
+        self,
+        sequence: str,
+        cds: np.ndarray | None,
+        splice: np.ndarray | None,
+    ) -> tuple[str, None, None]:
+        """Extract the coding sequence before scoring."""
+        _ = splice
+        if cds is None:
+            raise ValueError("CodonBERT scoring requires cds tracks.")
+        return self.get_cds(sequence, cds), None, None
 
     def _forward_chunks(
         self,
@@ -169,7 +198,7 @@ class CodonBERT(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using CodonBERT.
 

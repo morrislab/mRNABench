@@ -3,6 +3,12 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.omnigenome import OmniGenome
 
 
@@ -31,13 +37,13 @@ def model_186m(device) -> OmniGenome:
 
 def test_omnigenome_52m_forward(model_52m):
     """Test OmniGenome 52M forward pass."""
-    out = model_52m.embed_sequence("ATGATG")
+    out = embed_one(model_52m, "ATGATG")
     assert out.shape == (1, 480)
 
 
 def test_omnigenome_186m_forward(model_186m):
     """Test OmniGenome 186M forward pass."""
-    out = model_186m.embed_sequence("ATGATG")
+    out = embed_one(model_186m, "ATGATG")
     assert out.shape == (1, 720)
 
 
@@ -47,10 +53,10 @@ def test_omnigenome_converts_t_to_u(model_52m):
     dna_seq = "ATGATGATG"
     rna_seq = "AUGAUGAUG"
 
-    dna_output = model_52m.embed_sequence(dna_seq).cpu()
-    rna_output = model_52m.embed_sequence(rna_seq).cpu()
+    dna_output = embed_one(model_52m, dna_seq).cpu()
+    rna_output = embed_one(model_52m, rna_seq).cpu()
 
-    assert torch.allclose(dna_output, rna_output, atol=1e-4), \
+    assert torch.allclose(dna_output, rna_output, atol=1e-5), \
         "DNA (T) and RNA (U) sequences should produce identical embeddings"
 
 
@@ -63,16 +69,10 @@ def test_omnigenome_embed_batch_ragged(model_52m):
         "ATGATG" * 100,
     ]
 
-    batch_output = torch.stack(model_52m.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 480)
-
-    for i, seq in enumerate(sequences):
-        single_output = model_52m.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-3
-        ), "Mismatch at sequence {}".format(i)
+    assert_pooled_batch_matches_single(
+        model_52m,
+        sequences,
+    )
 
 
 @torch.no_grad()
@@ -87,11 +87,11 @@ def test_omnigenome_excludes_special_tokens(model_52m):
     mean_all = hidden_states.mean(dim=1).cpu()
     mean_no_special = hidden_states[:, 1:-1, :].mean(dim=1).cpu()
 
-    output = model_52m.embed_sequence(text).cpu()
+    output = embed_one(model_52m, text).cpu()
 
-    assert torch.allclose(output, mean_no_special, atol=1e-4), \
+    assert torch.allclose(output, mean_no_special, atol=1e-5), \
         "Output should exclude CLS/SEP tokens"
-    assert not torch.allclose(output, mean_all, atol=1e-4), \
+    assert not torch.allclose(output, mean_all, atol=1e-5), \
         "Output should differ from mean including special tokens"
 
 
@@ -100,6 +100,7 @@ def test_omnigenome_embed_ragged_agg(model_52m):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = model_52m.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model_52m, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
@@ -151,4 +152,4 @@ def test_omnigenome_extract_attention_weights(model_52m):
     w = attn[0][0]
     assert w.dim() == 3
     assert w.shape[1] == w.shape[2]
-    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-4)
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

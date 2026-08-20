@@ -1,3 +1,4 @@
+import math
 import pytest
 from unittest.mock import patch
 from types import SimpleNamespace
@@ -6,6 +7,11 @@ import numpy as np
 
 pytest.importorskip("torch")
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+)
 from mrna_bench.models.mrnafm import MRNAFM
 
 
@@ -37,12 +43,33 @@ def test_mrnafm_requires_cds(model):
         model.embed(["ATGATG"])
 
 
+def test_mrnafm_pseudo_likelihood(model):
+    """mRNA-FM exposes the retained masked-language-model head."""
+    sequence = "ATGATG"
+    cds = make_cds(sequence)
+    assert model.supports("pseudo_likelihood")
+    assert model.logits([sequence], cds=[cds])[0].ndim == 2
+    assert math.isfinite(model.sequence_score([sequence], cds=[cds])[0])
+    with pytest.raises(ValueError, match="requires cds"):
+        model.sequence_score([sequence])
+
+
+def test_mrnafm_pseudo_likelihood_excludes_utrs(model):
+    """mRNA-FM scores only the annotated coding sequence."""
+    sequence = "CCC" + "ATGATG" + "GGG"
+    cds = np.array([0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0])
+    transcript_logits = model.logits([sequence], cds=[cds])[0]
+    coding_logits = model.logits(
+        ["ATGATG"], cds=[make_cds("ATGATG")]
+    )[0]
+    assert torch.allclose(transcript_logits, coding_logits)
+
+
 def test_mrnafm_embed_batch(model):
-    """Test mRNA-FM batch embedding."""
-    sequences = ["ATGATG", "GCGCGC", "AAACCC"]
+    """Test pooled ragged batches match individual embeddings."""
+    sequences = ["ATGATG", "GCGCGCGCGCGC"]
     cds = [make_cds(s) for s in sequences]
-    out = torch.stack(model.embed(sequences, cds=cds))
-    assert out.shape == (3, 1280)
+    assert_pooled_batch_matches_single(model, sequences, cds=cds)
 
 
 def test_mrnafm_converts_t_to_u(model):
@@ -159,14 +186,6 @@ def test_mrnafm_mask_variable_lengths(model):
         assert mask[2].sum().item() == 3  # 3 codons
 
 
-def test_mrnafm_embed_batch_ragged(model):
-    """Test mRNA-FM batch embedding with variable length sequences."""
-    sequences = ["ATGATG", "GCGCGCGCGCGC"]
-    cds = [make_cds(s) for s in sequences]
-    out = torch.stack(model.embed(sequences, cds=cds))
-    assert out.shape == (2, 1280)
-
-
 def test_mrnafm_chunking(model):
     """Test mRNA-FM with sequence requiring chunking."""
     # max_chunk_length = (1024 - 2) * 3 = 3066 nucleotides
@@ -199,6 +218,7 @@ def test_mrnafm_embed_ragged_agg(model):
     seqs = ["ATGATG", "GCGCGCATGATG"]  # 6 and 12 chars
     cds = [make_cds(s) for s in seqs]
     out = model.embed(seqs, cds=cds, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out, cds=cds)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

@@ -5,6 +5,8 @@ from unittest.mock import patch
 
 import torch
 
+from tests.model_utils import assert_raw_batch_matches_single, embed_one
+
 from mrna_bench.models.alphagenome import AlphaGenome
 
 
@@ -24,7 +26,7 @@ def alphagenome(device) -> AlphaGenome:
 def test_alphagenome_forward(alphagenome):
     """Test AlphaGenome forward pass."""
     text = "ACGT" * 25000
-    output = alphagenome.embed_sequence(text)
+    output = embed_one(alphagenome, text)
     assert output.shape[0] == 1
     assert output.shape[1] == 1536
 
@@ -34,14 +36,21 @@ def test_alphagenome_embed_batch(alphagenome):
     alphagenome.set_inference_mode()
     sequences = [
         "ACGT" * 25000,
-        "ACGT" * 30000,
+        "ACGT" * 25001,
     ]
 
-    batch_output = torch.stack(alphagenome.embed(sequences)).cpu()
+    with patch.object(
+        alphagenome.model,
+        "encode",
+        wraps=alphagenome.model.encode,
+    ) as encode:
+        batch_output = torch.stack(alphagenome.embed(sequences)).cpu()
+    assert encode.call_args.args[0].shape[0] == 2
     assert batch_output.shape == (2, 1536)
 
     for i, seq in enumerate(sequences):
-        single_output = alphagenome.embed_sequence(seq).cpu()
+        single_output = embed_one(alphagenome, seq).cpu()
+        # Long padded windows change low-level convolution numerics.
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
@@ -50,10 +59,26 @@ def test_alphagenome_embed_batch(alphagenome):
 
 
 @torch.no_grad()
+def test_alphagenome_predict_tracks(alphagenome):
+    """Expose native tracks without routing them through embed()."""
+    output = alphagenome.predict_tracks(
+        ["ACGT" * 10],
+        heads=("atac",),
+        resolution=128,
+    )[0]
+
+    assert output.bin_size == 128
+    assert output.start == 0
+    assert output.values["atac"].shape == (1, 256)
+
+
+@torch.no_grad()
 def test_alphagenome_embed_ragged_agg(alphagenome):
     """Test embed with identity agg_fn returns per-bin embeddings (ragged)."""
-    seqs = ["ACGT" * 250, "ACGT" * 1000]
+    seqs = ["ACGT" * 250, "ACGT" * 300]
     out = alphagenome.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    # Unpooled bins retain larger padding-context differences than the mean.
+    assert_raw_batch_matches_single(alphagenome, seqs, out, atol=2e-2)
     assert out[0].dim() == 2  # (num_bins, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
@@ -76,11 +101,11 @@ def test_alphagenome_padding_logic(alphagenome):
         return {'embeddings_1bp': emb.clone()}
 
     with patch.object(alphagenome.model, "encode", side_effect=side_effect):
-        short_seq = "ACGT" * 10000  # 40000 bp → padded to 40960 (20 * 2048)
+        short_seq = "ACGT" * 10000  # 40000 bp -> padded to 40960 (20 * 2048)
         seq_len = len(short_seq)
         expected_padded_len = math.ceil(seq_len / 2048) * 2048
 
-        output = alphagenome.embed_sequence(short_seq, agg_fn=lambda x: x)
+        output = embed_one(alphagenome, short_seq, agg_fn=lambda x: x)
 
         # Right-padding: sequence occupies positions [0:seq_len]
         assert output.shape[1] == seq_len

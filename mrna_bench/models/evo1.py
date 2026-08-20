@@ -1,12 +1,14 @@
 from collections.abc import Callable
-from functools import partial
 from typing import Any
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models.embedding_model import (
+    EmbeddingModel,
+    ModelBehavior,
+)
 
 
 class Evo1(EmbeddingModel):
@@ -17,9 +19,8 @@ class Evo1(EmbeddingModel):
     byte level resolution. Owing to its StripedHyena backbone, it has a near
     linear scaling of compute and memory relative to its context window.
 
-    Note: StripedHyena's convolutions don't fully isolate sequences in batched
-    mode even with padding mask. This implementation uses single-sequence
-    processing for consistency.
+    Causal right-padding isolates real tokens from padding. Similar-length
+    chunks are batched and trimmed before aggregation.
 
     Link: https://github.com/evo-design/evo
     """
@@ -36,6 +37,10 @@ class Evo1(EmbeddingModel):
         "sdpa",
         "flash_attention_2",
     ]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.CAUSAL_LIKELIHOOD,
+    })
 
     # Attention QKV+output and MLP gates/projections in StripedHyena blocks.
     # These names are preserved by the HuggingFace port, but should be verified
@@ -87,7 +92,7 @@ class Evo1(EmbeddingModel):
         super().__init__(model_version, device, effective_attn)
 
         try:
-            from transformers import AutoModel, AutoTokenizer
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional_dependency to use Evo1."
@@ -99,13 +104,17 @@ class Evo1(EmbeddingModel):
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
         )
-        self.model = AutoModel.from_pretrained(
+        self.tokenizer.padding_side = "right"
+        loaded_model: Any = AutoModelForCausalLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
-        ).to(self.device)
+        )
+        loaded_model.config.use_cache = False
+        self._set_logits_model(loaded_model.to(self.device))
         self.max_length = self.tokenizer.model_max_length
+        self.sequence_score_chunk_length = self.max_length
 
     @property
     def hookable_layers(self) -> list[str]:
@@ -113,43 +122,14 @@ class Evo1(EmbeddingModel):
         num_layers = self.version_to_num_layers[self.model_version]
         return [f"blocks.{idx}" for idx in range(num_layers)] + ["norm"]
 
-    def embed_sequence(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0),
-    ) -> torch.Tensor:
-        """Embed a single sequence using Evo1.
-
-        Args:
-            sequence: Sequence to embed.
-            cds: Unused.
-            splice: Unused.
-            agg_fn: Function used to aggregate token embeddings.
-
-        Returns:
-            Tensor representing embedded sequence with leading batch dimension.
-        """
-        _, _ = cds, splice
-
-        chunks = self.chunk_sequence(sequence, self.max_length)
-        chunk_embeddings = []
-        for chunk in chunks:
-            toks = self.tokenizer([chunk], return_tensors="pt").to(self.device)
-            outputs = self.model(**toks, output_hidden_states=True)
-            chunk_embeddings.append(outputs.last_hidden_state[0])
-
-        return agg_fn(torch.cat(chunk_embeddings, dim=0)).float().unsqueeze(0)
-
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0),
+        agg_fn: Callable = EmbeddingModel.mean_pool,
     ) -> list[torch.Tensor]:
-        """Embed sequences using mean-pooled final HuggingFace hidden states.
+        """Embed right-padded sequence batches using final hidden states.
 
         Args:
             sequences: List of sequences to embed.
@@ -161,9 +141,53 @@ class Evo1(EmbeddingModel):
             List of embeddings with item shape depending on agg_fn.
         """
         _, _ = cds, splice
+        if not sequences:
+            return []
+
+        # Hyena's FFT size follows the padded length, so keep similar lengths
+        # together to limit batch-dependent numerical drift.
+        buckets: dict[int, list[tuple[int, int, str]]] = {}
+        for sequence_idx, sequence in enumerate(sequences):
+            for chunk_idx, chunk in enumerate(
+                self.chunk_sequence(sequence, self.max_length)
+            ):
+                length_bucket = 1 << max(1, len(chunk)).bit_length()
+                buckets.setdefault(length_bucket, []).append(
+                    (sequence_idx, chunk_idx, chunk)
+                )
+
+        chunks_by_sequence: list[list[tuple[int, torch.Tensor]]] = [
+            [] for _ in sequences
+        ]
+        for records in buckets.values():
+            toks = self.tokenizer(
+                [chunk for _, _, chunk in records],
+                padding=True,
+                return_tensors="pt",
+            ).to(self.device)
+            outputs = self.model(
+                **toks,
+                output_hidden_states=True,
+                use_cache=False,
+            )
+            hidden_states = outputs.hidden_states[-1]
+            lengths = toks["attention_mask"].sum(dim=1)
+
+            for batch_idx, (sequence_idx, chunk_idx, _) in enumerate(records):
+                chunks_by_sequence[sequence_idx].append(
+                    (
+                        chunk_idx,
+                        hidden_states[
+                            batch_idx, :int(lengths[batch_idx].item())
+                        ],
+                    )
+                )
+
         return [
-            self.embed_sequence(sequence, agg_fn=agg_fn).squeeze(0)
-            for sequence in sequences
+            agg_fn(torch.cat([
+                chunk for _, chunk in sorted(chunks, key=lambda item: item[0])
+            ], dim=0)).float()
+            for chunks in chunks_by_sequence
         ]
 
     def extract(

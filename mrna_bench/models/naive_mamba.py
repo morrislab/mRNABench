@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 
 
@@ -118,6 +118,7 @@ class NaiveMamba(EmbeddingModel):
     lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
     valid_attn_implementations = None
     hookable_layer_patterns = [r"layers\.\d+"]
+    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
     def __init__(
         self,
@@ -152,7 +153,7 @@ class NaiveMamba(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using NaiveMamba.
 

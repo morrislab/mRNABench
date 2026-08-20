@@ -1,7 +1,14 @@
+import math
+
 import pytest
 
 pytest.importorskip("torch")
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+)
 from mrna_bench.models.carbon import Carbon
 
 
@@ -29,16 +36,20 @@ def test_carbon_forward(model):
     assert len(out) == 1 and out[0].shape == (HIDDEN_DIM,)
 
 
+def test_carbon_causal_likelihood(model):
+    """Carbon exposes its native autoregressive head."""
+    sequence = "ATGATGATGATG"
+    assert model.supports("causal_likelihood")
+    assert model.logits([sequence])[0].ndim == 2
+    assert math.isfinite(model.sequence_score([sequence])[0])
+
+
 def test_carbon_embed_batch(model):
-    """Test Carbon batch embedding."""
-    out = model.embed(["ATGATGATGATG", "GCGCGCGCGCGC", "AAACCCGGGTTT"])
-    assert len(out) == 3 and out[0].shape == (HIDDEN_DIM,)
-
-
-def test_carbon_embed_batch_ragged(model):
-    """Test Carbon batch embedding with variable length sequences."""
-    out = model.embed(["ATGATG", "GCGCGCGCGCGCGCGCGC"])
-    assert len(out) == 2 and out[0].shape == (HIDDEN_DIM,)
+    """Test pooled ragged batches match individual embeddings."""
+    assert_pooled_batch_matches_single(
+        model,
+        ["ATGATG", "GCGCGCGCGCGCGCGCGC"],
+    )
 
 
 def test_carbon_excludes_dna_tags(model):
@@ -56,6 +67,7 @@ def test_carbon_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
@@ -107,4 +119,4 @@ def test_carbon_extract_attention_weights(model):
     w = attn[0][0]
     assert w.dim() == 3
     assert w.shape[1] == w.shape[2]
-    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-4)
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

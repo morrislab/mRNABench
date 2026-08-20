@@ -1,3 +1,4 @@
+import math
 import pytest
 from unittest.mock import patch
 
@@ -5,6 +6,12 @@ import numpy as np
 
 pytest.importorskip("torch")
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.codonbert import CodonBERT
 
 
@@ -36,10 +43,38 @@ def test_codonbert_requires_cds(model):
         model.embed(["ATGATG"])
 
 
+def test_codonbert_pseudo_likelihood_uses_cds(model):
+    """CodonBERT excludes UTR sequence before masked scoring."""
+    sequence = "CCC" + "ATGATG" + "GGG"
+    cds = np.array([0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0])
+    coding = "ATGATG"
+    coding_cds = make_cds(coding)
+
+    with pytest.raises(ValueError, match="requires cds"):
+        model.sequence_score([sequence])
+    transcript_logits = model.logits([sequence], cds=[cds])[0]
+    coding_logits = model.logits([coding], cds=[coding_cds])[0]
+    assert torch.allclose(transcript_logits, coding_logits)
+    assert math.isfinite(model.sequence_score([sequence], cds=[cds])[0])
+
+
+def test_codonbert_masked_marginal_llr(model):
+    """CodonBERT masks the changed codon rather than a nucleotide token."""
+    reference = "CCCATGATGGGG"
+    alternate = "CCCACGATGGGG"
+    cds = np.array([0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0])
+    score = model.masked_marginal_llr(
+        [reference],
+        [alternate],
+        cds=[cds],
+    )[0]
+    assert math.isfinite(score)
+
+
 def test_codonbert_forward(model):
     """Test CodonBERT forward pass."""
     seq = "ATGATG"
-    out = model.embed_sequence(seq, cds=make_cds(seq))
+    out = embed_one(model, seq, cds=make_cds(seq))
     assert out.shape == (1, 768)
 
 
@@ -50,30 +85,11 @@ def test_codonbert_converts_t_to_u(model):
     rna_seq = "AUGAUGAUG"
     cds = make_cds(dna_seq)
 
-    dna_output = model.embed_sequence(dna_seq, cds=cds).cpu()
-    rna_output = model.embed_sequence(rna_seq, cds=make_cds(rna_seq)).cpu()
+    dna_output = embed_one(model, dna_seq, cds=cds).cpu()
+    rna_output = embed_one(model, rna_seq, cds=make_cds(rna_seq)).cpu()
 
     assert torch.allclose(dna_output, rna_output, atol=1e-5), \
         "DNA (T) and RNA (U) sequences should produce identical embeddings"
-
-
-@torch.no_grad()
-def test_codonbert_embed_batch(model):
-    """Test CodonBERT batch embedding."""
-    sequences = ["ATGATG", "ATGATGATG", "ATGATGATGATG"]
-    cds = [make_cds(s) for s in sequences]
-    output = torch.stack(model.embed(sequences, cds=cds)).cpu()
-    assert output.shape == (3, 768)
-
-
-@torch.no_grad()
-def test_codonbert_embed_batch_single_equals_embed_sequence(model):
-    """Test that embed with single sequence matches embed_sequence."""
-    text = "ATGATGATG"
-    cds = make_cds(text)
-    single_output = model.embed_sequence(text, cds=cds).cpu()
-    batch_output = torch.stack(model.embed([text], cds=[cds])).cpu()
-    assert torch.allclose(single_output, batch_output, atol=1e-5)
 
 
 @torch.no_grad()
@@ -87,16 +103,11 @@ def test_codonbert_embed_batch_ragged(model):
     ]
     cds = [make_cds(s) for s in sequences]
 
-    batch_output = torch.stack(model.embed(sequences, cds=cds)).cpu()
-    assert batch_output.shape == (4, 768)
-
-    for i, seq in enumerate(sequences):
-        single_output = model.embed_sequence(seq, cds=cds[i]).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-5
-        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+    assert_pooled_batch_matches_single(
+        model,
+        sequences,
+        cds=cds,
+    )
 
 
 @torch.no_grad()
@@ -114,7 +125,7 @@ def test_codonbert_excludes_special_tokens(model):
     mean_no_special = hidden_states[:, 1:-1, :].mean(dim=1).cpu()
 
     cds = make_cds(text)
-    output = model.embed_sequence(text, cds=cds).cpu()
+    output = embed_one(model, text, cds=cds).cpu()
 
     assert torch.allclose(output, mean_no_special, atol=1e-5), \
         "Output should exclude CLS/SEP tokens"
@@ -126,7 +137,7 @@ def test_codonbert_excludes_special_tokens(model):
 def test_codonbert_single_codon(model):
     """Test embedding a single codon."""
     seq = "ATG"
-    output = model.embed_sequence(seq, cds=make_cds(seq)).cpu()
+    output = embed_one(model, seq, cds=make_cds(seq)).cpu()
     assert output.shape == (1, 768)
     assert not torch.isnan(output).any()
 
@@ -158,12 +169,12 @@ def test_codonbert_max_length_boundary(model):
     max_nt = (model.max_length - 2) * 3
     seq_at_boundary = "ATG" * (max_nt // 3)
     cds_at = make_cds(seq_at_boundary)
-    output1 = model.embed_sequence(seq_at_boundary, cds=cds_at).cpu()
+    output1 = embed_one(model, seq_at_boundary, cds=cds_at).cpu()
     assert output1.shape == (1, 768)
 
     seq_over_boundary = seq_at_boundary + "ATG"
     cds_over = make_cds(seq_over_boundary)
-    output2 = model.embed_sequence(seq_over_boundary, cds=cds_over).cpu()
+    output2 = embed_one(model, seq_over_boundary, cds=cds_over).cpu()
     assert output2.shape == (1, 768)
 
     assert not torch.allclose(output1, output2, atol=1e-5)
@@ -194,6 +205,7 @@ def test_codonbert_embed_ragged_agg(model):
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     cds = [make_cds(s) for s in seqs]
     out = model.embed(seqs, cds=cds, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out, cds=cds)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different codon counts

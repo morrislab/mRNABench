@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class HyenaDNA(EmbeddingModel):
@@ -16,11 +15,9 @@ class HyenaDNA(EmbeddingModel):
     resolution. Owing to its state-space backbone, it has an ultra long
     context window.
 
-    Note: HyenaDNA uses convolution-based Hyena operators which cannot mask
-    padding tokens like attention-based models. Therefore, batched inference
-    with variable-length sequences produces different embeddings than
-    single-sequence inference. This implementation uses single-sequence
-    processing for consistency.
+    HyenaDNA is causal, so right-padded tokens do not affect earlier sequence
+    representations. Similar-length chunks are batched and trimmed before
+    aggregation.
 
     Link: https://github.com/HazyResearch/hyena-dna
     """
@@ -36,6 +33,10 @@ class HyenaDNA(EmbeddingModel):
     default_attn_implementation = None
     valid_attn_implementations = None
     hookable_layer_patterns = [r"backbone\.layers\.\d+"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.CAUSAL_LIKELIHOOD,
+    })
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -70,7 +71,7 @@ class HyenaDNA(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoModel, AutoTokenizer
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use HyenaDNA."
@@ -83,7 +84,7 @@ class HyenaDNA(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        model = AutoModel.from_pretrained(
+        model = AutoModelForCausalLM.from_pretrained(
             checkpoint,
             dtype=torch.bfloat16,
             device_map="auto",
@@ -91,9 +92,11 @@ class HyenaDNA(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
+        tokenizer.padding_side = "right"
         self.tokenizer = tokenizer
-        self.model = model
+        self._set_logits_model(model)
         self.max_length = self._get_max_length()
+        self.sequence_score_chunk_length = self.max_length
 
     def _get_max_length(self) -> int:
         """Get maximum sequence length for model."""
@@ -108,60 +111,14 @@ class HyenaDNA(EmbeddingModel):
                 "Expected 'k' or 'm' suffix."
             )
 
-    def embed_sequence(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
-        """Embed a single sequence using HyenaDNA.
-
-        Args:
-            sequence: Sequence to embed.
-            cds: Unused.
-            splice: Unused.
-            agg_fn: Function used to aggregate embedding across length dim.
-
-        Returns:
-            Tensor representing embedded sequence.
-        """
-        _, _ = cds, splice
-
-        chunks = self.chunk_sequence(sequence, self.max_length)
-        embedding_chunks = []
-
-        for chunk in chunks:
-            toks = self.tokenizer(
-                chunk,
-                return_tensors="pt",
-            ).to(self.device)
-
-            hidden_states = self.model(toks["input_ids"])[0]
-
-            # Exclude EOS token at end (last position)
-            seq_hidden = hidden_states[0, :-1, :]
-            chunk_embedding = agg_fn(seq_hidden, dim=0)
-            embedding_chunks.append(chunk_embedding)
-
-        # Aggregate across chunks
-        if len(embedding_chunks) == 1:
-            return embedding_chunks[0].unsqueeze(0).float()
-
-        all_chunks = torch.stack(embedding_chunks, dim=0)
-        return agg_fn(all_chunks).unsqueeze(0).float()
-
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
-        """Embed sequences using HyenaDNA.
-
-        Processes sequences one at a time due to HyenaDNA's architectural
-        limitation with padding (convolutions cannot mask padding tokens).
+        """Embed sequences using right-padded, length-bucketed batches.
 
         Args:
             sequences: List of sequences to embed.
@@ -174,13 +131,54 @@ class HyenaDNA(EmbeddingModel):
              - default (mean): (hidden_dim,)
         """
         _, _ = cds, splice
+        if not sequences:
+            return []
 
-        all_embeddings = []
-        for sequence in sequences:
-            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding.squeeze(0))
+        # Hyena's FFT size follows the padded length, so keep similar lengths
+        # together to limit batch-dependent numerical drift.
+        buckets: dict[int, list[tuple[int, int, str]]] = {}
+        for sequence_idx, sequence in enumerate(sequences):
+            for chunk_idx, chunk in enumerate(
+                self.chunk_sequence(sequence, self.max_length)
+            ):
+                length_bucket = 1 << max(1, len(chunk)).bit_length()
+                buckets.setdefault(length_bucket, []).append(
+                    (sequence_idx, chunk_idx, chunk)
+                )
 
-        return all_embeddings
+        chunks_by_sequence: list[list[tuple[int, torch.Tensor]]] = [
+            [] for _ in sequences
+        ]
+        for records in buckets.values():
+            toks = self.tokenizer(
+                [chunk for _, _, chunk in records],
+                padding=True,
+                return_tensors="pt",
+            ).to(self.device)
+            hidden_states = self.model(
+                toks["input_ids"],
+                output_hidden_states=True,
+            ).hidden_states[-1]
+            lengths = toks["input_ids"].ne(
+                self.tokenizer.pad_token_id
+            ).sum(dim=1)
+
+            for batch_idx, (sequence_idx, chunk_idx, _) in enumerate(records):
+                # The tokenizer appends EOS; right padding follows it.
+                token_length = int(lengths[batch_idx].item()) - 1
+                chunks_by_sequence[sequence_idx].append(
+                    (
+                        chunk_idx,
+                        hidden_states[batch_idx, :token_length],
+                    )
+                )
+
+        return [
+            agg_fn(torch.cat([
+                chunk for _, chunk in sorted(chunks, key=lambda item: item[0])
+            ], dim=0), dim=0).float()
+            for chunks in chunks_by_sequence
+        ]
 
     def extract(
         self,

@@ -1,3 +1,4 @@
+import math
 import pytest
 
 from unittest.mock import patch
@@ -6,6 +7,11 @@ import numpy as np
 
 pytest.importorskip("torch")
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+)
 
 from mrna_bench.models.mrnabert import mRNABERT
 
@@ -33,12 +39,11 @@ def make_cds(seq: str) -> np.ndarray:
 
 
 def test_mrnabert_forward(model):
-    """Test mRNABERT forward pass using six track input."""
-    out = model.embed_sequence_sixtrack(
-        "ATG",
-        np.array([0, 0, 0]),
-        np.array([0, 0, 0])
-    )
+    """Test mRNABERT forward pass using CDS-aware input."""
+    out = model.embed(
+        ["ATG"],
+        cds=[np.array([0, 0, 0])],
+    )[0]
     assert out.shape == (768,)
 
 
@@ -64,7 +69,7 @@ def test_mrnabert_uses_separate_attention_and_pooling_masks(model):
             device=model.device,
         )
 
-        _, pooling_mask = model._forward_chunks_sixtrack(transformed)
+        _, pooling_mask = model._forward_chunks_cds(transformed)
 
     assert torch.equal(
         mock_model.call_args.kwargs["attention_mask"],
@@ -138,28 +143,17 @@ def test_mrnabert_cds_aware_chunking(model):
         assert (cds_end - cds_start) % 3 == 0
 
 
-def test_mrnabert_embed_batch(model):
-    """Test mRNABERT batch embedding."""
-    sequences = ["ATGATG", "GCGCGC", "AAACCC"]
-    cds = [make_cds(s) for s in sequences]
-    out = torch.stack(model.embed(sequences, cds=cds))
-    assert out.shape == (3, 768)
-
-
 @torch.no_grad()
 def test_mrnabert_embed_batch_ragged(model):
     """Test ragged batches match individual embeddings."""
     sequences = ["ATGATG", "GCGCGCGCGCGC", "AAA", "ATGATGATG"]
     cds = [make_cds(s) for s in sequences]
 
-    batch_out = torch.stack(model.embed(sequences, cds=cds)).cpu()
-    assert batch_out.shape == (4, 768)
-
-    for i, (seq, c) in enumerate(zip(sequences, cds)):
-        single_out = torch.stack(model.embed([seq], cds=[c])).cpu()
-        assert torch.allclose(
-            batch_out[i:i + 1], single_out, atol=1e-5
-        ), f"Mismatch at sequence {i} (len {len(seq)})"
+    assert_pooled_batch_matches_single(
+        model,
+        sequences,
+        cds=cds,
+    )
 
 
 def test_mrnabert_requires_cds(model):
@@ -168,12 +162,37 @@ def test_mrnabert_requires_cds(model):
         model.embed(["ATGATG"])
 
 
+def test_mrnabert_pseudo_likelihood(model):
+    """mRNABERT scores the CDS-aware tokenization used for embedding."""
+    sequence = "AAATGAAAT"
+    cds = np.array([0, 0, 1, 0, 0, 1, 0, 0, 0])
+    assert model.supports("pseudo_likelihood")
+    assert model.logits([sequence], cds=[cds])[0].ndim == 2
+    assert math.isfinite(model.sequence_score([sequence], cds=[cds])[0])
+    with pytest.raises(ValueError, match="requires cds"):
+        model.sequence_score([sequence])
+
+
+def test_mrnabert_masked_marginal_llr(model):
+    """mRNABERT masks the codon token containing the substitution."""
+    reference = "AAATGAAAT"
+    alternate = "AAACGAAAT"
+    cds = np.array([0, 0, 1, 0, 0, 1, 0, 0, 0])
+    score = model.masked_marginal_llr(
+        [reference],
+        [alternate],
+        cds=[cds],
+    )[0]
+    assert math.isfinite(score)
+
+
 @torch.no_grad()
 def test_mrnabert_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     cds = [make_cds(s) for s in seqs]
     out = model.embed(seqs, cds=cds, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out, cds=cds)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

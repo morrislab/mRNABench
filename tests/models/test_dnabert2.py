@@ -1,8 +1,15 @@
+import math
 import pytest
 
 pytest.importorskip("torch")
 
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.dnabert2 import DNABERT2
 
 
@@ -23,8 +30,17 @@ def dnabert2(device) -> DNABERT2:
 
 def test_dnabert2_forward(dnabert2):
     """Test DNABERT2 forward pass."""
-    out = dnabert2.embed_sequence("ATGATG")
+    out = embed_one(dnabert2, "ATGATG")
     assert out.shape == (1, 768)
+
+
+def test_dnabert2_masked_marginal_llr(dnabert2):
+    """DNABERT2 scores the changed BPE token span."""
+    score = dnabert2.masked_marginal_llr(
+        ["ATGATGATGATG"],
+        ["ATGACGATGATG"],
+    )[0]
+    assert math.isfinite(score)
 
 
 @torch.no_grad()
@@ -36,16 +52,7 @@ def test_dnabert2_embed_batch_ragged(dnabert2):
         "ATGATG" * 100,
     ]
 
-    batch_output = torch.stack(dnabert2.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 768)
-
-    for i, seq in enumerate(sequences):
-        single_output = dnabert2.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-4
-        ), "Mismatch at sequence {}".format(i)
+    assert_pooled_batch_matches_single(dnabert2, sequences)
 
 
 @torch.no_grad()
@@ -63,7 +70,7 @@ def test_dnabert2_excludes_special_tokens(dnabert2):
     # Mean excluding first and last (CLS/SEP)
     mean_no_special = hidden_states[:, 1:-1, :].mean(dim=1).cpu()
 
-    output = dnabert2.embed_sequence(text).cpu()
+    output = embed_one(dnabert2, text).cpu()
 
     assert torch.allclose(output, mean_no_special, atol=1e-5), \
         "Output should exclude CLS/SEP tokens"
@@ -76,6 +83,7 @@ def test_dnabert2_embed_ragged_agg(dnabert2):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = dnabert2.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(dnabert2, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

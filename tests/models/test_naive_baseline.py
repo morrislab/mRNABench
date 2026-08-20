@@ -4,6 +4,8 @@ import numpy as np
 
 pytest.importorskip("torch")
 import torch
+from tests.model_utils import assert_pooled_batch_matches_single
+
 from mrna_bench.models.naive_baseline import (
     NaiveBaseline,
     NaiveBaselineSixTrack,
@@ -123,35 +125,26 @@ def test_naive_baseline_batch(model_4track):
     """Test batch embed matches individual embeddings."""
     sequences = ["ATGATG", "GCGCGC", "ATATAT"]
 
-    batch_output = torch.stack(model_4track.embed(sequences))
-    assert batch_output.shape == (3, 21825)
-
-    for i, seq in enumerate(sequences):
-        single_output = torch.stack(model_4track.embed([seq]))
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-6
-        ), "Mismatch at sequence {}".format(i)
+    assert_pooled_batch_matches_single(
+        model_4track,
+        sequences,
+    )
 
 
 def test_naive_baseline_6track_batch(model_6track):
     """Test batch embed matches individual embeddings for 6-track."""
     sequences = ["ATGATG", "GCGCGC"]
-    cds_list = [np.array([1, 0, 0, 1, 0, 0]), np.array([0, 0, 0, 0, 0, 0])]
-    splice_list = [np.array([0, 0, 0, 0, 0, 0]), np.array([1, 0, 0, 0, 0, 0])]
-
-    batch_output = torch.stack(model_6track.embed(sequences, cds=cds_list, splice=splice_list))
-    assert batch_output.shape == (2, 21827)
-
-    for i in range(len(sequences)):
-        single_output = torch.stack(model_6track.embed(
-            [sequences[i]],
-            cds=[cds_list[i]],
-            splice=[splice_list[i]]
-        ))
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-6
-        ), "Mismatch at sequence {}".format(i)
+    cds = [
+        np.array([1, 0, 0, 1, 0, 0]),
+        np.array([0, 0, 0, 0, 0, 0]),
+    ]
+    splice = [
+        np.array([0, 0, 0, 0, 0, 0]),
+        np.array([1, 0, 0, 0, 0, 0]),
+    ]
+    assert_pooled_batch_matches_single(
+        model_6track,
+        sequences,
+        cds=cds,
+        splice=splice,
+    )

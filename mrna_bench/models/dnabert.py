@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class DNABERT(EmbeddingModel):
@@ -33,6 +32,10 @@ class DNABERT(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -70,7 +73,7 @@ class DNABERT(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import AutoModelForMaskedLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use DNABERT."
@@ -79,11 +82,7 @@ class DNABERT(EmbeddingModel):
         self.k = int(model_version.split("-")[1].replace("mer", ""))
 
         hub_id = "Taykhoom/{}".format(model_version)
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
+        dtype = self._get_inference_dtype()
         model_kwargs = {
             "trust_remote_code": True,
             "cache_dir": get_model_weights_path(),
@@ -96,20 +95,37 @@ class DNABERT(EmbeddingModel):
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
         )
-        self.model = AutoModel.from_pretrained(
+        language_model = AutoModelForMaskedLM.from_pretrained(
             hub_id,
             **model_kwargs,
         ).to(self.device)
+        self._set_logits_model(language_model)
 
         self.max_length = self.tokenizer.model_max_length
         self.max_kmer_tokens = self.max_length - 2
         self.max_chunk_length = self.max_kmer_tokens + self.k - 1
+        self.sequence_score_chunk_length = self.max_chunk_length
 
     def _seq_to_kmers(self, seq: str) -> str:
         """Convert a DNA sequence to overlapping space-delimited k-mers."""
         return " ".join(
             seq[i:i + self.k]
             for i in range(len(seq) - self.k + 1)
+        )
+
+    def _tokenize_for_logits(
+        self,
+        sequence: str,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """Tokenize overlapping k-mers for masked scoring."""
+        _ = cds, splice
+        return self.tokenizer(  # type: ignore[no-any-return]
+            self._seq_to_kmers(sequence),
+            return_tensors="pt",
+            add_special_tokens=add_special_tokens,
         )
 
     def _chunk_sequence_for_kmers(self, sequence: str) -> list[str]:
@@ -123,6 +139,32 @@ class DNABERT(EmbeddingModel):
             end = start + self.max_chunk_length
             chunks.append(sequence[start:end])
         return chunks
+
+    def _score_chunks(
+        self,
+        sequence: str,
+        cds: np.ndarray | None,
+        splice: np.ndarray | None,
+    ) -> list[tuple[str, np.ndarray | None, np.ndarray | None]]:
+        """Chunk without dropping k-mers that cross chunk boundaries."""
+        chunks = self._chunk_sequence_for_kmers(sequence)
+        starts = (
+            [0]
+            if len(sequence) < self.k
+            else range(
+                0,
+                len(sequence) - self.k + 1,
+                self.max_kmer_tokens,
+            )
+        )
+        return [
+            (
+                chunk,
+                None if cds is None else cds[start:start + len(chunk)],
+                None if splice is None else splice[start:start + len(chunk)],
+            )
+            for start, chunk in zip(starts, chunks)
+        ]
 
     def _forward_chunks(
         self,
@@ -159,7 +201,7 @@ class DNABERT(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using original k-mer DNABERT.
 

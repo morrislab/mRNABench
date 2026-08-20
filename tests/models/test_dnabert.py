@@ -1,8 +1,15 @@
+import math
 import pytest
 
 pytest.importorskip("torch")
 
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.dnabert import DNABERT
 
 
@@ -29,15 +36,45 @@ def test_dnabert_kmer_short_names():
     assert DNABERT.get_model_short_name("DNABERT-6mer") == "dnabert-6mer"
 
 
+def test_dnabert_scoring_chunks_preserve_boundary_kmers():
+    """Likelihood chunks cover every overlapping k-mer exactly once."""
+    model = DNABERT.__new__(DNABERT)
+    model.k = 3
+    model.max_kmer_tokens = 4
+    model.max_chunk_length = 6
+    sequence = "ABCDEFGHIJ"
+
+    chunks = model._score_chunks(sequence, None, None)
+    kmers = [
+        chunk[index:index + model.k]
+        for chunk, _, _ in chunks
+        for index in range(len(chunk) - model.k + 1)
+    ]
+
+    assert kmers == [
+        sequence[index:index + model.k]
+        for index in range(len(sequence) - model.k + 1)
+    ]
+
+
 def test_dnabert_kmer_forward(dnabert):
     """Test k-mer DNABERT forward pass."""
-    out = dnabert.embed_sequence("ATGATGATGATG")
+    out = embed_one(dnabert, "ATGATGATGATG")
     assert out.shape == (1, 768)
 
 
 def test_dnabert_kmer_k_value(dnabert):
     """The 6-mer model parses k=6 from its version name."""
     assert dnabert.k == 6
+
+
+def test_dnabert_masked_marginal_llr(dnabert):
+    """DNABERT scores every overlapping k-mer changed by the substitution."""
+    score = dnabert.masked_marginal_llr(
+        ["ATGATGATGATG"],
+        ["ATGACGATGATG"],
+    )[0]
+    assert math.isfinite(score)
 
 
 @torch.no_grad()
@@ -49,16 +86,7 @@ def test_dnabert_kmer_embed_batch_ragged(dnabert):
         "ATGATG" * 100,
     ]
 
-    batch_output = torch.stack(dnabert.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 768)
-
-    for i, seq in enumerate(sequences):
-        single_output = dnabert.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-4,
-        ), "Mismatch at sequence {}".format(i)
+    assert_pooled_batch_matches_single(dnabert, sequences)
 
 
 @torch.no_grad()
@@ -74,7 +102,7 @@ def test_dnabert_kmer_excludes_special_tokens(dnabert):
     mean_all = hidden_states.mean(dim=1).cpu()
     mean_no_special = hidden_states[:, 1:-1, :].mean(dim=1).cpu()
 
-    output = dnabert.embed_sequence(text).cpu()
+    output = embed_one(dnabert, text).cpu()
 
     assert torch.allclose(output, mean_no_special, atol=1e-5), \
         "Output should exclude CLS/SEP tokens"
@@ -87,6 +115,7 @@ def test_dnabert_kmer_embed_ragged_agg(dnabert):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATGATG", "GCGCGCGCGCGCGCGC"]
     out = dnabert.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(dnabert, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

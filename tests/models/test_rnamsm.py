@@ -3,6 +3,11 @@ import pytest
 pytest.importorskip("torch")
 import torch
 
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+)
+
 from mrna_bench.models.rnamsm import RNAMSM
 
 
@@ -64,16 +69,7 @@ def test_rnamsm_embed_batch(model):
         "UUUAAAGGGCCC",
     ]
 
-    batch_output = torch.stack(model.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 768)
-
-    for i, seq in enumerate(sequences):
-        single_output = torch.stack(model.embed([seq])).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-5
-        ), "Mismatch at sequence {}".format(i)
+    assert_pooled_batch_matches_single(model, sequences)
 
 
 @torch.no_grad()
@@ -81,6 +77,7 @@ def test_rnamsm_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

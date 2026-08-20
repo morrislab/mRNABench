@@ -5,6 +5,12 @@ import numpy as np
 pytest.importorskip("torch")
 pytest.importorskip("mamba_ssm")
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.naive_mamba import NaiveMamba
 
 
@@ -35,20 +41,10 @@ def make_splice(seq: str) -> np.ndarray:
     return np.zeros(len(seq), dtype=int)
 
 
-def test_naive_mamba_forward(model):
-    """Test NaiveMamba forward pass with batch."""
-    sequences = ["ATGATG", "ATGATGATG"]
-    cds = [make_cds(s) for s in sequences]
-    splice = [make_splice(s) for s in sequences]
-
-    out = torch.stack(model.embed(sequences, cds, splice))
-    assert out.shape == (2, 64)
-
-
 def test_naive_mamba_single_sequence(model):
-    """Test NaiveMamba with single sequence via embed_sequence."""
+    """Test NaiveMamba with one sequence."""
     sequence = "ATGATG"
-    out = model.embed_sequence(sequence, make_cds(sequence), make_splice(sequence))
+    out = embed_one(model, sequence, make_cds(sequence), make_splice(sequence))
     assert out.shape == (1, 64)
 
 
@@ -71,16 +67,12 @@ def test_naive_mamba_embed_batch_ragged(model):
     cds = [make_cds(s) for s in sequences]
     splice = [make_splice(s) for s in sequences]
 
-    batch_out = torch.stack(model.embed(sequences, cds, splice))
-
-    individual_outs = []
-    for seq, c, s in zip(sequences, cds, splice):
-        out = model.embed([seq], [c], [s])
-        individual_outs.append(out[0])
-
-    individual_stacked = torch.stack(individual_outs)
-
-    assert torch.allclose(batch_out, individual_stacked, atol=1e-5)
+    assert_pooled_batch_matches_single(
+        model,
+        sequences,
+        cds=cds,
+        splice=splice,
+    )
 
 
 def test_naive_mamba_custom_agg_fn(model):
@@ -105,6 +97,9 @@ def test_naive_mamba_embed_ragged_agg(model):
     cds = [make_cds(s) for s in seqs]
     splice = [make_splice(s) for s in seqs]
     out = model.embed(seqs, cds=cds, splice=splice, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(
+        model, seqs, out, cds=cds, splice=splice
+    )
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

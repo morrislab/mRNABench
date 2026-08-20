@@ -1,5 +1,4 @@
 from collections.abc import Callable
-from functools import partial
 import warnings
 import math
 
@@ -7,7 +6,11 @@ import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import (
+    EmbeddingModel,
+    ModelBehavior,
+    TrackOutput,
+)
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 
 
@@ -45,13 +48,17 @@ class Borzoi(EmbeddingModel):
         "eager",
         "flash_attention_2"
     ]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.TRACKS,
+    })
 
     min_length = 196_608
     bin_size = 32  # embedding is in 32 base bins
-    # res_tower CNN blocks -> unet skip block -> transformer blocks ->
-    # upsampling/separable CNN blocks. (conv_dna is intentionally excluded.)
+    # Initial convolution -> res_tower CNN blocks -> unet skip block ->
+    # transformer blocks -> upsampling/separable CNN blocks.
     hookable_layer_patterns = [
-        # r"conv_dna",
+        r"conv_dna",
         r"res_tower\.\d+",
         r"unet\d+",
         r"transformer\.\d+",
@@ -207,93 +214,23 @@ class Borzoi(EmbeddingModel):
         """Set all Borzoi replicate models to inference mode."""
         for m in self.models:
             m.eval()
-        torch.set_grad_enabled(False)
 
     def set_train_mode(self) -> None:
         """Set all Borzoi replicate models to training mode."""
         for m in self.models:
             m.train()
-        torch.set_grad_enabled(True)
-
-    def embed_sequence(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
-        """Embed sequence using Borzoi, excluding padded regions.
-
-        Args:
-            sequence: Sequence to embed.
-            agg_fn: Aggregation function to apply across sequence bins.
-
-        Returns:
-            Tensor representing embedded sequence.
-        """
-        _, _ = cds, splice
-
-        def center_padding(seq: str, length: int) -> tuple[str, int]:
-            """Center pad sequence to a given length."""
-            padding_left = (length - len(seq)) // 2
-            padding_right = length - len(seq) - padding_left
-
-            return "N" * padding_left + seq + "N" * padding_right, padding_left
-
-        chunks = self.chunk_sequence(sequence, self.max_length)
-
-        embedding_chunks = []
-
-        for chunk in chunks:
-            if len(chunk) < self.min_length:
-                padded_chunk, padding_left = center_padding(
-                    chunk,
-                    self.min_length
-                )
-            elif len(chunk) < self.max_length:
-                padded_chunk, padding_left = center_padding(
-                    chunk,
-                    self.max_length
-                )
-            else:
-                padded_chunk, padding_left = chunk, 0
-
-            # first OHE sequence chunk
-            batch = torch.tensor(
-                str_to_ohe(padded_chunk),
-                dtype=self.dtype
-            ).unsqueeze(0).permute(0, 2, 1).to(self.device)
-
-            # average embeddings across model replicates
-            replicate_embeds = [
-                m.get_embs_after_crop(batch) for m in self.models
-            ]
-            embedded_chunk = torch.stack(replicate_embeds).mean(dim=0)
-
-            # extract embedding portion corresponding to original unpadded seq
-            start_bin = padding_left // self.bin_size
-            end_bin = math.ceil((padding_left + len(chunk)) / self.bin_size)
-
-            embedding = embedded_chunk[:, :, start_bin:end_bin]
-
-            embedding_chunks.append(embedding.permute(0, 2, 1))
-
-        embedding = torch.cat(embedding_chunks, dim=1).squeeze(0)
-
-        aggregate_embedding = agg_fn(embedding).unsqueeze(0)
-        return aggregate_embedding
 
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0),
+        agg_fn: Callable = EmbeddingModel.mean_pool,
     ) -> list[torch.Tensor]:
         """Embed sequences using Borzoi.
 
-        Processes sequences one at a time due to memory constraints
-        at 500k+ bp sequence lengths.
+        Chunks share a model call only when they use the same native Borzoi
+        input length, preserving the model's crop behavior.
 
         Args:
             sequences: List of sequences to embed.
@@ -306,13 +243,138 @@ class Borzoi(EmbeddingModel):
             - default (mean): (1536,)
         """
         _, _ = cds, splice
+        if not sequences:
+            return []
 
-        all_embeddings = []
+        buckets: dict[
+            int, list[tuple[int, int, str, int]]
+        ] = {}
+        for sequence_idx, sequence in enumerate(sequences):
+            for chunk_idx, chunk in enumerate(
+                self.chunk_sequence(sequence, self.max_length)
+            ):
+                if len(chunk) < self.min_length:
+                    target_length = self.min_length
+                else:
+                    target_length = self.max_length
+                padding_total = target_length - len(chunk)
+                padding_left = (
+                    padding_total // 2 // self.bin_size * self.bin_size
+                )
+                buckets.setdefault(target_length, []).append(
+                    (sequence_idx, chunk_idx, chunk, padding_left)
+                )
+
+        chunks_by_sequence: list[list[tuple[int, torch.Tensor]]] = [
+            [] for _ in sequences
+        ]
+        for target_length, records in buckets.items():
+            for batch_records in self.chunk_tokens(
+                records, max(1, len(sequences))
+            ):
+                batch = torch.stack([
+                    torch.tensor(
+                        str_to_ohe(
+                            "".join((
+                                "N" * padding_left,
+                                chunk,
+                                "N" * (
+                                    target_length - len(chunk) - padding_left
+                                ),
+                            ))
+                        ),
+                        dtype=self.dtype,
+                    )
+                    for _, _, chunk, padding_left in batch_records
+                ]).permute(0, 2, 1).to(self.device)
+
+                replicate_embeds = [
+                    model.get_embs_after_crop(batch)
+                    for model in self.models
+                ]
+                embedded = torch.stack(replicate_embeds).mean(dim=0)
+
+                for batch_idx, (
+                    sequence_idx, chunk_idx, chunk, padding_left
+                ) in enumerate(batch_records):
+                    start_bin = padding_left // self.bin_size
+                    end_bin = math.ceil(
+                        (padding_left + len(chunk)) / self.bin_size
+                    )
+                    chunks_by_sequence[sequence_idx].append(
+                        (
+                            chunk_idx,
+                            embedded[batch_idx, :, start_bin:end_bin].T,
+                        )
+                    )
+
+        return [
+            agg_fn(torch.cat([
+                chunk for _, chunk in sorted(chunks, key=lambda item: item[0])
+            ], dim=0))
+            for chunks in chunks_by_sequence
+        ]
+
+    def predict_tracks(
+        self,
+        sequences: list[str],
+        species: str = "human",
+    ) -> list[TrackOutput]:
+        """Return Borzoi's native human or mouse tracks.
+
+        Args:
+            sequences: Genomic sequences to predict.
+            species: Species-specific prediction head to use.
+
+        Returns:
+            Model-native tracks aligned to each input sequence.
+        """
+        if species not in {"human", "mouse"}:
+            raise ValueError("species must be 'human' or 'mouse'.")
+        if species == "mouse" and any(
+            not hasattr(model, "mouse_head") for model in self.models
+        ):
+            raise ValueError(
+                "Mouse tracks require a Flashzoi checkpoint."
+            )
+        if any(len(sequence) > self.max_length for sequence in sequences):
+            raise ValueError(
+                "predict_tracks accepts one Borzoi window per sequence."
+            )
+
+        outputs = []
         for sequence in sequences:
-            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding.squeeze(0))
-
-        return all_embeddings
+            target_length = (
+                self.min_length
+                if len(sequence) < self.min_length
+                else self.max_length
+            )
+            padding_total = target_length - len(sequence)
+            padding_left = (
+                padding_total // 2 // self.bin_size * self.bin_size
+            )
+            padding_right = target_length - len(sequence) - padding_left
+            padded = (
+                "N" * padding_left + sequence + "N" * padding_right
+            )
+            batch = torch.tensor(
+                str_to_ohe(padded),
+                dtype=self.dtype,
+            ).unsqueeze(0).permute(0, 2, 1).to(self.device)
+            predictions = torch.stack([
+                model(batch, is_human=species == "human")
+                for model in self.models
+            ]).mean(dim=0)
+            start = padding_left // self.bin_size
+            end = math.ceil(
+                (padding_left + len(sequence)) / self.bin_size
+            )
+            outputs.append(TrackOutput(
+                {species: predictions[0, :, start:end].T},
+                0,
+                self.bin_size,
+            ))
+        return outputs
 
     def extract(
         self,
@@ -391,7 +453,8 @@ class Borzoi(EmbeddingModel):
         }
 
         def center_padding(seq: str, length: int) -> tuple[str, int]:
-            padding_left = (length - len(seq)) // 2
+            centered = (length - len(seq)) // 2
+            padding_left = centered // self.bin_size * self.bin_size
             padding_right = length - len(seq) - padding_left
             return "N" * padding_left + seq + "N" * padding_right, padding_left
 
@@ -477,14 +540,14 @@ class Borzoi(EmbeddingModel):
                                 # CNN layers are (C, T) after squeeze;
                                 # transformer layers are already (T, D).
                                 if not path.startswith("transformer"):
-                                    h = h.T  # (C, T) → (T, C)
+                                    h = h.T  # (C, T) -> (T, C)
                             seq_hidden[path].append(
                                 h.cpu() if offload_to_cpu else h
                             )
 
                     for path in attn_paths:
                         if score_store[path]:
-                            w = score_store[path][0][0]  # (1,H,T,T) → (H,T,T)
+                            w = score_store[path][0][0]  # (1,H,T,T) -> (H,T,T)
                             seq_score[path].append(
                                 w.cpu() if offload_to_cpu else w)
 

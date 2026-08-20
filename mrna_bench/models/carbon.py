@@ -1,12 +1,11 @@
 from collections.abc import Callable
-from functools import partial
 from typing import Any
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class Carbon(EmbeddingModel):
@@ -37,6 +36,10 @@ class Carbon(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.CAUSAL_LIKELIHOOD,
+    })
 
     lora_target_modules = [
         "q_proj", "k_proj", "v_proj", "o_proj",
@@ -68,7 +71,7 @@ class Carbon(EmbeddingModel):
         super().__init__(model_version, device, attn_implementation)
 
         try:
-            from transformers import AutoModel, AutoTokenizer
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional_dependency to use Carbon."
@@ -81,19 +84,16 @@ class Carbon(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
 
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
+        dtype = self._get_inference_dtype()
 
-        self.model = AutoModel.from_pretrained(
+        loaded_model: Any = AutoModelForCausalLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
             dtype=dtype,
-        ).to(self.device)
+        )
+        self._set_logits_model(loaded_model.to(self.device))
 
         # DNA tag tokens delimiting the 6-mer region; excluded from pooling.
         self.dna_tag_ids = set(
@@ -111,6 +111,8 @@ class Carbon(EmbeddingModel):
         # Reserve the two <dna>/</dna> tokens, then convert the remaining token
         # budget to nucleotides using the tokenizer's k-mer size.
         self.max_length = (self.context_length - 2) * self.tokenizer.k
+        self.sequence_score_chunk_length = self.max_length
+        self.causal_score_context_length = self.tokenizer.k
 
     def _wrap_dna(self, chunks: list[str]) -> list[str]:
         """Wrap raw nucleotide chunks in <dna>...</dna> for 6-mer tokenization.
@@ -122,6 +124,21 @@ class Carbon(EmbeddingModel):
             Chunks delimited by the DNA tags expected by the tokenizer.
         """
         return ["<dna>{}</dna>".format(chunk) for chunk in chunks]
+
+    def _tokenize_for_logits(
+        self,
+        sequence: str,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """Tokenize with Carbon's required DNA delimiters."""
+        _ = cds, splice
+        return self.tokenizer(  # type: ignore[no-any-return]
+            self._wrap_dna([sequence]),
+            add_special_tokens=False,
+            return_tensors="pt",
+        )
 
     def _forward_chunks(
         self,
@@ -162,7 +179,7 @@ class Carbon(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using Carbon.
 

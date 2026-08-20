@@ -5,6 +5,12 @@ from unittest.mock import patch
 pytest.importorskip("torch")
 
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.aido_rna import AIDORNA
 
 
@@ -26,7 +32,7 @@ def aidomodel(device) -> AIDORNA:
 def test_aido_forward(aidomodel):
     """Test AIDORNA initialization and forward pass."""
 
-    out = aidomodel.embed_sequence("ATGATG")
+    out = embed_one(aidomodel, "ATGATG")
     assert out.shape == (1, 1280)
 
 
@@ -37,23 +43,16 @@ def test_aido_dna_rna_equivalent(aidomodel):
     'T' token.
     """
     import torch
-    dna = aidomodel.embed_sequence("ATGCATGCATGC").cpu()
-    rna = aidomodel.embed_sequence("AUGCAUGCAUGC").cpu()
-    assert torch.allclose(dna, rna, atol=1e-4)
+    dna = embed_one(aidomodel, "ATGCATGCATGC").cpu()
+    rna = embed_one(aidomodel, "AUGCAUGCAUGC").cpu()
+    assert torch.allclose(dna, rna, atol=1e-5)
 
 
 def test_aido_forward_long(aidomodel):
     """Test AIDORNA forward pass."""
     long_sequence = "ATGC" * 257  # 1028 nucleotides
-    out = aidomodel.embed_sequence(long_sequence)
+    out = embed_one(aidomodel, long_sequence)
     assert out.shape == (1, 1280)
-
-
-def test_aido_embed_batch(aidomodel):
-    """Test AIDORNA batch embedding."""
-    sequences = ["ATGATG", "GCGCGC", "AAACCC"]
-    out = torch.stack(aidomodel.embed(sequences))
-    assert out.shape == (3, 1280)
 
 
 @torch.no_grad()
@@ -66,14 +65,7 @@ def test_aido_embed_batch_ragged(aidomodel):
         "ACTG" * 10,
     ]
 
-    batch_out = torch.stack(aidomodel.embed(sequences)).cpu()
-    assert batch_out.shape == (4, 1280)
-
-    for i, seq in enumerate(sequences):
-        single_out = torch.stack(aidomodel.embed([seq])).cpu()
-        assert torch.allclose(
-            batch_out[i:i + 1], single_out, atol=1e-5
-        ), f"Mismatch at sequence {i} (len {len(seq)})"
+    assert_pooled_batch_matches_single(aidomodel, sequences)
 
 
 def test_aido_excludes_special_tokens(aidomodel):
@@ -97,6 +89,7 @@ def test_aido_embed_ragged_agg(aidomodel):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = aidomodel.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(aidomodel, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

@@ -1,10 +1,9 @@
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import torch
 
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
 from mrna_bench.utils import get_model_weights_path
 
 
@@ -34,6 +33,10 @@ class SpliceBERT(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -69,7 +72,7 @@ class SpliceBERT(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import AutoModelForMaskedLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use SpliceBERT."
@@ -82,20 +85,33 @@ class SpliceBERT(EmbeddingModel):
             cache_dir=cache_dir,
             trust_remote_code=True,
         )
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
-        self.model = AutoModel.from_pretrained(
+        dtype = self._get_inference_dtype()
+        language_model = AutoModelForMaskedLM.from_pretrained(
             hub_id,
             attn_implementation=self.attn_implementation,
             cache_dir=cache_dir,
             trust_remote_code=True,
             dtype=dtype,
         ).to(device)
+        self._set_logits_model(language_model)
 
         self.max_length = self.tokenizer.model_max_length
+        self.sequence_score_chunk_length = self.max_length
+
+    def _tokenize_for_logits(
+        self,
+        sequence: str,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """Tokenize spaced nucleotides for masked scoring."""
+        _ = cds, splice
+        return self.tokenizer(  # type: ignore[no-any-return]
+            " ".join(sequence),
+            return_tensors="pt",
+            add_special_tokens=add_special_tokens,
+        )
 
     def _forward_chunks(
         self,
@@ -130,7 +146,7 @@ class SpliceBERT(EmbeddingModel):
     def _embed_1024(
         self,
         sequences: list[str],
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using 1024nt model.
 
@@ -151,7 +167,7 @@ class SpliceBERT(EmbeddingModel):
     def _embed_510(
         self,
         sequences: list[str],
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using 510nt model with overlap handling.
 
@@ -203,7 +219,7 @@ class SpliceBERT(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using SpliceBERT.
 

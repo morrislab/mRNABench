@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class OmniGenome(EmbeddingModel):
@@ -30,6 +29,11 @@ class OmniGenome(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    uses_rna_alphabet = True
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
 
     def __init__(
         self,
@@ -55,7 +59,11 @@ class OmniGenome(EmbeddingModel):
         self.max_length = 1024
 
         try:
-            from transformers import AutoModel, AutoTokenizer, AutoConfig
+            from transformers import (
+                AutoConfig,
+                AutoModelForMaskedLM,
+                AutoTokenizer,
+            )
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use OmniGenome."
@@ -85,12 +93,14 @@ class OmniGenome(EmbeddingModel):
             self.attn_implementation == "flash_attention_2"
         )
 
-        self.model = AutoModel.from_pretrained(
+        language_model = AutoModelForMaskedLM.from_pretrained(
             path,
             trust_remote_code=True,
             config=config,
             cache_dir=get_model_weights_path(),
         ).to(device)
+        self._set_logits_model(language_model)
+        self.sequence_score_chunk_length = self.max_length - 2
 
         # The 52M model's remote modeling code ignores
         # config.use_flash_attention (unlike the 186M model) and uses
@@ -132,38 +142,12 @@ class OmniGenome(EmbeddingModel):
 
         return hidden_states, pooling_mask
 
-    def _embed_single_sequence(
-        self,
-        sequence: str,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
-        """Embed a single sequence with chunking support.
-
-        Args:
-            sequence: Sequence to embed (already converted to RNA).
-            agg_fn: Function used to aggregate token embeddings.
-
-        Returns:
-            Tensor representing the embedded sequence.
-        """
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
-
-        all_hidden = []
-        for chunk in chunks:
-            hidden_states, pooling_mask = self._forward_chunks([chunk])
-            mask = pooling_mask.reshape(-1).bool()
-            hidden = hidden_states.reshape(-1, hidden_states.shape[-1])
-            all_hidden.append(hidden[mask])
-
-        combined_hidden = torch.cat(all_hidden, dim=0)
-        return agg_fn(combined_hidden)
-
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using OmniGenome.
 
@@ -185,12 +169,20 @@ class OmniGenome(EmbeddingModel):
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]
 
-        all_embeddings = []
+        embeddings = []
         for sequence in sequences:
-            embedding = self._embed_single_sequence(sequence, agg_fn=agg_fn)
-            all_embeddings.append(embedding)
-
-        return all_embeddings
+            all_hidden = []
+            for chunk in self.chunk_sequence(
+                sequence, self.max_length - 2
+            ):
+                hidden_states, pooling_mask = self._forward_chunks([chunk])
+                mask = pooling_mask.reshape(-1).bool()
+                hidden = hidden_states.reshape(
+                    -1, hidden_states.shape[-1]
+                )
+                all_hidden.append(hidden[mask])
+            embeddings.append(agg_fn(torch.cat(all_hidden)))
+        return embeddings
 
     def extract(
         self,
@@ -210,7 +202,7 @@ class OmniGenome(EmbeddingModel):
         embeddings from padding interactions.
 
         Args:
-            sequences: RNA sequences (T or U bases; T→U applied internally).
+            sequences: RNA sequences (T or U bases; T->U applied internally).
             cds: Unused.
             splice: Unused.
             layers: Layer selection; see EmbeddingModel.extract().

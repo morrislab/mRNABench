@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import torch
 import numpy as np
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class mRNABERT(EmbeddingModel):
@@ -30,6 +29,10 @@ class mRNABERT(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -63,7 +66,11 @@ class mRNABERT(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoModel, AutoTokenizer, AutoConfig
+            from transformers import (
+                AutoConfig,
+                AutoModelForMaskedLM,
+                AutoTokenizer,
+            )
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use mRNABERT."
@@ -83,31 +90,79 @@ class mRNABERT(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
 
-        self.model = AutoModel.from_pretrained(
+        language_model = AutoModelForMaskedLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
-            add_pooling_layer=False,
             cache_dir=get_model_weights_path(),
             config=self.config,
             attn_implementation=self.attn_implementation,
         ).to(self.device)
+        self._set_logits_model(language_model)
         # ALiBi allows arbitrary lengths; model_max_length (from config) caps
         # the chunk size to avoid quadratic-memory OOM.
         self.max_length = self.tokenizer.model_max_length
+
+    def _tokenize_for_logits(
+        self,
+        sequence: str,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """Tokenize UTR nucleotides and CDS codons for masked scoring."""
+        _ = splice
+        if cds is None:
+            raise ValueError("mRNABERT scoring requires cds tracks.")
+        transformed = self.separate_utr_cds(list(sequence), cds)[0]
+        return self.tokenizer(  # type: ignore[no-any-return]
+            transformed,
+            add_special_tokens=add_special_tokens,
+            return_tensors="pt",
+        )
+
+    def _score_chunks(
+        self,
+        sequence: str,
+        cds: np.ndarray | None,
+        splice: np.ndarray | None,
+    ) -> list[
+        tuple[str, np.ndarray | None, np.ndarray | None]
+    ]:
+        """Chunk scoring inputs without splitting CDS codons."""
+        if cds is None:
+            raise ValueError("mRNABERT scoring requires cds tracks.")
+        chunks = self.chunk_sequence_cds_aware(
+            sequence, cds, self.max_length - 2
+        )
+        offset = 0
+        score_chunks: list[
+            tuple[str, np.ndarray | None, np.ndarray | None]
+        ] = []
+        for chunk_tokens, chunk_cds in chunks:
+            chunk_length = len(chunk_tokens)
+            score_chunks.append((
+                "".join(chunk_tokens),
+                chunk_cds,
+                (
+                    None if splice is None
+                    else splice[offset:offset + chunk_length]
+                ),
+            ))
+            offset += chunk_length
+        return score_chunks
 
     def embed(
         self,
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Batch embed sequences using mRNABERT.
 
         Args:
             sequences: List of sequences to embed.
-            cds: List of CDS tracks for sequences. If provided, will trigger
-                6-track embedding.
+            cds: List of CDS tracks for sequences.
             splice: List of splice tracks for sequences. Unused for mRNABERT.
             agg_fn: Method used to aggregate across sequence dimension.
 
@@ -115,14 +170,38 @@ class mRNABERT(EmbeddingModel):
             Embeddings with item shape depending on agg_fn.
              - default (mean): (768,)
         """
-        if cds is not None:
-            return self.embed_sixtrack(sequences, cds, splice, agg_fn)
-        else:
+        _ = splice
+        if cds is None:
             raise ValueError(
                 "CDS tracks must be provided for mRNABERT embedding."
             )
 
-    def _forward_chunks_sixtrack(
+        all_chunks = []
+        chunk_counts = []
+        for sequence, cds_track in zip(sequences, cds):
+            chunks = self.chunk_sequence_cds_aware(
+                sequence, cds_track, self.max_length - 2
+            )
+            for chunk_sequence, chunk_cds in chunks:
+                all_chunks.append(
+                    self.separate_utr_cds(chunk_sequence, chunk_cds)[0]
+                )
+            chunk_counts.append(len(chunks))
+
+        hidden_states, pooling_mask = self._forward_chunks_cds(all_chunks)
+        embeddings = []
+        chunk_start = 0
+        for chunk_count in chunk_counts:
+            chunk_end = chunk_start + chunk_count
+            hidden = hidden_states[chunk_start:chunk_end].reshape(
+                -1, hidden_states.shape[-1]
+            )
+            mask = pooling_mask[chunk_start:chunk_end].reshape(-1).bool()
+            embeddings.append(agg_fn(hidden[mask]))
+            chunk_start = chunk_end
+        return embeddings
+
+    def _forward_chunks_cds(
         self,
         transformed_chunks: list[str]
     ) -> tuple[torch.Tensor, torch.Tensor]:
@@ -152,86 +231,6 @@ class mRNABERT(EmbeddingModel):
         ).last_hidden_state
 
         return hidden_states, pooling_mask
-
-    def embed_sixtrack(
-        self,
-        sequences: list[str],
-        cds: list[np.ndarray],
-        splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> list[torch.Tensor]:
-        """Batch embed sequences using mRNABERT with 6-track input.
-
-        Expects binary encoded tracks denoting the beginning of each codon
-        in the CDS.
-
-        Args:
-            sequences: List of sequences to embed.
-            cds: List of CDS tracks for sequences.
-            splice: Unused.
-            agg_fn: Method used to aggregate across sequence dimension.
-
-        Returns:
-            Embeddings with item shape depending on agg_fn.
-             - default (mean): (768,)
-        """
-        _ = splice  # Unused
-
-        all_chunks = []
-        chunk_counts = []
-
-        for seq, c in zip(sequences, cds):
-            chunks = self.chunk_sequence_cds_aware(seq, c, self.max_length - 2)
-            for chunk_seq, chunk_cds in chunks:
-                transformed = self.separate_utr_cds(chunk_seq, chunk_cds)
-                all_chunks.append(transformed[0])
-            chunk_counts.append(len(chunks))
-
-        hidden_states, pooling_mask = self._forward_chunks_sixtrack(all_chunks)
-
-        seq_embeddings = []
-        chunk_ptr = 0
-
-        for num_chunks in chunk_counts:
-            seq_hidden = hidden_states[chunk_ptr:chunk_ptr + num_chunks]
-            seq_mask = pooling_mask[chunk_ptr:chunk_ptr + num_chunks]
-
-            hidden = seq_hidden.reshape(-1, seq_hidden.shape[-1])
-            mask = seq_mask.reshape(-1).bool()
-
-            masked_hidden = hidden[mask]
-            seq_embeddings.append(agg_fn(masked_hidden))
-
-            chunk_ptr += num_chunks
-
-        return seq_embeddings
-
-    def embed_sequence_sixtrack(
-        self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
-        agg_fn: Callable = partial(torch.mean, dim=0)
-    ) -> torch.Tensor:
-        """Embed single sequence using mRNABERT with 6-track input.
-
-        Legacy single-sequence wrapper for embed_sixtrack.
-
-        Args:
-            sequence: Sequence to embed.
-            cds: CDS track for sequence to embed.
-            splice: Unused.
-            agg_fn: Method used to aggregate across sequence dimension.
-
-        Returns:
-            Tensor representing embedded sequence.
-        """
-        return self.embed_sixtrack(
-            [sequence],
-            [cds],
-            [splice],
-            agg_fn
-        )[0]
 
     def chunk_sequence_cds_aware(
         self,

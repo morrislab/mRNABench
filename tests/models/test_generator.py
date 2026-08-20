@@ -1,9 +1,16 @@
+import math
+
 import pytest
 
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 pytest.importorskip("torch")
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+)
 from mrna_bench.models.generator import GENERator
 
 
@@ -28,16 +35,35 @@ def test_generator_forward(model):
     assert len(out) == 1 and out[0].shape == (3072,)
 
 
+def test_generator_likelihood_tokenization_pads_trailing_bases():
+    """Likelihood scoring preserves a final partial k-mer."""
+    model = GENERator.__new__(GENERator)
+    model.k = 3
+    model.tokenizer = Mock(return_value={"input_ids": torch.tensor([[1]])})
+
+    model._tokenize_for_logits("ATGA")
+
+    model.tokenizer.assert_called_once_with(
+        "ATGAAA",
+        return_tensors="pt",
+        add_special_tokens=True,
+    )
+
+
+def test_generator_causal_likelihood(model):
+    """GENERator exposes its native autoregressive head."""
+    sequence = "ATGATGATGATG"
+    assert model.supports("causal_likelihood")
+    assert model.logits([sequence])[0].ndim == 2
+    assert math.isfinite(model.sequence_score([sequence])[0])
+
+
 def test_generator_embed_batch(model):
-    """Test GENERator batch embedding."""
-    out = model.embed(["ATGATG", "GCGCGC", "AAACCC"])
-    assert len(out) == 3 and out[0].shape == (3072,)
-
-
-def test_generator_embed_batch_ragged(model):
-    """Test GENERator batch embedding with variable length sequences."""
-    out = model.embed(["ATGATG", "GCGCGCGCGCGC"])
-    assert len(out) == 2 and out[0].shape == (3072,)
+    """Test pooled ragged batches match individual embeddings."""
+    assert_pooled_batch_matches_single(
+        model,
+        ["ATGATG", "GCGCGCGCGCGC"],
+    )
 
 
 def test_generator_excludes_special_tokens(model):
@@ -58,6 +84,7 @@ def test_generator_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
@@ -109,4 +136,4 @@ def test_generator_extract_attention_weights(model):
     w = attn[0][0]
     assert w.dim() == 3
     assert w.shape[1] == w.shape[2]
-    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-4)
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

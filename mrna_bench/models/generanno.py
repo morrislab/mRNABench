@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import torch
 import numpy as np
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class GENERanno(EmbeddingModel):
@@ -36,6 +35,31 @@ class GENERanno(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
+    # GENERanno overflows in FP16 under FA; need BF16 for range
+    flash_attn_dtype = torch.bfloat16
+    _BASE_VERSIONS = {
+        "prokaryote-0.5b-base",
+        "eukaryote-0.5b-base",
+    }
+
+    @classmethod
+    def behaviors_for_version(
+        cls,
+        model_version: str,
+    ) -> frozenset[ModelBehavior]:
+        """Return MLM behavior only for base checkpoints.
+
+        Args:
+            model_version: Version whose supported behaviors to retrieve.
+
+        Returns:
+            Embedding behavior, plus pseudo-likelihood for base checkpoints.
+        """
+        behaviors = super().behaviors_for_version(model_version)
+        if model_version in cls._BASE_VERSIONS:
+            return behaviors | {ModelBehavior.PSEUDO_LIKELIHOOD}
+        return behaviors
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -67,7 +91,11 @@ class GENERanno(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import (
+                AutoModel,
+                AutoModelForMaskedLM,
+                AutoTokenizer,
+            )
         except ImportError:
             raise ImportError(
                 "Install base_models optional_dependency to use GENERanno."
@@ -79,19 +107,23 @@ class GENERanno(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
 
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
+        dtype = self._get_inference_dtype()
 
-        self.model = AutoModel.from_pretrained(
+        model_class = (
+            AutoModelForMaskedLM
+            if model_version in self._BASE_VERSIONS else AutoModel
+        )
+        loaded_model = model_class.from_pretrained(
             "GenerTeam/GENERanno-{}".format(model_version),
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
             dtype=dtype,
         ).to(self.device)
+        if model_version in self._BASE_VERSIONS:
+            self._set_logits_model(loaded_model)
+        else:
+            self.model = loaded_model
 
         self.tokenizer.padding_side = "right"
         self.tokenizer.truncation_side = "right"
@@ -101,6 +133,7 @@ class GENERanno(EmbeddingModel):
             self.tokenizer.pad_token = self.tokenizer.eos_token
 
         self.max_length = 8192  # based on technical report
+        self.sequence_score_chunk_length = self.max_length - 2
 
     def _forward_chunks(
         self,
@@ -141,7 +174,7 @@ class GENERanno(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using GENERanno.
 

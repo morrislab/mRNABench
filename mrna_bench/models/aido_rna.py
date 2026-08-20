@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import torch
 import numpy as np
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
 
 
 class AIDORNA(EmbeddingModel):
@@ -35,6 +34,11 @@ class AIDORNA(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    uses_rna_alphabet = True
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -78,7 +82,7 @@ class AIDORNA(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import AutoModelForMaskedLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional_dependency to use AIDO.RNA."
@@ -92,20 +96,18 @@ class AIDORNA(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
 
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
+        dtype = self._get_inference_dtype()
 
-        self.model = AutoModel.from_pretrained(
+        language_model = AutoModelForMaskedLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
             dtype=dtype,
         ).to(device)
+        self._set_logits_model(language_model)
         self.max_length = self.tokenizer.model_max_length
+        self.sequence_score_chunk_length = self.max_length - 2
 
     def _forward_chunks(
         self,
@@ -143,7 +145,7 @@ class AIDORNA(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using AIDO.RNA.
 

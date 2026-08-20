@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from sklearn.feature_extraction.text import CountVectorizer
 
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 def generate_kmer_vocab(
@@ -67,6 +67,7 @@ class NaiveBaseline(EmbeddingModel):
     default_attn_implementation = None
     valid_attn_implementations = None
     hookable_layer_patterns = []
+    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -140,6 +141,7 @@ class NaiveBaselineSixTrack(EmbeddingModel):
     default_attn_implementation = None
     valid_attn_implementations = None
     hookable_layer_patterns = []
+    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:

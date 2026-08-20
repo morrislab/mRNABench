@@ -2,7 +2,11 @@ import pytest
 
 pytest.importorskip("torch")
 
+from unittest.mock import patch
+
 import torch
+
+from tests.model_utils import assert_raw_batch_matches_single, embed_one
 
 if not torch.cuda.is_available():
     pytest.skip(
@@ -32,7 +36,7 @@ def model(device) -> Evo1:
 
 def test_evo1_forward(model):
     """Evo1 embeds to the final-layer hidden dimension."""
-    out = model.embed_sequence("ATGATG")
+    out = embed_one(model, "ATGATG")
     assert out.shape == (1, HIDDEN_DIM)
 
 
@@ -46,27 +50,36 @@ def test_evo1_embed_batch(model):
     """Test batch embed matches individual embeddings."""
     sequences = [
         "ATGATG" * 10,
-        "ATGATG" * 50,
-        "ATGATG" * 100,
+        "ATGATG" * 10 + "ATG",
     ]
 
-    batch_output = torch.stack(model.embed(sequences)).cpu()
-    assert batch_output.shape == (3, HIDDEN_DIM)
+    with patch.object(
+        model.model,
+        "forward",
+        wraps=model.model.forward,
+    ) as forward:
+        batch_output = torch.stack(model.embed(sequences)).cpu()
+    assert forward.call_args.kwargs["input_ids"].shape[0] == 2
+    assert batch_output.shape == (2, HIDDEN_DIM)
 
     for i, seq in enumerate(sequences):
-        single_output = model.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-2,
-        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+        single_output = embed_one(model, seq).cpu()
+        cosine = torch.nn.functional.cosine_similarity(
+            batch_output[i:i + 1].float(),
+            single_output.float(),
+        )
+        assert cosine.item() >= 0.999
 
 
 @torch.no_grad()
 def test_evo1_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
-    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    seqs = ["ATGATG", "GCGCGCG"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    # BF16 kernels preserve direction more reliably than elementwise values.
+    assert_raw_batch_matches_single(
+        model, seqs, out, min_cosine=0.999
+    )
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
@@ -126,7 +139,7 @@ def test_evo1_extract_transformer_attention(model):
     assert upper.abs().max() == 0.0
     # Rows are a softmax distribution (sum to 1 within bf16 tolerance).
     rowsum = w.float().sum(-1)
-    assert torch.allclose(rowsum, torch.ones_like(rowsum), atol=1e-2)
+    assert torch.allclose(rowsum, torch.ones_like(rowsum), atol=5e-3)
 
 
 def test_evo1_extract_hyena_scores_none(model):

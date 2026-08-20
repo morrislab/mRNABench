@@ -3,6 +3,12 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.rnabert import RNABERT
 
 
@@ -23,7 +29,7 @@ def model(device) -> RNABERT:
 
 def test_rnabert_forward(model):
     """Test RNABERT forward pass."""
-    out = model.embed_sequence("ATGATG")
+    out = embed_one(model, "ATGATG")
     assert out.shape == (1, 120)
 
 
@@ -33,8 +39,8 @@ def test_rnabert_converts_t_to_u(model):
     dna_seq = "ATGATGATG"
     rna_seq = "AUGAUGAUG"
 
-    dna_output = model.embed_sequence(dna_seq).cpu()
-    rna_output = model.embed_sequence(rna_seq).cpu()
+    dna_output = embed_one(model, dna_seq).cpu()
+    rna_output = embed_one(model, rna_seq).cpu()
 
     assert torch.allclose(dna_output, rna_output, atol=1e-5), \
         "DNA (T) and RNA (U) sequences should produce identical embeddings"
@@ -49,16 +55,7 @@ def test_rnabert_embed_batch_ragged(model):
         "ATGATG" * 100,
     ]
 
-    batch_output = torch.stack(model.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 120)
-
-    for i, seq in enumerate(sequences):
-        single_output = model.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-4
-        ), "Mismatch at sequence {}".format(i)
+    assert_pooled_batch_matches_single(model, sequences)
 
 
 @torch.no_grad()
@@ -81,7 +78,7 @@ def test_rnabert_excludes_special_tokens(model):
     ), "RNABERT tokenizer unexpectedly added special tokens"
 
     mean_all = hidden_states.mean(dim=1).cpu()
-    output = model.embed_sequence(text).cpu()
+    output = embed_one(model, text).cpu()
 
     assert torch.allclose(output, mean_all, atol=1e-5), \
         "Output should pool over all real tokens (RNABERT has no CLS/EOS)"
@@ -92,6 +89,7 @@ def test_rnabert_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

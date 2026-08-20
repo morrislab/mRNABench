@@ -5,6 +5,11 @@ from types import SimpleNamespace
 
 pytest.importorskip("torch")
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+)
 from mrna_bench.models.rnafm import RNAFM
 
 
@@ -32,9 +37,11 @@ def test_rnafm_forward(model):
 
 
 def test_rnafm_embed_batch(model):
-    """Test RNA-FM batch embedding."""
-    out = model.embed(["ATGATG", "GCGCGC", "AAAA"])
-    assert len(out) == 3 and out[0].shape == (640,)
+    """Test pooled ragged batches match individual embeddings."""
+    assert_pooled_batch_matches_single(
+        model,
+        ["ATGATG", "GCGCGCGCGCGC"],
+    )
 
 
 def test_rnafm_converts_t_to_u(model):
@@ -51,12 +58,6 @@ def test_rnafm_converts_t_to_u(model):
         model.embed(["ATGATG"])
         chunks = mock.call_args[0][0]
         assert chunks[0] == "AUGAUG"
-
-
-def test_rnafm_embed_batch_ragged(model):
-    """Test RNA-FM batch embedding with variable length sequences."""
-    out = model.embed(["ATGATG", "GCGCGCGCGCGC"])
-    assert len(out) == 2 and out[0].shape == (640,)
 
 
 def test_rnafm_mask_nucleotide_tokenization(model):
@@ -101,6 +102,7 @@ def test_rnafm_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

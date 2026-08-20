@@ -3,6 +3,8 @@ import pytest
 import numpy as np
 import torch
 
+from tests.model_utils import assert_raw_batch_matches_single, embed_one
+
 from mrna_bench.models.helix_mrna import HelixmRNA
 
 
@@ -23,7 +25,7 @@ def helix_mrna(device) -> HelixmRNA:
 
 def test_helix_mrna_forward(helix_mrna):
     """Test Helix-mRNA initialization and forward pass."""
-    out = helix_mrna.embed_sequence("ATGATG")
+    out = embed_one(helix_mrna, "ATGATG")
     assert out.shape == (1, 256)
 
 @torch.no_grad()
@@ -33,8 +35,8 @@ def test_helix_mrna_converts_t_to_u(helix_mrna):
     dna_seq = "ATGATGATG"
     rna_seq = "AUGAUGAUG"
 
-    dna_output = helix_mrna.embed_sequence(dna_seq).cpu()
-    rna_output = helix_mrna.embed_sequence(rna_seq).cpu()
+    dna_output = embed_one(helix_mrna, dna_seq).cpu()
+    rna_output = embed_one(helix_mrna, rna_seq).cpu()
 
     assert torch.allclose(dna_output, rna_output, atol=1e-5), \
         "DNA (T) and RNA (U) sequences should produce identical embeddings"
@@ -69,6 +71,7 @@ def test_helix_mrna_embed_ragged_agg(helix_mrna):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = helix_mrna.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(helix_mrna, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

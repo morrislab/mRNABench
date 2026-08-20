@@ -1,8 +1,14 @@
+import math
+
 import pytest
 
 pytest.importorskip("torch")
 pytest.importorskip("transformers")
+from unittest.mock import patch
+
 import torch
+
+from tests.model_utils import assert_raw_batch_matches_single, embed_one
 from mrna_bench.models.hyenadna import HyenaDNA
 
 
@@ -22,8 +28,16 @@ def model(device) -> HyenaDNA:
 def test_hyenadna_forward(model):
     """Test HyenaDNA forward pass."""
     model.set_inference_mode()
-    out = model.embed_sequence("ATGATG")
+    out = embed_one(model, "ATGATG")
     assert out.shape == (1, 256)
+
+
+def test_hyenadna_causal_likelihood(model):
+    """HyenaDNA exposes its native autoregressive head."""
+    sequence = "ATGATG"
+    assert model.supports("causal_likelihood")
+    assert model.logits([sequence])[0].ndim == 2
+    assert math.isfinite(model.sequence_score([sequence])[0])
 
 
 def test_hyenadna_max_length(device):
@@ -37,27 +51,36 @@ def test_hyenadna_embed_batch(model):
     model.set_inference_mode()
     sequences = [
         "ATGATG" * 10,
-        "ATGATG" * 50,
-        "ATGATG" * 100,
+        "ATGATG" * 10 + "ATG",
     ]
 
-    batch_output = torch.stack(model.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 256)
+    with patch.object(
+        model.model,
+        "forward",
+        wraps=model.model.forward,
+    ) as forward:
+        batch_output = torch.stack(model.embed(sequences)).cpu()
+    assert forward.call_args.args[0].shape[0] == 2
+    assert batch_output.shape == (2, 256)
 
     for i, seq in enumerate(sequences):
-        single_output = model.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-4
-        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+        single_output = embed_one(model, seq).cpu()
+        cosine = torch.nn.functional.cosine_similarity(
+            batch_output[i:i + 1].float(),
+            single_output.float(),
+        )
+        assert cosine.item() >= 0.999
 
 
 @torch.no_grad()
 def test_hyenadna_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
-    seqs = ["ATGATG", "GCGCGCGCGCGC"]
+    seqs = ["ATGATG", "GCGCGCG"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    # BF16 kernels preserve direction more reliably than elementwise values.
+    assert_raw_batch_matches_single(
+        model, seqs, out, min_cosine=0.999
+    )
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts

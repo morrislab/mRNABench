@@ -3,6 +3,12 @@ import pytest
 pytest.importorskip("torch")
 
 import torch
+
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
 from mrna_bench.models.nucleotide_transformer import NucleotideTransformer
 
 
@@ -23,7 +29,7 @@ def model(device) -> NucleotideTransformer:
 
 def test_nt_forward(model):
     """Test NucleotideTransformer forward pass."""
-    out = model.embed_sequence("ATGATG")
+    out = embed_one(model, "ATGATG")
     assert out.shape == (1, 512)
 
 
@@ -36,16 +42,7 @@ def test_nt_embed_batch_ragged(model):
         "ATGATG" * 100,
     ]
 
-    batch_output = torch.stack(model.embed(sequences)).cpu()
-    assert batch_output.shape == (3, 512)
-
-    for i, seq in enumerate(sequences):
-        single_output = model.embed_sequence(seq).cpu()
-        assert torch.allclose(
-            batch_output[i:i + 1],
-            single_output,
-            atol=1e-4
-        ), "Mismatch at sequence {}".format(i)
+    assert_pooled_batch_matches_single(model, sequences)
 
 
 @torch.no_grad()
@@ -66,7 +63,7 @@ def test_nt_excludes_special_tokens(model):
     mean_all = hidden_states.mean(dim=1).cpu()
     mean_no_cls = hidden_states[:, 1:, :].mean(dim=1).cpu()
 
-    output = model.embed_sequence(text).cpu()
+    output = embed_one(model, text).cpu()
 
     assert torch.allclose(output, mean_no_cls, atol=1e-5), \
         "Output should exclude CLS but include all content tokens (no SEP in NT)"
@@ -79,6 +76,7 @@ def test_nt_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
@@ -130,4 +128,4 @@ def test_nt_extract_attention_weights(model):
     w = attn[0][0]
     assert w.dim() == 3
     assert w.shape[1] == w.shape[2]
-    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-4)
+    assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)

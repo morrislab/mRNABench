@@ -1,9 +1,16 @@
 import pytest
+from types import SimpleNamespace
+
+import numpy as np
 
 pytest.importorskip("torch")
 import torch
 
-from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.embedding_model import (
+    EmbeddingModel,
+    ModelBehavior,
+    mean_pool,
+)
 
 
 class MockEmbeddingModel(EmbeddingModel):
@@ -13,13 +20,20 @@ class MockEmbeddingModel(EmbeddingModel):
     valid_versions = ["mock"]
     default_attn_implementation = "mock"
     valid_attn_implementations = ["mock"]
+    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
     hidden_dim = 64
 
     def __init__(self, device: torch.device):
         super().__init__("mock", device)
         self.model = torch.nn.Identity()
 
-    def embed(self, sequences, cds=None, splice=None, agg_fn=torch.mean):
+    def embed(
+        self,
+        sequences,
+        cds=None,
+        splice=None,
+        agg_fn=EmbeddingModel.mean_pool,
+    ):
         """Not used directly in these tests."""
         pass
 
@@ -69,52 +83,62 @@ def model(device) -> MockEmbeddingModel:
     return MockEmbeddingModel(device)
 
 
-def test_embed_with_chunking_batch_no_chunking(model):
-    """Test batch of sequences that all fit in one chunk."""
-    sequences = ["ATG", "ATGATG", "A"]
-    max_chunk_length = 100
-
-    output = model._embed_with_chunking(
-        sequences=sequences,
-        max_chunk_length=max_chunk_length,
-        embed_fn=model.mock_forward_chunks,
-    )
-
-    assert len(output) == 3 and output[0].shape == (model.hidden_dim,)
-
-    for i, seq in enumerate(sequences):
-        expected_mean = sum(ord(c) for c in seq) / len(seq)
-        assert torch.allclose(
-            output[i],
-            torch.full((model.hidden_dim,), expected_mean, device=model.device),
-            atol=1e-5
-        ), "Mismatch at sequence {}".format(i)
-
-
-def test_embed_with_chunking_batch_with_chunking(model):
-    """Test batch where sequences require multiple chunks."""
-    sequences = [
-        "ATG",  # 1 chunk
-        "ATGATGATG",  # 3 chunks with max_chunk_length=3
-        "ATGATGA",  # 3 chunks, last chunk partial
+def test_embed_with_chunking_batch(model):
+    """Test pooled batches with and without sequence chunking."""
+    cases = [
+        (["ATG", "ATGATG", "A"], 100),
+        (["ATG", "ATGATGATG", "ATGATGA"], 3),
     ]
-    max_chunk_length = 3
+    for sequences, max_chunk_length in cases:
+        output = model._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=max_chunk_length,
+            embed_fn=model.mock_forward_chunks,
+        )
 
-    output = model._embed_with_chunking(
-        sequences=sequences,
-        max_chunk_length=max_chunk_length,
-        embed_fn=model.mock_forward_chunks,
-    )
+        assert len(output) == 3 and output[0].shape == (model.hidden_dim,)
 
-    assert len(output) == 3 and output[0].shape == (model.hidden_dim,)
+        for i, seq in enumerate(sequences):
+            expected_mean = sum(ord(c) for c in seq) / len(seq)
+            assert torch.allclose(
+                output[i],
+                torch.full(
+                    (model.hidden_dim,),
+                    expected_mean,
+                    device=model.device,
+                ),
+                atol=1e-5,
+            ), "Mismatch at sequence {}".format(i)
 
-    for i, seq in enumerate(sequences):
-        expected_mean = sum(ord(c) for c in seq) / len(seq)
-        assert torch.allclose(
-            output[i],
-            torch.full((model.hidden_dim,), expected_mean, device=model.device),
-            atol=1e-5
-        ), "Mismatch at sequence {}".format(i)
+
+def test_mean_pool_uses_float32():
+    """Default pooling preserves half-precision token differences."""
+    hidden = torch.tensor([[1.0, 2.0], [1.01, 2.01]], dtype=torch.float16)
+    pooled = mean_pool(hidden)
+
+    assert pooled.dtype == torch.float32
+    torch.testing.assert_close(pooled, hidden.float().mean(dim=0))
+
+
+def test_flash_attention_uses_float16(model):
+    """FlashAttention uses FP16 while other backends retain FP32."""
+    original = model.attn_implementation
+    try:
+        model.attn_implementation = "flash_attention_2"
+        assert model._get_inference_dtype() == torch.float16
+        model.attn_implementation = "eager"
+        assert model._get_inference_dtype() == torch.float32
+    finally:
+        model.attn_implementation = original
+
+
+def test_resolve_layer_paths_rejects_undeclared_strings(model):
+    """String layer paths must name a declared hookable layer."""
+    model.hookable_layer_patterns = [r""]
+
+    assert model._resolve_layer_paths([""]) == [""]
+    with pytest.raises(ValueError, match="Unknown layer"):
+        model._resolve_layer_paths(["weight"])
 
 
 def test_embed_with_chunking_applies_pooling_mask(model):
@@ -135,6 +159,29 @@ def test_embed_with_chunking_applies_pooling_mask(model):
         torch.full((model.hidden_dim,), expected_mean_a, device=model.device),
         atol=1e-5
     ), "Pooling mask should exclude masked positions"
+
+
+def test_embed_with_chunking_raw_batch_matches_single(model):
+    """Return identical unpooled embeddings with and without padding."""
+    sequences = ["A", "ATGATG"]
+    batch = model._embed_with_chunking(
+        sequences=sequences,
+        max_chunk_length=100,
+        embed_fn=model.mock_forward_chunks,
+        agg_fn=lambda hidden: hidden,
+    )
+    singles = [
+        model._embed_with_chunking(
+            sequences=[sequence],
+            max_chunk_length=100,
+            embed_fn=model.mock_forward_chunks,
+            agg_fn=lambda hidden: hidden,
+        )[0]
+        for sequence in sequences
+    ]
+
+    for batched, single in zip(batch, singles):
+        assert torch.equal(batched, single)
 
 
 def test_embed_with_chunking_preserves_gradient(model):
@@ -210,11 +257,29 @@ def test_chunk_tokens(model):
     assert chunks == [[1, 2, 3, 4, 5, 6, 7, 8, 9]]
 
 
+def test_score_tracks_are_validated_and_chunked(model):
+    sequences = ["ACGT", "AA"]
+    cds = [np.zeros(4), np.zeros(2)]
+    splice = [np.arange(4), np.arange(2)]
+
+    model._validate_score_tracks(sequences, cds, splice)
+    with pytest.raises(ValueError, match="one track per sequence"):
+        model._validate_score_tracks(sequences, cds[:1], splice)
+    with pytest.raises(ValueError, match="match sequence lengths"):
+        model._validate_score_tracks(sequences, [np.zeros(3), cds[1]], splice)
+
+    model.sequence_score_chunk_length = 2
+    chunks = model._score_chunks(sequences[0], cds[0], splice[0])
+    assert [chunk[0] for chunk in chunks] == ["AC", "GT"]
+    np.testing.assert_array_equal(chunks[1][2], np.array([2, 3]))
+
+
 def test_invalid_version_raises_value_error(device):
     """Test that invalid model version raises ValueError with valid versions."""
     class MultiVersionModel(EmbeddingModel):
         default_version = "v1"
         valid_versions = ["v1", "v2", "v3"]
+        supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
         def __init__(self, model_version: str, device: torch.device):
             super().__init__(model_version, device)
@@ -231,3 +296,155 @@ def test_invalid_version_raises_value_error(device):
     assert "v1" in error_msg
     assert "v2" in error_msg
     assert "v3" in error_msg
+
+
+def test_causal_sequence_score(device):
+    class Tokenizer:
+        def __call__(self, sequence, **kwargs):
+            ids = [{"A": 0, "C": 1}[base] for base in sequence]
+            return {"input_ids": torch.tensor([ids])}
+
+    class Model(torch.nn.Module):
+        def forward(self, input_ids, **kwargs):
+            logits = torch.full(
+                (*input_ids.shape, 2),
+                -10.0,
+                device=input_ids.device,
+            )
+            for idx in range(input_ids.shape[1] - 1):
+                logits[0, idx, input_ids[0, idx + 1]] = 10.0
+            return SimpleNamespace(logits=logits)
+
+    class ScoringModel(MockEmbeddingModel):
+        supported_behaviors = frozenset({
+            ModelBehavior.EMBEDDING,
+            ModelBehavior.CAUSAL_LIKELIHOOD,
+        })
+
+        def __init__(self, device):
+            super().__init__(device)
+            self.tokenizer = Tokenizer()
+            self.model = Model()
+
+    scorer = ScoringModel(device)
+    mean_score = scorer.sequence_score(["ACAC"])[0]
+    sum_score = scorer.sequence_score(
+        ["ACAC"], normalization="sum"
+    )[0]
+    assert scorer.logits(["ACAC"])[0].shape == (4, 2)
+
+    assert mean_score == pytest.approx(0.0, abs=1e-6)
+    assert sum_score == pytest.approx(mean_score * 3)
+    with pytest.raises(ValueError):
+        scorer.sequence_score(["ACAC"], ModelBehavior.PSEUDO_LIKELIHOOD)
+
+    scorer.sequence_score_chunk_length = 2
+    with pytest.warns(RuntimeWarning, match="independently per chunk"):
+        scorer.sequence_score(["ACAC"])
+    assert scorer.logits(["ACAC"])[0].shape == (4, 2)
+
+    class FixedModel(torch.nn.Module):
+        def forward(self, input_ids, **kwargs):
+            logits = torch.full(
+                (*input_ids.shape, 2),
+                -10.0,
+                device=input_ids.device,
+            )
+            logits[..., 0] = 10.0
+            return SimpleNamespace(logits=logits)
+
+    scorer.model = FixedModel()
+    with pytest.warns(RuntimeWarning):
+        reference = scorer.sequence_score(["AAAA"], normalization="sum")[0]
+    with pytest.warns(RuntimeWarning):
+        alternate = scorer.sequence_score(["AACA"], normalization="sum")[0]
+    assert reference > alternate
+
+
+def test_pseudo_log_likelihood(device):
+    class Tokenizer:
+        mask_token_id = 2
+
+        def __call__(self, sequence, **kwargs):
+            ids = [{"A": 0, "C": 1}[base] for base in sequence]
+            return {"input_ids": torch.tensor([ids])}
+
+        def get_special_tokens_mask(self, ids, **kwargs):
+            return [0] * len(ids)
+
+    class Model(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.calls = 0
+
+        def forward(self, input_ids):
+            self.calls += 1
+            logits = torch.zeros(
+                (*input_ids.shape, 3),
+                device=input_ids.device,
+            )
+            logits[..., 0] = 2.0
+            return SimpleNamespace(logits=logits)
+
+    class ScoringModel(MockEmbeddingModel):
+        sequence_score_batch_size = 2
+        supported_behaviors = frozenset({
+            ModelBehavior.EMBEDDING,
+            ModelBehavior.PSEUDO_LIKELIHOOD,
+        })
+
+        def __init__(self, device):
+            super().__init__(device)
+            self.tokenizer = Tokenizer()
+            self.model = Model()
+
+    scorer = ScoringModel(device)
+    score_a, score_c = scorer.sequence_score(["AAA", "CCC"])
+
+    assert score_a > score_c
+    assert scorer.model.calls == 4
+
+
+def test_masked_marginal_llr_handles_kmer_tokens(device):
+    """A substitution scores every overlapping tokenizer token it changes."""
+    class KmerTokenizer:
+        mask_token_id = 4
+        vocab = {"AA": 0, "AC": 1, "CA": 2}
+
+        def __call__(self, sequence, **kwargs):
+            ids = [
+                self.vocab[sequence[idx:idx + 2]]
+                for idx in range(len(sequence) - 1)
+            ]
+            return {"input_ids": torch.tensor([ids])}
+
+        def get_special_tokens_mask(self, ids, **kwargs):
+            return [0] * len(ids)
+
+    class Model(torch.nn.Module):
+        def forward(self, input_ids):
+            logits = torch.zeros(
+                (*input_ids.shape, 5),
+                device=input_ids.device,
+            )
+            logits[..., 0] = 3.0
+            return SimpleNamespace(logits=logits)
+
+    class ScoringModel(MockEmbeddingModel):
+        supported_behaviors = frozenset({
+            ModelBehavior.EMBEDDING,
+            ModelBehavior.PSEUDO_LIKELIHOOD,
+        })
+
+        def __init__(self, device):
+            super().__init__(device)
+            self.tokenizer = KmerTokenizer()
+            self.model = Model()
+
+    scorer = ScoringModel(device)
+    with pytest.warns(RuntimeWarning, match="multiple tokenizer tokens"):
+        score = scorer.masked_marginal_llr(["AAAA"], ["ACAA"])[0]
+
+    assert score > 0
+    with pytest.raises(ValueError, match="substitutions only"):
+        scorer.masked_marginal_llr(["AAAA"], ["AAA"])

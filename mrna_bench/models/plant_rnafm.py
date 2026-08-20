@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class PlantRNAFM(EmbeddingModel):
@@ -29,6 +28,11 @@ class PlantRNAFM(EmbeddingModel):
         "flash_attention_2"
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    uses_rna_alphabet = True
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -57,7 +61,11 @@ class PlantRNAFM(EmbeddingModel):
         self.max_length = 1026
 
         try:
-            from transformers import AutoModel, AutoTokenizer, AutoConfig
+            from transformers import (
+                AutoConfig,
+                AutoModelForMaskedLM,
+                AutoTokenizer,
+            )
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use PlantRNAFM."
@@ -86,13 +94,9 @@ class PlantRNAFM(EmbeddingModel):
         # for more about how mask_token_id is used in ESM's forward pass.
         config.mask_token_id = self.tokenizer.mask_token_id
 
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
+        dtype = self._get_inference_dtype()
 
-        self.model = AutoModel.from_pretrained(
+        language_model = AutoModelForMaskedLM.from_pretrained(
             "yangheng/PlantRNA-FM",
             trust_remote_code=True,
             config=config,
@@ -100,6 +104,8 @@ class PlantRNAFM(EmbeddingModel):
             attn_implementation=self.attn_implementation,
             dtype=dtype,
         ).to(device)
+        self._set_logits_model(language_model)
+        self.sequence_score_chunk_length = self.max_length - 2
 
     def _forward_chunks(
         self,
@@ -135,7 +141,7 @@ class PlantRNAFM(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using PlantRNAFM.
 
@@ -174,7 +180,7 @@ class PlantRNAFM(EmbeddingModel):
         """Extract per-layer representations from PlantRNAFM.
 
         Args:
-            sequences: RNA sequences (T or U bases; T→U applied internally).
+            sequences: RNA sequences (T or U bases; T->U applied internally).
             cds: Unused.
             splice: Unused.
             layers: Layer selection; see EmbeddingModel.extract().

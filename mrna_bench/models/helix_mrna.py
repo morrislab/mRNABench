@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class HelixmRNA(EmbeddingModel):
@@ -27,6 +26,7 @@ class HelixmRNA(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
     def __init__(
         self,
@@ -58,11 +58,7 @@ class HelixmRNA(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        dtype = (
-            torch.bfloat16
-            if self.attn_implementation == "flash_attention_2"
-            else torch.float32
-        )
+        dtype = self._get_inference_dtype()
 
         self.model = AutoModel.from_pretrained(
             "Taykhoom/Helix-mRNA-Wrapper",
@@ -123,7 +119,7 @@ class HelixmRNA(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Batch embed sequences using Helix-mRNA.
 
@@ -182,7 +178,7 @@ class HelixmRNA(EmbeddingModel):
         produce attention weights; Mamba and MLP layers yield None.
 
         Args:
-            sequences: RNA sequences (T or U bases; T→U applied internally).
+            sequences: RNA sequences (T or U bases; T->U applied internally).
             cds: Optional CDS tracks; if provided, codon 'E' tokens are added.
             splice: Unused.
             layers: Layer selection; see EmbeddingModel.extract().

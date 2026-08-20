@@ -1,11 +1,10 @@
 from collections.abc import Callable
-from functools import partial
 
 import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.models import EmbeddingModel, ModelBehavior
 
 
 class RNAMSM(EmbeddingModel):
@@ -24,6 +23,11 @@ class RNAMSM(EmbeddingModel):
         "eager",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    uses_rna_alphabet = True
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.PSEUDO_LIKELIHOOD,
+    })
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -53,7 +57,7 @@ class RNAMSM(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import AutoModelForMaskedLM, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use RNA-MSM."
@@ -66,13 +70,15 @@ class RNAMSM(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
 
-        self.model = AutoModel.from_pretrained(
+        language_model = AutoModelForMaskedLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
         ).to(device)
+        self._set_logits_model(language_model)
         self.max_length = self.tokenizer.model_max_length
+        self.sequence_score_chunk_length = self.max_length - 1
 
     def _forward_chunks(
         self,
@@ -120,7 +126,7 @@ class RNAMSM(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = partial(torch.mean, dim=0)
+        agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
         """Embed sequences using RNA-MSM.
 
@@ -159,7 +165,7 @@ class RNAMSM(EmbeddingModel):
         """Extract per-layer representations from RNA-MSM.
 
         Args:
-            sequences: RNA sequences (T or U bases; T→U applied internally).
+            sequences: RNA sequences (T or U bases; T->U applied internally).
             cds: Unused.
             splice: Unused.
             layers: Layer selection; see EmbeddingModel.extract().
@@ -211,7 +217,7 @@ class RNAMSM(EmbeddingModel):
                 for path in resolved:
                     idx = layer_to_idx[path]
                     hs_idx = idx + 1  # HF offset: index 0 is embedding
-                    h = hf_hidden[hs_idx][0, 0]  # squeeze B, num_msa → (T, D)
+                    h = hf_hidden[hs_idx][0, 0]  # squeeze B, num_msa -> (T, D)
                     seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
 
                     if return_attentions and outputs.attentions is not None:

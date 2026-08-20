@@ -5,6 +5,12 @@ import numpy as np
 pytest.importorskip("torch")
 import torch
 
+from tests.model_utils import (
+    assert_pooled_batch_matches_single,
+    assert_raw_batch_matches_single,
+    embed_one,
+)
+
 from mrna_bench.models.orthrus import Orthrus
 
 
@@ -43,37 +49,17 @@ def make_splice(seq: str) -> np.ndarray:
     return np.zeros(len(seq), dtype=int)
 
 
-def test_orthrus_forward_six(orthrus_6):
-    """Test Orthrus 6-track forward pass with batch."""
-    sequences = ["ATG", "ATGATG"]
-    cds = [make_cds(s) for s in sequences]
-    splice = [make_splice(s) for s in sequences]
-
-    out = torch.stack(orthrus_6.embed(sequences, cds, splice))
-
-    assert out.shape == (2, 512)
-
-
-def test_orthrus_forward_four(orthrus_4):
-    """Test Orthrus 4-track forward pass with batch."""
-    sequences = ["ATG", "ATGATG"]
-
-    out = torch.stack(orthrus_4.embed(sequences))
-
-    assert out.shape == (2, 512)
-
-
 def test_orthrus_single_sequence_six(orthrus_6):
-    """Test Orthrus 6-track with single sequence via embed_sequence."""
+    """Test Orthrus 6-track with one sequence."""
     sequence = "ATG"
-    out = orthrus_6.embed_sequence(sequence, make_cds(sequence), make_splice(sequence))
+    out = embed_one(orthrus_6, sequence, make_cds(sequence), make_splice(sequence))
     assert out.shape == (1, 512)
 
 
 def test_orthrus_single_sequence_four(orthrus_4):
-    """Test Orthrus 4-track with single sequence via embed_sequence."""
+    """Test Orthrus 4-track with one sequence."""
     sequence = "ATG"
-    out = orthrus_4.embed_sequence(sequence)
+    out = embed_one(orthrus_4, sequence)
     assert out.shape == (1, 512)
 
 
@@ -108,32 +94,22 @@ def test_orthrus_batch_ragged_six(orthrus_6):
     cds = [make_cds(s) for s in sequences]
     splice = [make_splice(s) for s in sequences]
 
-    batch_out = torch.stack(orthrus_6.embed(sequences, cds, splice))
-
-    individual_outs = []
-    for seq, c, s in zip(sequences, cds, splice):
-        out = orthrus_6.embed([seq], [c], [s])
-        individual_outs.append(out[0])
-
-    individual_stacked = torch.stack(individual_outs)
-
-    assert torch.allclose(batch_out, individual_stacked, atol=1e-5)
+    assert_pooled_batch_matches_single(
+        orthrus_6,
+        sequences,
+        cds=cds,
+        splice=splice,
+    )
 
 
 def test_orthrus_batch_ragged_four(orthrus_4):
     """Test 4-track batch embedding matches individual embeddings."""
     sequences = ["ATG", "ATGATGATG"]
 
-    batch_out = torch.stack(orthrus_4.embed(sequences))
-
-    individual_outs = []
-    for seq in sequences:
-        out = orthrus_4.embed([seq])
-        individual_outs.append(out[0])
-
-    individual_stacked = torch.stack(individual_outs)
-
-    assert torch.allclose(batch_out, individual_stacked, atol=1e-5)
+    assert_pooled_batch_matches_single(
+        orthrus_4,
+        sequences,
+    )
 
 
 @torch.no_grad()
@@ -141,6 +117,7 @@ def test_orthrus_embed_ragged_agg(orthrus_4):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
     out = orthrus_4.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    assert_raw_batch_matches_single(orthrus_4, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2
     assert out[0].shape[0] != out[1].shape[0]  # ragged: different token counts
