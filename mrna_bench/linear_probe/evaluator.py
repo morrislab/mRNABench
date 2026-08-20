@@ -2,8 +2,9 @@ import numpy as np
 from scipy.stats import pearsonr, spearmanr
 
 from sklearn.base import RegressorMixin, ClassifierMixin
-from sklearn.metrics import average_precision_score, roc_auc_score
 from sklearn.multioutput import MultiOutputClassifier
+
+from mrna_bench.metrics import classification_metrics, multilabel_metrics
 
 
 def eval_regression(
@@ -47,21 +48,19 @@ def eval_classification(
     Returns:
         Dictionary of classification metrics from linear probe.
     """
-    y_pred = model.predict_proba(X)[:, 1]
-
-    metrics = {
-        "auroc": roc_auc_score(y, y_pred),
-        "auprc": average_precision_score(y, y_pred)
-    }
-
-    return metrics
+    y_score = model.predict_proba(X)
+    return classification_metrics(
+        np.asarray(y),
+        y_score,
+        model.classes_,
+        missing_class_nan=True,
+    )
 
 
 def eval_multilabel(
     model: MultiOutputClassifier,
     X: np.ndarray,
     y: np.ndarray,
-    average: str = "micro"
 ) -> dict[str, float]:
     """Perform linear probing on multilabel classification task.
 
@@ -69,20 +68,17 @@ def eval_multilabel(
         model: Scikit-learn classification model supporting multi-output.
         X: Data to be probed.
         y: Ground truth labels of data.
-        average: Type of averaging to use for multilabel metrics.
-
     Returns:
         Dictionary of multilabel metrics from linear probe.
     """
-    y_pred = model.predict_proba(X)
-    y_pred = np.swapaxes(np.array(y_pred), 0, 1)[:, :, 1]
-
-    metrics = {
-        "auroc": roc_auc_score(y, y_pred, average=average),
-        "auprc": average_precision_score(y, y_pred, average=average)
-    }
-
-    return metrics
+    scores = np.swapaxes(
+        np.array(model.predict_proba(X)), 0, 1
+    )[:, :, 1]
+    return multilabel_metrics(
+        np.asarray(y),
+        scores,
+        missing_class_nan=True,
+    )
 
 
 class LinearProbeEvaluator:
@@ -92,8 +88,6 @@ class LinearProbeEvaluator:
         "regression",
         "classification",
         "multilabel",
-        "reg_lin",
-        "reg_ridge"
     ]
 
     def __init__(self, task: str):
@@ -161,7 +155,7 @@ class LinearProbeEvaluator:
             split_X = data_splits[split_name + "_X"]
             split_y = data_splits[split_name + "_y"]
 
-            if self.task in ["regression", "reg_lin", "reg_ridge"]:
+            if self.task == "regression":
                 split_metrics = eval_regression(model, split_X, split_y)
             elif self.task == "classification":
                 split_metrics = eval_classification(model, split_X, split_y)

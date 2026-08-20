@@ -22,7 +22,7 @@ class MRLHLLBKWK(BenchmarkDataset):
         target_col=["target_in_cell_half_life", "target_ribosome_load"],
         default_split_type="default",
         benchmark_set="core",
-        vep=False,
+        evaluations=("linear_probe",),
     )
 
     def __init__(

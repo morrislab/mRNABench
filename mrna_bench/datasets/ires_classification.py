@@ -38,7 +38,7 @@ class IRESClassification(BenchmarkDataset):
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",
-        vep=False,
+        evaluations=("linear_probe",),
     )
 
     SOURCE_COLUMNS: ClassVar[list[str]] = [

@@ -43,7 +43,8 @@ class LinearProbePersister:
         model_short_name: str,
         task: str,
         target_col: str,
-        split_type: str
+        split_type: str,
+        regressor: str = "ols",
     ):
         """Initialize LinearProbePersister.
 
@@ -53,10 +54,17 @@ class LinearProbePersister:
             task: Task evaluated.
             target_col: Target column evaluated.
             split_type: Type of data split used.
+            regressor: Regression estimator, either ``ols`` or ``ridge``.
         """
         self.dataset = dataset
         self.model_short_name = model_short_name
-        self.task = task
+        if regressor not in {"ols", "ridge"}:
+            raise ValueError("regressor must be one of ols or ridge.")
+        self.task = (
+            "regression_{}".format(regressor)
+            if task == "regression"
+            else task
+        )
         self.target_col = target_col
         self.split_type = split_type
 
@@ -191,36 +199,29 @@ class LinearProbePersister:
 
     @staticmethod
     def load_all_results(dataset_path: str | Path) -> list[dict]:
-        """Load every LP result row for a dataset.
-
-        Args:
-            dataset_path: Root path of the dataset.
-
-        Returns:
-            List of dicts with model, task, target_col, split_type,
-            seed, and metrics keys.
-        """
+        """Load every LP result row for a dataset."""
         db_path = Path(dataset_path) / "results.db"
         if not db_path.exists():
             return []
 
         conn = sqlite3.connect(str(db_path), timeout=60)
         conn.row_factory = sqlite3.Row
-
-        rows = conn.execute(
-            "SELECT model, task, target_col, split_type,"
-            "       seed, metrics FROM lp_results"
-        ).fetchall()
-        conn.close()
+        try:
+            rows = conn.execute(
+                "SELECT model, task, target_col, split_type,"
+                "       seed, metrics FROM lp_results"
+            ).fetchall()
+        finally:
+            conn.close()
 
         return [
             {
-                "model": r["model"],
-                "task": r["task"],
-                "target_col": r["target_col"],
-                "split_type": r["split_type"],
-                "seed": r["seed"],
-                "metrics": json.loads(r["metrics"]),
+                "model": row["model"],
+                "task": row["task"],
+                "target_col": row["target_col"],
+                "split_type": row["split_type"],
+                "seed": row["seed"],
+                "metrics": json.loads(row["metrics"]),
             }
-            for r in rows
+            for row in rows
         ]

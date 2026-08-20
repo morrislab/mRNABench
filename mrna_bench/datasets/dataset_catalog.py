@@ -1,4 +1,6 @@
-from .benchmark_dataset import BenchmarkDataset
+from typing import Any
+
+from .benchmark_dataset import BenchmarkDataset, EvaluationMethod
 
 from .apa_isoform import APAIsoform
 from .eclip_binding import eCLIPBindingK562, eCLIPBindingHepG2
@@ -54,13 +56,16 @@ DATASET_CATALOG: dict[str, type[BenchmarkDataset]] = {
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
 
-DATASET_INFO: dict[str, dict[str, str | list[str] | bool]] = {
+DATASET_INFO: dict[str, dict[str, Any]] = {
     name: {
         "dataset": cls.METADATA.dataset_name,
         "task": cls.METADATA.task,
         "target_col": cls.METADATA.target_col,
+        "evaluations": [
+            EvaluationMethod(evaluation).value
+            for evaluation in cls.METADATA.evaluations
+        ],
         "default_split_type": cls.METADATA.default_split_type,
-        "vep": cls.METADATA.vep,
     }
     for name, cls in DATASET_CATALOG.items()
 }

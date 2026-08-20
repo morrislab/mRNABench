@@ -29,7 +29,7 @@ class TranslationEfficiencyMouse(BenchmarkDataset):
         target_col=["target"],
         default_split_type="homology",
         benchmark_set="core",
-        vep=False,
+        evaluations=("linear_probe",),
     )
 
     def __init__(

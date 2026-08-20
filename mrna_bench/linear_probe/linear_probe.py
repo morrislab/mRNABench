@@ -28,10 +28,13 @@ class LinearProbe:
     to a disk.
     """
 
+    regression_models = {
+        "ols": lambda: LinearRegression(n_jobs=-1),
+        "ridge": lambda: RidgeCV(
+            alphas=[1e-3, 1e-2, 1e-1, 1, 10]
+        ),
+    }
     linear_models = {
-        "regression": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
-        "reg_lin": lambda: LinearRegression(n_jobs=-1),
-        "reg_ridge": lambda: RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
         "classification": lambda: LogisticRegression(max_iter=5000),
         "multilabel": lambda: MultiOutputClassifier(
             LogisticRegression(max_iter=5000),
@@ -49,7 +52,7 @@ class LinearProbe:
         evaluator: LinearProbeEvaluator,
         eval_all_splits: bool,
         persister: LinearProbePersister | None = None,
-        is_vep: bool = False
+        regressor: str = "ols",
     ):
         """Initialize LinearProbe.
 
@@ -66,23 +69,22 @@ class LinearProbe:
                 validation split otherwise.
             persister: Persister object for linear probing results.
                 If not provided, results will not be saved.
+            regressor: Regression estimator, either ``ols`` or ``ridge``.
         """
-        if task not in self.linear_models.keys():
+        valid_tasks = {*self.linear_models, "regression"}
+        if task not in valid_tasks:
             raise ValueError("Invalid task name.")
+        if regressor not in self.regression_models:
+            raise ValueError("regressor must be one of ols or ridge.")
 
         if target_col not in data_df.columns:
             raise ValueError("Target column not found in dataframe.")
 
         self.data_df = data_df.copy()
         self.data_df["embeddings"] = list(embeddings)
-        self.is_vep = is_vep
-
-        if self.is_vep:
-            from mrna_bench.linear_probe.vep import compute_vep_deltas
-
-            self.data_df = compute_vep_deltas(self.data_df)
 
         self.task = task
+        self.regressor = regressor
         self.target_col = target_col
 
         self.splitter = splitter
@@ -155,7 +157,11 @@ class LinearProbe:
         Returns:
             Dictionary of linear probing metrics per split.
         """
-        model = self.linear_models[self.task]()
+        model = (
+            self.regression_models[self.regressor]()
+            if self.task == "regression"
+            else self.linear_models[self.task]()
+        )
         splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
@@ -163,7 +169,7 @@ class LinearProbe:
         try:
             model.fit(splits["train_X"], splits["train_y"])
         except ValueError:
-            if self.task in ["regression", "reg_ridge"]:
+            if self.task == "regression" and self.regressor == "ridge":
                 model = Ridge(solver="sag", alpha=1e-3)
                 model.fit(splits["train_X"], splits["train_y"])
             else:
@@ -193,23 +199,19 @@ class LinearProbe:
         random_seeds: list[int],
         persist: bool = False
     ) -> dict[int, dict[str, float]]:
-        """Run multiple linear probes with distinct data split randomization.
+        """Run one linear probe per random seed.
 
         Args:
-            random_seeds: Trandom seeds used per individual linear probe run.
-            persist: Save results to data directory.
+            random_seeds: Random seeds used to generate dataset splits.
+            persist: Save each run to the configured persister.
 
         Returns:
-            Dictionary of metrics per random seed used to generate data splits
-            for each individual linear probing run.
+            Metrics for each random seed.
         """
-        metrics = {}
-
-        for random_seed in random_seeds:
-            metric = self.run_linear_probe(random_seed, persist)
-            metrics[random_seed] = metric
-
-        return metrics
+        return {
+            random_seed: self.run_linear_probe(random_seed, persist)
+            for random_seed in random_seeds
+        }
 
     def compute_multirun_results(
         self,
@@ -257,12 +259,12 @@ class LinearProbe:
         return metric_out
 
     def get_fit_model(self, random_seed: int) -> BaseEstimator:
-        """Get model trained on specific data split.
+        """Return the model trained for a specific split seed.
 
         Args:
-            random_seed: Random seed used to generate data split.
+            random_seed: Random seed identifying the fitted split.
 
         Returns:
-            Trained model for specific data split.
+            Estimator fitted for the requested seed.
         """
         return self.models[random_seed]

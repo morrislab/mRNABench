@@ -271,7 +271,7 @@ class MRLSampleEGFP(MRLSample):
         ],
         default_split_type="default",
         benchmark_set="core",
-        vep=False,
+        evaluations=("linear_probe",),
     )
 
     def __init__(
@@ -394,7 +394,7 @@ class MRLSampleMCherry(MRLSample):
         target_col=["target_mrl_mcherry"],
         default_split_type="default",
         benchmark_set="core",
-        vep=False,
+        evaluations=("linear_probe",),
     )
 
     def __init__(
@@ -428,7 +428,7 @@ class MRLSampleDesigned(MRLSample):
         target_col=["target_mrl_designed"],
         default_split_type="default",
         benchmark_set="core",
-        vep=False,
+        evaluations=("linear_probe",),
     )
 
     def __init__(
@@ -462,7 +462,7 @@ class MRLSampleVarying(MRLSample):
         target_col=["target_mrl_varying_length"],
         default_split_type="default",
         benchmark_set="core",
-        vep=False,
+        evaluations=("linear_probe",),
     )
 
     def __init__(

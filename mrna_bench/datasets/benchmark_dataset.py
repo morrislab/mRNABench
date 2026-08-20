@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, TYPE_CHECKING
 
 import pandas as pd
 
@@ -13,10 +14,26 @@ VALID_TASKS = (
     "regression",
     "classification",
     "multilabel",
-    "reg_lin",
-    "reg_ridge",
-    "zeroshot",
 )
+
+if TYPE_CHECKING:
+    from mrna_bench.models import EmbeddingModel
+
+
+class EvaluationMethod(StrEnum):
+    """Evaluation routes supported by a dataset."""
+
+    LINEAR_PROBE = "linear_probe"
+    EMBEDDING_VEP = "embedding_vep"
+    LIKELIHOOD_VEP = "likelihood_vep"
+
+
+@dataclass(frozen=True)
+class TaskSpec:
+    """One supported target and its biological prediction task."""
+
+    task: str
+    target_col: str
 
 
 @dataclass(frozen=True)
@@ -29,7 +46,21 @@ class DatasetMetadata:
     target_col: list[str]
     default_split_type: str
     benchmark_set: str
-    vep: bool
+    evaluations: tuple[EvaluationMethod | str, ...]
+    variant_region: str | None = None
+
+    @property
+    def is_vep(self) -> bool:
+        """Return whether the dataset defines a VEP evaluation route.
+
+        Returns:
+            True if embedding- or likelihood-based VEP is supported.
+        """
+        vep_methods = {
+            EvaluationMethod.EMBEDDING_VEP,
+            EvaluationMethod.LIKELIHOOD_VEP,
+        }
+        return bool(vep_methods.intersection(self.evaluations))
 
     def __post_init__(self):
         """Post-initialization checks."""
@@ -51,6 +82,89 @@ class DatasetMetadata:
                     "task elements must be one of {}".format(VALID_TASKS)
                 )
 
+        if not self.task or not self.target_col:
+            raise ValueError("task and target_col must not be empty.")
+        valid_cardinality = any((
+            len(self.task) == len(self.target_col),
+            len(self.task) == 1,
+            len(self.target_col) == 1,
+        ))
+        if not valid_cardinality:
+            raise ValueError(
+                "task and target_col must have equal lengths, or one side "
+                "must contain a single value."
+            )
+        evaluations = tuple(
+            EvaluationMethod(evaluation)
+            for evaluation in self.evaluations
+        )
+        if not evaluations:
+            raise ValueError("evaluations must not be empty.")
+        object.__setattr__(self, "evaluations", evaluations)
+        if self.variant_region not in {None, "full", "utr", "cds"}:
+            raise ValueError(
+                "variant_region must be one of full, utr, cds, or None."
+            )
+
+    @property
+    def task_specs(self) -> tuple[TaskSpec, ...]:
+        """Return explicit task/target combinations.
+
+        Returns:
+            Supported biological task and target-column pairs.
+        """
+        pairs = (
+            zip(self.task, self.target_col)
+            if len(self.task) == len(self.target_col)
+            else (
+                ((task, self.target_col[0]) for task in self.task)
+                if len(self.target_col) == 1
+                else ((self.task[0], target) for target in self.target_col)
+            )
+        )
+        return tuple(TaskSpec(task, target) for task, target in pairs)
+
+    def compatible_evaluations(
+        self,
+        model: "EmbeddingModel",
+    ) -> tuple[EvaluationMethod, ...]:
+        """Return dataset evaluations supported by a model.
+
+        Args:
+            model: Loaded embedding model to evaluate for compatibility.
+
+        Returns:
+            Dataset evaluation routes supported by the model.
+        """
+        from mrna_bench.models import ModelBehavior
+
+        compatible: list[EvaluationMethod] = []
+        for evaluation in self.evaluations:
+            evaluation = EvaluationMethod(evaluation)
+            has_embedding = model.supports(ModelBehavior.EMBEDDING)
+            has_likelihood = any((
+                model.supports(ModelBehavior.CAUSAL_LIKELIHOOD),
+                model.supports(ModelBehavior.PSEUDO_LIKELIHOOD),
+            ))
+            is_linear_probe = evaluation == EvaluationMethod.LINEAR_PROBE
+            if is_linear_probe and has_embedding:
+                compatible.append(evaluation)
+            score_scope = getattr(model, "sequence_score_scope", "full")
+            region_compatible = any((
+                self.variant_region is None,
+                score_scope == "full",
+                score_scope == self.variant_region,
+            ))
+            is_embedding_vep = evaluation == EvaluationMethod.EMBEDDING_VEP
+            if all((is_embedding_vep, has_embedding, region_compatible)):
+                compatible.append(evaluation)
+            is_likelihood_vep = (
+                evaluation == EvaluationMethod.LIKELIHOOD_VEP
+            )
+            if all((is_likelihood_vep, has_likelihood, region_compatible)):
+                compatible.append(evaluation)
+        return tuple(compatible)
+
 
 class BenchmarkDataset(ABC):
     """Abstract class for benchmarking datasets.
@@ -60,6 +174,26 @@ class BenchmarkDataset(ABC):
     """
 
     METADATA: ClassVar[DatasetMetadata]
+
+    def get_vep_pairs(
+        self,
+        dataframe: pd.DataFrame,
+        value_columns: tuple[str, ...] = ("sequence", "cds", "splice"),
+    ) -> pd.DataFrame:
+        """Return the dataset's variants in canonical ref/alt columns.
+
+        Args:
+            dataframe: Dataset rows containing reference and alternate
+                variants.
+            value_columns: Columns to copy into ref- and alt-prefixed output
+                columns.
+
+        Returns:
+            One row per variant with aligned reference and alternate values.
+        """
+        raise NotImplementedError(
+            f"{self.dataset_name} does not define VEP row pairing."
+        )
 
     def __init__(
         self,
@@ -131,33 +265,19 @@ class BenchmarkDataset(ABC):
         pass
 
     def subset_df(self, target_cols: list[str]) -> pd.DataFrame:
-        """Subset dataframe target columns.
-
-        Args:
-            df: Dataframe to subset.
-
-        Returns:
-            Subsetted dataframe.
-        """
-        if self.data_df is None:
-            raise RuntimeError("Dataframe not loaded.")
-        if not isinstance(self.data_df, pd.DataFrame):
-            raise TypeError("Dataframe is not a pandas DataFrame.")
-
-        # Set invariant columns
-        invariant_col_set = set(
-            [
-                "sequence",
-                "gene",
-                "chromosome",
-                "cds",
-                "splice",
-            ]
-        )
-
-        keep_col_set = invariant_col_set.union(set(target_cols))
-        keep_cols = [c for c in self.data_df.columns if c in keep_col_set]
-        return self.data_df[keep_cols]
+        """Return invariant sequence columns and requested targets."""
+        invariant_cols = {
+            "sequence",
+            "gene",
+            "chromosome",
+            "cds",
+            "splice",
+        }
+        keep_cols = invariant_cols.union(target_cols)
+        columns = [
+            column for column in self.data_df.columns if column in keep_cols
+        ]
+        return self.data_df[columns]
 
     def init_folders(self):
         """Initialize folders for storing raw data.
@@ -209,7 +329,7 @@ class BenchmarkDataset(ABC):
         split_ratios: tuple[float, float, float],
         random_seed: int = 2541,
         split_type: str | None = None,
-        split_kwargs: dict = {},
+        split_kwargs: dict | None = None,
     ) -> dict[str, pd.DataFrame]:
         """Get data splits for the dataset.
 
@@ -227,7 +347,8 @@ class BenchmarkDataset(ABC):
         if split_type is None:
             split_type = self.metadata.default_split_type
 
-        if split_type == "homology" and split_kwargs == {}:
+        split_kwargs = dict(split_kwargs or {})
+        if split_type == "homology" and "species" not in split_kwargs:
             split_kwargs["species"] = self.metadata.species
 
         splitter = SPLIT_CATALOG[split_type](**split_kwargs)

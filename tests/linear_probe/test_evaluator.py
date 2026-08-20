@@ -12,6 +12,7 @@ from mrna_bench.linear_probe.evaluator import (
     eval_classification,
     eval_multilabel
 )
+from mrna_bench.metrics import classification_metrics, multilabel_metrics
 
 
 @pytest.fixture
@@ -57,6 +58,96 @@ def test_classification(mock_classifier):
     assert isinstance(metrics, dict)
     assert "auroc" in metrics
     assert "auprc" in metrics
+    assert "mcc" in metrics
+    assert "balanced_accuracy" in metrics
+
+
+def test_multiclass_classification_metrics():
+    """Test multiclass classification reports macro/micro metrics."""
+    X = np.eye(6)
+    y = np.array([0, 0, 1, 1, 2, 2])
+    model = LogisticRegression().fit(X, y)
+
+    metrics = eval_classification(model, X, y)
+
+    assert "accuracy" in metrics
+    assert "f1_macro" in metrics
+    assert "auroc_macro" in metrics
+    assert "auroc_micro" in metrics
+    assert "auprc_macro" in metrics
+    assert "auprc_micro" in metrics
+
+
+def test_linear_probe_metrics_mark_missing_classes_nan():
+    """Probe evaluators mark undefined held-out metrics as NaN."""
+    X = np.eye(6)
+    model = LogisticRegression().fit(
+        X,
+        np.array([0, 0, 1, 1, 2, 2]),
+    )
+
+    classification = eval_classification(
+        model,
+        X[:4],
+        np.array([0, 0, 1, 1]),
+    )
+    assert np.isnan(classification["auroc_macro"])
+    assert np.isnan(classification["auprc_macro"])
+
+    multilabel_model = MultiOutputClassifier(LogisticRegression()).fit(
+        X[:4],
+        np.array([[0, 0], [0, 0], [1, 1], [1, 1]]),
+    )
+    multilabel = eval_multilabel(
+        multilabel_model,
+        X[:2],
+        np.zeros((2, 2), dtype=int),
+    )
+    assert np.isnan(multilabel["auroc_macro"])
+    assert np.isnan(multilabel["auprc_macro"])
+
+
+def test_classification_metrics_handle_missing_and_nonstandard_classes():
+    """Missing classes return NaN and binary labels need not be zero/one."""
+    binary = classification_metrics(
+        np.array([2, 3]),
+        np.array([[0.9, 0.1], [0.1, 0.9]]),
+        np.array([2, 3]),
+    )
+    assert binary["auprc"] == 1.0
+
+    missing = classification_metrics(
+        np.array([0, 0]),
+        np.array([[0.9, 0.1], [0.8, 0.2]]),
+        np.array([0, 1]),
+        missing_class_nan=True,
+    )
+    assert np.isnan(missing["auroc"])
+    assert np.isnan(missing["auprc"])
+
+    multiclass = classification_metrics(
+        np.array([0, 1]),
+        np.array([[0.8, 0.1, 0.1], [0.1, 0.8, 0.1]]),
+        np.array([0, 1, 2]),
+        missing_class_nan=True,
+    )
+    assert np.isnan(multiclass["auroc_macro"])
+    assert np.isnan(multiclass["auprc_macro"])
+    assert not np.isnan(multiclass["auroc_micro"])
+
+
+def test_multilabel_metrics_mark_only_undefined_averages_nan():
+    """A missing label class invalidates macro but not micro metrics."""
+    metrics = multilabel_metrics(
+        np.array([[0, 0], [1, 0]]),
+        np.array([[0.1, 0.2], [0.9, 0.3]]),
+        missing_class_nan=True,
+    )
+
+    assert np.isnan(metrics["auroc_macro"])
+    assert np.isnan(metrics["auprc_macro"])
+    assert not np.isnan(metrics["auroc_micro"])
+    assert not np.isnan(metrics["auprc_micro"])
 
 
 def test_multilabel(mock_multioutput_classifier):
@@ -66,8 +157,11 @@ def test_multilabel(mock_multioutput_classifier):
 
     metrics = eval_multilabel(mock_multioutput_classifier, X, y)
     assert isinstance(metrics, dict)
-    assert "auroc" in metrics
-    assert "auprc" in metrics
+    assert "auroc_micro" in metrics
+    assert "auroc_macro" in metrics
+    assert "auprc_micro" in metrics
+    assert "auprc_macro" in metrics
+    assert "mcc_micro" in metrics
 
 
 def test_linear_probe_evaluator_task_check():
@@ -119,4 +213,4 @@ def test_linear_probe_evaluator_evaluate(mock_regression):
         assert "train_mse" in metrics
         assert "train_p" in metrics
         assert "val_mse" in metrics
-        assert "train_p" in metrics
+        assert "val_p" in metrics

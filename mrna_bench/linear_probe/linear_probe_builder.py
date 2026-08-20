@@ -1,9 +1,8 @@
-from typing import Callable
-
 import numpy as np
 
 from mrna_bench import load_dataset
 from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
 from mrna_bench.embedder import get_embedding_filepath
 from mrna_bench.models import EmbeddingModel
@@ -11,7 +10,6 @@ from mrna_bench.models import EmbeddingModel
 from mrna_bench.linear_probe.linear_probe import LinearProbe
 from mrna_bench.linear_probe.persister import LinearProbePersister
 from mrna_bench.linear_probe.evaluator import LinearProbeEvaluator
-from mrna_bench.linear_probe.zeroshot_vep import ZeroShotVEP
 
 
 class LinearProbeBuilder:
@@ -83,6 +81,7 @@ class LinearProbeBuilder:
 
         self.target_col = self._resolve_default_target_col(metadata)
         self.task = self._resolve_default_task(metadata)
+        self.regressor = "ols"
         self.split_type = self._resolve_default_split_type(metadata)
         self.is_vep = self._resolve_default_vep(metadata)
         self.eval_all_splits = False
@@ -90,13 +89,10 @@ class LinearProbeBuilder:
         self.model_short_name: str | None = None
         self.embeddings: np.ndarray | None = None
         self.persister_flag = False
-        self.scoring_fn: Callable[[np.ndarray], np.ndarray] | None = None
 
-        self.splitter = self._build_default_splitter(metadata)
-        self.evaluator = (
+        self.splitter: DataSplitter | None = None
+        self.evaluator: LinearProbeEvaluator | None = (
             LinearProbeEvaluator(self.task)
-            if self.task != "zeroshot"
-            else None
         )
 
     @staticmethod
@@ -113,7 +109,7 @@ class LinearProbeBuilder:
             tasks = getattr(metadata, "task", None)
             if isinstance(tasks, list):
                 for task in tasks:
-                    if task in LinearProbeEvaluator.valid_tasks + ["zeroshot"]:
+                    if task in LinearProbeEvaluator.valid_tasks:
                         return task
         return "regression"
 
@@ -128,9 +124,9 @@ class LinearProbeBuilder:
     @staticmethod
     def _resolve_default_vep(metadata: object | None) -> bool:
         if metadata is not None:
-            vep = getattr(metadata, "vep", None)
-            if isinstance(vep, bool):
-                return vep
+            is_vep = getattr(metadata, "is_vep", None)
+            if isinstance(is_vep, bool):
+                return is_vep
         return False
 
     def _build_default_splitter(self, metadata: object | None):
@@ -149,23 +145,8 @@ class LinearProbeBuilder:
         self,
         model: EmbeddingModel,
     ) -> "LinearProbeBuilder":
-        """Get embeddings for LinearProbe from EmbeddingModel instance.
-
-        Args:
-            model: EmbeddingModel instance used to generate embeddings.
-
-        Returns:
-            LinearProbeBuilder with set embeddings.
-        """
-        self.model_short_name = model.short_name
-
-        self.embeddings = self.load_persisted_embeddings(
-            self.dataset.embedding_dir,
-            self.model_short_name,
-            self.dataset.dataset_name,
-        )
-
-        return self
+        """Load persisted embeddings using a model instance's short name."""
+        return self.fetch_embedding_by_model_name(model.short_name)
 
     def fetch_embedding_by_model_name(
         self,
@@ -260,6 +241,13 @@ class LinearProbeBuilder:
         """
         self.eval_all_splits = eval_all_splits
         self.split_type = split_type
+        if split_type == "homology" and "species" not in split_args:
+            species = getattr(self.dataset.metadata, "species", None)
+            if not isinstance(species, str) or species == "":
+                raise ValueError(
+                    "Homology splitting requires a dataset species."
+                )
+            split_args["species"] = species
         self.splitter = SPLIT_CATALOG[split_type](split_ratios, **split_args)
 
         return self
@@ -281,33 +269,27 @@ class LinearProbeBuilder:
         """Set evaluator for LinearProbe.
 
         Args:
-            task: Task for linear probing evaluation. Use ``"zeroshot"`` for
-                zero-shot VEP scoring (no training, no data split).
+            task: Linear probing task.
 
         Returns:
             LinearProbeBuilder with set evaluator.
         """
         self.task = task
-        self.evaluator = (
-            LinearProbeEvaluator(task) if task != "zeroshot" else None
-        )
-
+        self.evaluator = LinearProbeEvaluator(task)
         return self
 
-    def set_scoring_fn(
-        self,
-        scoring_fn: Callable[[np.ndarray], np.ndarray],
-    ) -> "LinearProbeBuilder":
-        """Set custom scoring function for zero-shot VEP.
+    def set_regressor(self, regressor: str) -> "LinearProbeBuilder":
+        """Select the estimator used for regression tasks.
 
         Args:
-            scoring_fn: Callable mapping an (N, D) delta matrix to (N,)
-                scalar scores. Only used when task is ``"zeroshot"``.
+            regressor: Regression estimator, either ``ols`` or ``ridge``.
 
         Returns:
-            LinearProbeBuilder with set scoring function.
+            LinearProbeBuilder with the selected regression estimator.
         """
-        self.scoring_fn = scoring_fn
+        if regressor not in LinearProbe.regression_models:
+            raise ValueError("regressor must be one of ols or ridge.")
+        self.regressor = regressor
         return self
 
     def use_persister(self) -> "LinearProbeBuilder":
@@ -340,10 +322,6 @@ class LinearProbeBuilder:
                 "model_short_name (required when persister is enabled)"
             )
 
-        is_probe = self.task != "zeroshot" and not self.is_vep
-        if is_probe and self.splitter is None:
-            missing.append("splitter (call build_splitter())")
-
         return missing
 
     def status(self) -> dict[str, object]:
@@ -351,6 +329,7 @@ class LinearProbeBuilder:
         return {
             "dataset_name": self.dataset.dataset_name,
             "task": self.task,
+            "regressor": self.regressor,
             "vep": self.is_vep,
             "target_col": self.target_col,
             "split_type": self.split_type,
@@ -361,13 +340,17 @@ class LinearProbeBuilder:
             "missing": self.validate(),
         }
 
-    def build(self) -> "LinearProbe | ZeroShotVEP":
-        """Build LinearProbe or ZeroShotVEP instance.
+    def build(self) -> LinearProbe:
+        """Build a LinearProbe instance.
 
         Returns:
-            LinearProbe for standard tasks, ZeroShotVEP when task is
-            ``"zeroshot"``.
+            Configured linear probe ready to run.
         """
+        if self.splitter is None:
+            self.splitter = self._build_default_splitter(
+                getattr(self.dataset, "metadata", None)
+            )
+
         missing = self.validate()
         if len(missing) > 0:
             raise ValueError(
@@ -380,35 +363,42 @@ class LinearProbeBuilder:
 
         if self.persister_flag:
             assert self.model_short_name is not None
-            split_type = "none" if self.task == "zeroshot" else self.split_type
             self.persister = LinearProbePersister(
                 self.dataset,
                 self.model_short_name,
                 self.task,
                 self.target_col,
-                split_type,
+                self.split_type,
+                regressor=self.regressor,
             )
 
         assert self.embeddings is not None
-
-        if self.task == "zeroshot":
-            return ZeroShotVEP(
-                self.data_df,
-                self.embeddings,
-                self.target_col,
-                self.persister,
-                self.scoring_fn,
-            )
-
         assert self.evaluator is not None
+        assert self.splitter is not None
+        data_df = self.data_df
+        embeddings = self.embeddings
+        if self.is_vep:
+            data_df = data_df.copy()
+            data_df["embeddings"] = list(embeddings)
+            data_df = self.dataset.get_vep_pairs(
+                data_df,
+                ("embeddings",),
+            )
+            embeddings = np.subtract(
+                np.stack(data_df["alt_embeddings"]),
+                np.stack(data_df["ref_embeddings"]),
+            )
+            data_df = data_df.drop(
+                columns=["ref_embeddings", "alt_embeddings"]
+            )
         return LinearProbe(
-            self.data_df,
-            self.embeddings,
+            data_df,
+            embeddings,
             self.target_col,
             self.task,
             self.splitter,
             self.evaluator,
             self.eval_all_splits,
             self.persister,
-            self.is_vep,
+            self.regressor,
         )

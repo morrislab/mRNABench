@@ -38,6 +38,41 @@ class VEPTraitGym(BenchmarkDataset):
     complex_url = "complex_traits_matched_9/test.parquet"
     mendelian_url = "mendelian_traits_matched_9/test.parquet"
 
+    def get_vep_pairs(
+        self,
+        dataframe: pd.DataFrame,
+        value_columns: tuple[str, ...] = ("sequence", "cds", "splice"),
+    ) -> pd.DataFrame:
+        """Pair each variant with its transcript's wild-type row.
+
+        Args:
+            dataframe: TraitGym rows containing wild-type and variant
+                sequences.
+            value_columns: Columns to copy into ref- and alt-prefixed output
+                columns.
+
+        Returns:
+            Variant rows with aligned reference and alternate values.
+        """
+        is_reference = dataframe["description"].eq("wild-type")
+        references = dataframe[is_reference].set_index("transcript_id")
+        variants = dataframe[~is_reference].copy()
+        missing = sorted(
+            set(variants["transcript_id"]) - set(references.index)
+        )
+        if missing:
+            raise ValueError(
+                "Missing wild-type for transcripts: {}".format(
+                    ", ".join(map(str, missing))
+                )
+            )
+        for column in value_columns:
+            variants[f"ref_{column}"] = variants["transcript_id"].map(
+                references[column]
+            )
+            variants[f"alt_{column}"] = variants[column]
+        return variants.reset_index(drop=True)
+
     def __init__(
         self,
         force_redownload_hf: bool = False,
@@ -279,11 +314,12 @@ class VEPTraitGymMendelian(VEPTraitGym):
     METADATA = DatasetMetadata(
         dataset_name="vep-traitgym-mendelian",
         species="human",
-        task=["classification", "zeroshot"],
+        task=["classification"],
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",
-        vep=True,
+        evaluations=("linear_probe", "embedding_vep", "likelihood_vep"),
+        variant_region="utr",
     )
 
     def __init__(
@@ -313,11 +349,12 @@ class VEPTraitGymComplex(VEPTraitGym):
     METADATA = DatasetMetadata(
         dataset_name="vep-traitgym-complex",
         species="human",
-        task=["classification", "zeroshot"],
+        task=["classification"],
         target_col=["target"],
         default_split_type="default",
         benchmark_set="core",
-        vep=True,
+        evaluations=("linear_probe", "embedding_vep", "likelihood_vep"),
+        variant_region="utr",
     )
 
     def __init__(
