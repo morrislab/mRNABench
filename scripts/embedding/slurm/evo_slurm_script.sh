@@ -1,14 +1,14 @@
 #!/bin/bash
 
 #SBATCH --job-name=evo_embed
-#SBATCH --partition=gpu
+#SBATCH --partition=gpu,morrisq
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
-#SBATCH --constraint=h100
+#SBATCH --constraint=h100|l40s
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=2
-#SBATCH --mem-per-cpu=32GB
-#SBATCH --time=02:00:00
+#SBATCH --mem-per-cpu=128GB
+#SBATCH --time=12:00:00
 #SBATCH --output=./logs/evo_embed.%A.out
 #SBATCH --error=./logs/evo_embed.%A.err
 
@@ -29,8 +29,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-source [path/to/conda.sh]
-conda activate [path/to/env]
+source /home/dalalt1/miniforge3/etc/profile.d/conda.sh
+conda activate mrnabench
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 if [[ "$force_recompute" == "True" ]]; then

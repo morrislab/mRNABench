@@ -120,7 +120,9 @@ if __name__ == "__main__":
 
                     for ckpt in get_ckpts_from_dir(os.path.join(args.model_dir, model_version), choice, args.best_onward):
 
-                        model_short_name = (model_version + "_" + ckpt.replace(".ckpt", "")).replace("_", "-").replace("-track", "").replace("best-", "")
+                        model_short_name = (
+                            model_version + "_" + ckpt.replace(".ckpt", "")
+                        ).replace("_", "-").replace("-track", "").replace("best-", "")
 
                         # ----------------------------
                         # embedding VEP: single run, no splits, no seeds
@@ -164,7 +166,7 @@ if __name__ == "__main__":
                         # ----------------------------
                         if args.canonical_split:
                             valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
-                        elif "mrl-sample" in dataset_name:
+                        elif "mrl-sample" in dataset_name or "apa-isoform" in dataset_name or "ires-classification" in dataset_name:
                             valid_split_types = ["default", "hard-kmer", "kmer"]
                         elif "mrl-hl-lbkwk" in dataset_name:
                             valid_split_types = ["default"]

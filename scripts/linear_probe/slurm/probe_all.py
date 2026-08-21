@@ -43,6 +43,7 @@ if __name__ == "__main__":
         choices=["ols", "ridge"],
         default="ols",
     )
+    parser.add_argument("--model_version", type=str, default=None, help="Specify a model version to run. If not provided, all versions will be run.")
     args = parser.parse_args()
 
     for _, dataset_info in DATASET_INFO.items():
@@ -53,8 +54,17 @@ if __name__ == "__main__":
         dataset = mb.load_dataset(dataset_name)
 
         skip_model_keys = [
+            "evo2-40b-base",
             "evo2-40b",
-            "replicate" # skip the borzoi and flashzoi replicate models
+            "replicate", # skip the individual borzoi and flashzoi replicate models
+            "aido-dna",
+            "aido-rna-mars",
+            "carbon",
+            "utrlm-base",
+            "utrlm-ss",
+            "rnaernie2",
+            "dnabert-3mer", "dnabert-4mer", "dnabert-5mer", "dnabert-6mer",
+            "ernierna-mrl",
         ]
 
         jobs = [
@@ -84,6 +94,8 @@ if __name__ == "__main__":
             for task in tasks:
                 for model_name, model_versions in MODEL_VERSION_MAP.items():
                     for model_version in model_versions:
+                        if args.model_version is not None and model_version != args.model_version:
+                            continue
 
                         model_short_name = MODEL_CATALOG[model_name].get_model_short_name(model_version)
 
@@ -247,7 +259,7 @@ if __name__ == "__main__":
                         # ----------------------------
                         if args.canonical_split:
                             valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
-                        elif "mrl-sample" in dataset_name:
+                        elif "mrl-sample" in dataset_name or "apa-isoform" in dataset_name or "ires-classification" in dataset_name:
                             valid_split_types = ["default", "hard-kmer", "kmer"]
                         elif "mrl-hl-lbkwk" in dataset_name:
                             valid_split_types = ["default"]

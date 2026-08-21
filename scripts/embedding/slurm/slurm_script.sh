@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #SBATCH --job-name=embed
-#SBATCH --partition=gpu
+#SBATCH --partition=gpu,morrisq
 #SBATCH --gres=gpu:1
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=4
@@ -28,8 +28,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-source [path/to/conda.sh]
-conda activate [path/to/env]
+source /home/dalalt1/miniforge3/etc/profile.d/conda.sh
+conda activate mrnabench
 
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 

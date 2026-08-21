@@ -1,11 +1,11 @@
 #!/bin/bash
 #SBATCH --job-name=orthrus_lp
-#SBATCH --partition=cpu
+#SBATCH --partition=cpu,morrisq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
 #SBATCH --mem-per-cpu=32GB
-#SBATCH --time=6:00:00
+#SBATCH --time=2:00:00
 #SBATCH --output=./logs/orthrus_lp.%A.out
 #SBATCH --error=./logs/orthrus_lp.%A.err
 
@@ -34,8 +34,8 @@ while [[ "$#" -gt 0 ]]; do
     shift
 done
 
-source [path/to/conda.sh]
-conda activate [path/to/env]
+source /home/dalalt1/miniforge3/etc/profile.d/conda.sh
+conda activate mrnabench
 
 # if force_recompute is set to True
 if [ "$force_recompute" == "True" ]; then

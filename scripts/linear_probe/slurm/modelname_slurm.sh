@@ -1,17 +1,17 @@
 #!/bin/bash
 
 #SBATCH --job-name=linear_probe
-#SBATCH --partition=cpu
+#SBATCH --partition=cpu,morrisq
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=4
-#SBATCH --mem=300G
+#SBATCH --mem=500GB
 #SBATCH --time=5:00:00
 #SBATCH --output=./logs/linear_probe.%A.out
 #SBATCH --error=./logs/linear_probe.%A.err
 
-source [path/to/conda.sh]
-conda activate [path/to/env]
+source /home/dalalt1/miniforge3/etc/profile.d/conda.sh
+conda activate mrnabench
 
 export OMP_NUM_THREADS=4
 export MKL_NUM_THREADS=4

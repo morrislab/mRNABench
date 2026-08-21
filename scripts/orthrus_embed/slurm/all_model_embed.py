@@ -94,7 +94,9 @@ if __name__ == "__main__":
 
             for ckpt in get_ckpts_from_dir(os.path.join(args.model_dir, model_version), choice, args.best_onward):
 
-                model_short_name = (model_version + "_" + ckpt.replace(".ckpt", "")).replace("_", "-").replace("-track", "").replace("best-", "")
+                model_short_name = (
+                    model_version + "_" + ckpt.replace(".ckpt", "")
+                ).replace("_", "-").replace("-track", "").replace("best-", "")
 
                 if (emb_dir / f"{dataset_name}_{model_short_name}.npz").exists() and not args.force_recompute:
                     # Skip if embedding already exists
