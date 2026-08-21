@@ -41,7 +41,12 @@ def test_dnaberts_embed_batch_ragged(model):
         "ATGATG" * 100,
     ]
 
-    assert_pooled_batch_matches_single(model, sequences)
+    with pytest.warns(RuntimeWarning, match="batch size 1"):
+        assert_pooled_batch_matches_single(
+            model,
+            sequences,
+            atol=1e-4,
+        )
 
 
 @torch.no_grad()

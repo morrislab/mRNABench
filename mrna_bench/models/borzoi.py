@@ -288,10 +288,13 @@ class Borzoi(EmbeddingModel):
                     for _, _, chunk, padding_left in batch_records
                 ]).permute(0, 2, 1).to(self.device)
 
-                replicate_embeds = [
-                    model.get_embs_after_crop(batch)
-                    for model in self.models
-                ]
+                # cuDNN TF32 changes convolution results with batch shape.
+                # Use full FP32 so persisted embeddings are batch-size stable.
+                with self._full_precision_cudnn():
+                    replicate_embeds = [
+                        model.get_embs_after_crop(batch)
+                        for model in self.models
+                    ]
                 embedded = torch.stack(replicate_embeds).mean(dim=0)
 
                 for batch_idx, (

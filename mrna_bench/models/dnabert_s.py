@@ -115,6 +115,7 @@ class DNABERTS(EmbeddingModel):
             - default (mean): (768,)
         """
         _, _ = cds, splice
+        self._warn_batch_size_reproducibility(len(sequences))
 
         toks = self.tokenizer(
             sequences,

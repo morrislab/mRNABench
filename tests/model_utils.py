@@ -25,6 +25,8 @@ def assert_pooled_batch_matches_single(
     sequences: list[str],
     cds: list[np.ndarray] | None = None,
     splice: list[np.ndarray] | None = None,
+    atol: float = 1e-5,
+    rtol: float = 1e-5,
 ) -> None:
     """Check pooled batch outputs against one-at-a-time inference."""
     batch_output = model.embed(sequences, cds, splice)
@@ -37,8 +39,8 @@ def assert_pooled_batch_matches_single(
         torch.testing.assert_close(
             batch_output[i].cpu(),
             single.cpu(),
-            atol=1e-5,
-            rtol=1e-5,
+            atol=atol,
+            rtol=rtol,
         )
 
 

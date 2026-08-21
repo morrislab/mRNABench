@@ -956,6 +956,28 @@ class EmbeddingModel(SupportsEmbedding, ABC):
             self._remove_hooks(handles)
         return output, activations
 
+    @staticmethod
+    def _full_precision_cudnn() -> Any:
+        """Run cuDNN operations without TF32 while preserving other flags."""
+        return torch.backends.cudnn.flags(
+            enabled=torch.backends.cudnn.enabled,
+            benchmark=torch.backends.cudnn.benchmark,
+            benchmark_limit=torch.backends.cudnn.benchmark_limit,
+            deterministic=torch.backends.cudnn.deterministic,
+            allow_tf32=False,
+        )
+
+    def _warn_batch_size_reproducibility(self, batch_size: int) -> None:
+        """Warn when batching can introduce shape-dependent numeric drift."""
+        if batch_size > 1:
+            warnings.warn(
+                "{} batched inference can produce small shape-dependent "
+                "floating-point differences. Use batch size 1 for maximum "
+                "reproducibility.".format(self.__class__.__name__),
+                RuntimeWarning,
+                stacklevel=2,
+            )
+
     def _remove_hooks(self, handles: list[Any]) -> None:
         """Remove all registered forward hooks.
 

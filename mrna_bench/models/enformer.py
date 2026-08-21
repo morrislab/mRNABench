@@ -135,11 +135,14 @@ class Enformer(EmbeddingModel):
                 torch.tensor(str_to_ohe(padded), dtype=torch.float32)
                 for _, _, _, _, padded in batch_records
             ]).to(self.device)
-            _, embedded = self.model(
-                batch,
-                return_embeddings=True,
-                target_length=-1,
-            )
+            # cuDNN TF32 changes convolution results with batch shape.
+            # Use full FP32 so persisted embeddings are batch-size stable.
+            with self._full_precision_cudnn():
+                _, embedded = self.model(
+                    batch,
+                    return_embeddings=True,
+                    target_length=-1,
+                )
             for batch_idx, (
                 sequence_idx, chunk_idx, chunk, padding_left, _
             ) in enumerate(batch_records):

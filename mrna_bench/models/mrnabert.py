@@ -176,6 +176,8 @@ class mRNABERT(EmbeddingModel):
                 "CDS tracks must be provided for mRNABERT embedding."
             )
 
+        self._warn_batch_size_reproducibility(len(sequences))
+
         all_chunks = []
         chunk_counts = []
         for sequence, cds_track in zip(sequences, cds):

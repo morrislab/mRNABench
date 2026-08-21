@@ -175,9 +175,12 @@ class AlphaGenome(EmbeddingModel):
                     dtype=torch.long,
                     device=self.device,
                 )
-                embeddings = model.encode(
-                    batch, organism_index, resolutions=(1,)
-                )["embeddings_1bp"]
+                # cuDNN TF32 changes convolution results with batch shape.
+                # Use full FP32 so persisted embeddings are batch-size stable.
+                with self._full_precision_cudnn():
+                    embeddings = model.encode(
+                        batch, organism_index, resolutions=(1,)
+                    )["embeddings_1bp"]
 
                 for batch_idx, (
                     sequence_idx, chunk_idx, chunk

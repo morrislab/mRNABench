@@ -149,11 +149,13 @@ def test_mrnabert_embed_batch_ragged(model):
     sequences = ["ATGATG", "GCGCGCGCGCGC", "AAA", "ATGATGATG"]
     cds = [make_cds(s) for s in sequences]
 
-    assert_pooled_batch_matches_single(
-        model,
-        sequences,
-        cds=cds,
-    )
+    with pytest.warns(RuntimeWarning, match="batch size 1"):
+        assert_pooled_batch_matches_single(
+            model,
+            sequences,
+            cds=cds,
+            atol=1e-4,
+        )
 
 
 def test_mrnabert_requires_cds(model):

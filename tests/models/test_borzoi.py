@@ -55,7 +55,7 @@ def test_borzoi_embed_batch(borzoi):
         assert torch.allclose(
             batch_output[i:i + 1],
             single_output,
-            atol=1e-4
+            atol=1e-5
         ), "Mismatch at sequence {} (len {})".format(i, len(seq))
 
 
