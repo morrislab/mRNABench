@@ -4,6 +4,7 @@ from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
     DatasetMetadata,
 )
+from mrna_bench.datasets.go_utils import build_go_dataset
 
 
 HF_URL = (
@@ -43,6 +44,5 @@ class GOMolecularFunction(BenchmarkDataset):
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
-        raise NotImplementedError(
-            "Code documenting GO Molecular Function data is still in progress."
-        )
+        """Rebuild GO Molecular Function data from source annotations."""
+        return build_go_dataset("mf", self.raw_data_dir)

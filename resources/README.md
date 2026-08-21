@@ -1,4 +1,6 @@
-# Ietswaart RNA lifecycle dataset processing
+# Dataset source artifacts
+
+## Ietswaart RNA lifecycle dataset processing
 
 This directory contains the intermediate transcript tables used by mRNABench
 to construct `rna-lifecycle-ietswaart`.
@@ -9,7 +11,7 @@ one. A compartment receives a positive label when its normalized coverage
 share is below that compartment's 33rd percentile across dataset rows. The
 target order is `[chromatin, cytoplasm, polysome]`.
 
-## Original direct-RNA data
+### Original direct-RNA data
 
 Ietswaart et al. generated direct RNA sequencing data from four K562 RNA
 fractions:
@@ -42,7 +44,7 @@ accessions and FAST5 signal files.
 Researchers seeking the same consolidated FASTQ files can contact the original
 study authors.
 
-## mRNABench FASTQ-to-table processing
+### mRNABench FASTQ-to-table processing
 
 The mRNABench reprocessing used this input layout. `barcode01` through
 `barcode08` are workflow directory identifiers, not molecular barcodes.
@@ -129,7 +131,7 @@ Each table contains reference gene and transcript identifiers, gffcompare
 class code, query transcript identifier, exon count, transcript coverage, and
 transcript length.
 
-## Transcript tables to benchmark labels
+### Transcript tables to benchmark labels
 
 `RNALifecycleIetswaart._get_data_from_raw()` performs these steps:
 
@@ -163,9 +165,27 @@ value in the
 [`morrislab/rna-lifecycle-ietswaart`](https://huggingface.co/datasets/morrislab/rna-lifecycle-ietswaart)
 dataset.
 
-## Stored source tables
+### Stored source tables
 
 `ietswaart_wf_transcript_tables.tar.gz` stores the eight transcript tables used
 by the dataset builder. Git LFS manages the 4 MB archive, and Python wheels
 exclude it. `RNALifecycleIetswaart(force_rebuild_raw=True)` downloads the
 archive on demand and runs the table-to-label processing above.
+
+## Gene Ontology source annotations
+
+`go_annotations.tsv.gz` stores the exact selected transcripts and GO
+assignments for the molecular-function, biological-process, and
+cellular-component tasks. The labels were collected by querying MyGene.info
+with human APPRIS gene symbols, retaining all evidence codes, requiring a
+direct three-edge `is_a` path from each branch root, and selecting the 20 most
+frequent terms.
+
+The MyGene.info records are from spring 2023, while the final class set is
+consistent with `go-basic.obo` release 2025-03-16. Historical API responses
+were not versioned, so the compact table freezes the published assignments
+without retaining the original 1.17 GB padded arrays.
+
+`build_go_dataset()` recreates sequence, CDS, splice, and chromosome features
+from GenomeKit's GENCODE v41 annotation. The resulting dataframes match every
+ordered value in the published GO parquets.
