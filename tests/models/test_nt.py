@@ -103,6 +103,14 @@ def test_nt_gradient_flow(model):
     model.set_inference_mode()
 
 
+def test_nt_hookable_layers_match_encoder(model):
+    """Expose every encoder layer after stripping the masked-LM head."""
+    assert model.hookable_layers == [
+        f"encoder.layer.{idx}"
+        for idx in range(model.model.config.num_hidden_layers)
+    ]
+
+
 def test_nt_extract_structure(model):
     """extract() returns (dict, dict) with matching keys; hidden states are 2D."""
     h, s = model.extract(["ATGATG"], layers=[0])
@@ -116,7 +124,7 @@ def test_nt_extract_structure(model):
 def test_nt_extract_layer_selection(model):
     """Requesting layers=[0] returns exactly 1 layer."""
     h, _ = model.extract(["ATGATG"], layers=[0])
-    assert len(h) == 1
+    assert list(h) == [model.hookable_layers[0]]
 
 
 def test_nt_extract_attention_weights(model):

@@ -40,7 +40,7 @@ class NucleotideTransformer(EmbeddingModel):
         "sdpa",
         "flash_attention_2"
     ]
-    hookable_layer_patterns = [r"esm\.encoder\.layer\.\d+"]
+    hookable_layer_patterns = [r"(?:esm\.)?encoder\.layer\.\d+"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,
