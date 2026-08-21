@@ -119,21 +119,31 @@ class Evo2(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
         self.tokenizer.padding_side = "right"
+        model_kwargs: dict[str, Any] = {}
+        if device.type == "cuda":
+            model_kwargs["device_map"] = "auto"
+
         loaded_model: Any = AutoModelForCausalLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
+            **model_kwargs,
         )
         loaded_model.config.use_cache = False
-        self._set_logits_model(loaded_model.to(self.device))
+        if "device_map" in model_kwargs:
+            self.device = loaded_model.get_input_embeddings().weight.device
+        else:
+            loaded_model = loaded_model.to(self.device)
+        self._set_logits_model(loaded_model)
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = self.max_length
         # Middle block = num_layers // 2 (per the Evo2 HF port READMEs). Its
         # pre-norm output is concatenated with the final-layer embedding.
         self.middle_layer_idx = self.version_to_num_layers[model_version] // 2
-        model: Any = self.model
-        self._middle_block = model.blocks[self.middle_layer_idx]
+        self.middle_layer_path = (
+            f"blocks.{self.middle_layer_idx}.pre_norm"
+        )
 
     @property
     def hookable_layers(self) -> list[str]:
@@ -195,16 +205,25 @@ class Evo2(EmbeddingModel):
                 padding=True,
                 return_tensors="pt",
             ).to(self.device)
-            outputs = self.model(
-                **toks,
-                output_hidden_states=True,
-                use_cache=False,
+            outputs, captured = self._run_with_layer_capture(
+                [self.middle_layer_path],
+                lambda: self.model(
+                    **toks,
+                    output_hidden_states=False,
+                    use_cache=False,
+                ),
+                detach=False,
             )
-            middle_hidden = self._middle_block.pre_norm(
-                outputs.hidden_states[self.middle_layer_idx]
-            )
+            middle_outputs = captured[self.middle_layer_path]
+            if len(middle_outputs) != 1:
+                raise RuntimeError(
+                    "Failed to capture Evo2 middle hidden state."
+                )
+            middle_hidden = middle_outputs[0]
+            middle_hidden = middle_hidden.to(outputs.last_hidden_state.device)
             combined = torch.cat(
-                [middle_hidden, outputs.hidden_states[-1]], dim=-1
+                [middle_hidden, outputs.last_hidden_state],
+                dim=-1,
             )
             lengths = toks["attention_mask"].sum(dim=1)
 

@@ -895,11 +895,13 @@ class EmbeddingModel(SupportsEmbedding, ABC):
     def _register_hooks(
         self,
         layer_paths: list[str],
+        detach: bool = True,
     ) -> tuple[list[Any], dict[str, list[torch.Tensor]]]:
         """Register forward hooks on modules at the given paths.
 
         Args:
             layer_paths: Module paths relative to self.model.
+            detach: Detach captured tensors from autograd.
 
         Returns:
             (handles, activations) where handles must be removed after the
@@ -920,11 +922,39 @@ class EmbeddingModel(SupportsEmbedding, ABC):
                     output: torch.Tensor | tuple[torch.Tensor, ...],
                 ) -> None:
                     out = output[0] if isinstance(output, tuple) else output
-                    activations[name].append(out.detach())
+                    activations[name].append(
+                        out.detach() if detach else out
+                    )
                 return hook
 
             handles.append(module.register_forward_hook(make_hook(path)))
         return handles, activations
+
+    def _run_with_layer_capture(
+        self,
+        layer_paths: list[str],
+        forward_fn: Callable[[], Any],
+        detach: bool = True,
+    ) -> tuple[Any, dict[str, list[torch.Tensor]]]:
+        """Run a forward callable while capturing selected module outputs.
+
+        Args:
+            layer_paths: Module paths relative to self.model.
+            forward_fn: Zero-argument callable that runs the model forward.
+            detach: Detach captured tensors from autograd.
+
+        Returns:
+            The forward result and captured outputs grouped by module path.
+        """
+        handles, activations = self._register_hooks(
+            layer_paths,
+            detach=detach,
+        )
+        try:
+            output = forward_fn()
+        finally:
+            self._remove_hooks(handles)
+        return output, activations
 
     def _remove_hooks(self, handles: list[Any]) -> None:
         """Remove all registered forward hooks.

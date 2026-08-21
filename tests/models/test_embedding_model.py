@@ -141,6 +141,28 @@ def test_resolve_layer_paths_rejects_undeclared_strings(model):
         model._resolve_layer_paths(["weight"])
 
 
+def test_run_with_layer_capture_supports_multiple_paths(model):
+    """Selected layer outputs can be captured without detaching gradients."""
+    model.model = torch.nn.Sequential(
+        torch.nn.Linear(4, 4),
+        torch.nn.ReLU(),
+    )
+    inputs = torch.randn(2, 4, requires_grad=True)
+
+    output, activations = model._run_with_layer_capture(
+        ["0", "1"],
+        lambda: model.model(inputs),
+        detach=False,
+    )
+
+    assert set(activations) == {"0", "1"}
+    assert len(activations["0"]) == len(activations["1"]) == 1
+    assert activations["0"][0].requires_grad
+    assert activations["1"][0].requires_grad
+    output.sum().backward()
+    assert inputs.grad is not None
+
+
 def test_embed_with_chunking_applies_pooling_mask(model):
     """Test that pooling_mask is used to filter tokens."""
     sequences = ["A", "ATGATG"]
