@@ -271,7 +271,13 @@ The current datasets catalogued are:
 ### RNA Lifecycle
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |
 |---|---|---|---|---|
-| RNA Lifecycle (Ietswaart) | <code>rna&#8209;lifecycle&#8209;ietswaart</code> | RNA lifecycle properties including synthesis, processing, and degradation rates in human cells. | `multilabel` | [paper](https://pubmed.ncbi.nlm.nih.gov/38964322/) |
+| RNA Lifecycle (Ietswaart) | <code>rna&#8209;lifecycle&#8209;ietswaart</code> | Lower-tertile normalized coverage share across chromatin, cytoplasm, and polysome fractions in human K562 cells. | `multilabel` | [paper](https://pubmed.ncbi.nlm.nih.gov/38964322/) |
+
+The transcript tables used to rebuild this dataset are stored with Git LFS at
+`resources/ietswaart_wf_transcript_tables.tar.gz` and excluded from the Python
+wheel. Installed copies download them only when
+`RNALifecycleIetswaart(force_rebuild_raw=True)` is requested. Processing is
+documented in `resources/README.md`.
 
 ### miRNA Target Prediction
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |

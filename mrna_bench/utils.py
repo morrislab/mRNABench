@@ -1,3 +1,4 @@
+import hashlib
 import os
 from pathlib import Path
 import requests
@@ -10,7 +11,8 @@ from warnings import warn
 def download_file(
     url: str,
     download_dir: str,
-    force_redownload: bool = False
+    force_redownload: bool = False,
+    expected_sha256: str | None = None,
 ) -> str:
     """Download file at the given url.
 
@@ -18,28 +20,54 @@ def download_file(
         url: URL of file to be downloaded.
         download_dir: Directory to store downloaded file.
         force_redownload: Forces download even if file already exists.
+        expected_sha256: Optional SHA-256 checksum for validation.
 
     Returns:
         Path to downloaded file.
     """
-    response = requests.get(url, stream=True)
-    response.raise_for_status()
-    total_bytes = int(response.headers.get("content-length", 0))
+    output_path = Path(download_dir) / os.path.basename(url)
+    output_path.parent.mkdir(parents=True, exist_ok=True)
 
-    output_path = download_dir + "/" + os.path.basename(url)
+    def checksum_matches(path: Path) -> bool:
+        if expected_sha256 is None:
+            return True
+        with path.open("rb") as handle:
+            observed = hashlib.file_digest(handle, "sha256").hexdigest()
+        return observed == expected_sha256
 
-    if os.path.isfile(output_path) and not force_redownload:
+    cached_file_is_valid = False
+    if output_path.is_file() and not force_redownload:
+        cached_file_is_valid = checksum_matches(output_path)
+    if cached_file_is_valid:
         print("File already downloaded.")
-        return output_path
+        return str(output_path)
 
-    with open(output_path, "wb") as f:
-        with tqdm(total=total_bytes, unit="B", unit_scale=True) as bar:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
-                    bar.update(len(chunk))
+    partial_path = output_path.with_suffix(output_path.suffix + ".part")
+    partial_path.unlink(missing_ok=True)
+    try:
+        with requests.get(url, stream=True) as response:
+            response.raise_for_status()
+            total_bytes = int(response.headers.get("content-length", 0))
+            with partial_path.open("wb") as output:
+                with tqdm(
+                    total=total_bytes,
+                    unit="B",
+                    unit_scale=True,
+                ) as bar:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            output.write(chunk)
+                            bar.update(len(chunk))
 
-    return output_path
+        if not checksum_matches(partial_path):
+            raise RuntimeError(
+                f"Checksum mismatch while downloading {url}."
+            )
+        partial_path.replace(output_path)
+    finally:
+        partial_path.unlink(missing_ok=True)
+
+    return str(output_path)
 
 
 class DataManager:
