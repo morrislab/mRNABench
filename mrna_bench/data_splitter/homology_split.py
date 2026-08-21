@@ -283,8 +283,7 @@ def build_homology_map(
         columns=["gene_name", "gene_group"],
     )
     group_sizes = homology.groupby("gene_group").size().to_dict()
-    # The published notebook merges groups only when half their cross-product
-    # appears as conflicts during the greedy scan.
+    # Merge groups when conflicts cover at least half their cross-product.
     parent = {group: group for group in group_sizes}
 
     def root(group: int) -> int:

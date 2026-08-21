@@ -33,7 +33,7 @@ SOURCE_SHA256 = (
 LIFECYCLE_QUANTILE = 0.33
 COMPARTMENTS = ("chr", "cyto", "poly")
 
-# Preserve the source-table order used to create the published rows.
+# Replicate order determines row order for many-to-many transcript matches.
 TABLE_ORDER = {
     "chr": ("K562_chr_1", "K562_chr_2"),
     "cyto": ("K562_cyto_1", "K562_cyto_2"),

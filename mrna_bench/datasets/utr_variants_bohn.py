@@ -128,7 +128,7 @@ class UTRVariantsBohn(BenchmarkDataset):
 
             utr5_length = sum(utr5_lengths)
             cds_length = sum(cds_lengths)
-            # Preserve the source notebook's published feature-track order.
+            # The stored track marks UTR/CDS segment ends, not exon junctions.
             regions = utr3_lengths + cds_lengths + utr5_lengths
             total_length = sum(regions)
 
