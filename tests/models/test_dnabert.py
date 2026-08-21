@@ -70,10 +70,11 @@ def test_dnabert_kmer_k_value(dnabert):
 
 def test_dnabert_masked_marginal_llr(dnabert):
     """DNABERT scores every overlapping k-mer changed by the substitution."""
-    score = dnabert.masked_marginal_llr(
-        ["ATGATGATGATG"],
-        ["ATGACGATGATG"],
-    )[0]
+    with pytest.warns(RuntimeWarning, match="multiple tokenizer tokens"):
+        score = dnabert.masked_marginal_llr(
+            ["ATGATGATGATG"],
+            ["ATGACGATGATG"],
+        )[0]
     assert math.isfinite(score)
 
 

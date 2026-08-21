@@ -141,7 +141,10 @@ def test_alphagenome_extract_layer_selection(alphagenome):
 def test_alphagenome_extract_scores_always_none(alphagenome):
     """All layers return None scores — AlphaGenome attention is not hookable."""
     seq = "ACGT" * 1000
-    _, s = alphagenome.extract([seq], layers=[0], return_attentions=True)
+    with pytest.warns(UserWarning, match="attention weights are not"):
+        _, s = alphagenome.extract(
+            [seq], layers=[0], return_attentions=True
+        )
     assert all(v is None for v in s.values())
 
 
@@ -152,9 +155,10 @@ def test_alphagenome_extract_transformer_scores_none(alphagenome):
     captured via hooks without modifying the library.
     """
     seq = "ACGT" * 1000
-    _, s = alphagenome.extract(
-        [seq], layers=["tower.blocks.0.mlp"], return_attentions=True
-    )
+    with pytest.warns(UserWarning, match="attention weights are not"):
+        _, s = alphagenome.extract(
+            [seq], layers=["tower.blocks.0.mlp"], return_attentions=True
+        )
     assert s["tower.blocks.0.mlp"] is None
 
 
@@ -174,7 +178,10 @@ def test_alphagenome_extract_transformer_hidden_state_shape(alphagenome):
 def test_alphagenome_extract_encoder_scores_none(alphagenome):
     """Encoder layers return None scores even when return_attentions=True."""
     seq = "ACGT" * 1000
-    _, s = alphagenome.extract(
-        [seq], layers=["encoder.down_blocks.0"], return_attentions=True
-    )
+    with pytest.warns(UserWarning, match="attention weights are not"):
+        _, s = alphagenome.extract(
+            [seq],
+            layers=["encoder.down_blocks.0"],
+            return_attentions=True,
+        )
     assert s["encoder.down_blocks.0"] is None

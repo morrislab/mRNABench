@@ -76,7 +76,8 @@ def test_dnaberts_excludes_special_tokens(model):
 def test_dnabert_s_embed_ragged_agg(model):
     """Test embed with identity agg_fn returns per-token embeddings (ragged)."""
     seqs = ["ATGATG", "GCGCGCGCGCGC"]
-    out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
+    with pytest.warns(RuntimeWarning, match="batch size 1"):
+        out = model.embed(seqs, agg_fn=lambda x, **kwargs: x)
     assert_raw_batch_matches_single(model, seqs, out)
     assert out[0].dim() == 2  # (num_tokens, hidden_dim)
     assert out[1].dim() == 2

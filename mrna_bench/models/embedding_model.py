@@ -1064,21 +1064,43 @@ class EmbeddingModel(SupportsEmbedding, ABC):
             for chunk in chunks:
                 toks = tokenize_fn([chunk])
                 with torch.inference_mode():
-                    outputs = self.model(
-                        **toks,
-                        output_hidden_states=True,
-                        output_attentions=return_attentions,
+                    outputs, captured = self._run_with_layer_capture(
+                        resolved,
+                        lambda: self.model(
+                            **toks,
+                            output_hidden_states=False,
+                            output_attentions=return_attentions,
+                        ),
                     )
-                hidden_states = outputs.hidden_states
                 attentions = getattr(outputs, "attentions", None)
                 for path in resolved:
-                    hidden_index = layer_to_idx[path] + 1
-                    h = hidden_states[hidden_index][0]
+                    layer_outputs = captured[path]
+                    if len(layer_outputs) != 1:
+                        raise RuntimeError(
+                            "Expected layer {!r} to run once, captured {} "
+                            "outputs.".format(path, len(layer_outputs))
+                        )
+                    h = layer_outputs[0]
+                    if h.dim() == 3:
+                        if h.shape[0] == 1:
+                            h = h[0]
+                        elif h.shape[1] == 1:
+                            h = h[:, 0]
+                    if h.dim() != 2:
+                        raise RuntimeError(
+                            (
+                                "Expected layer {!r} output with shape "
+                                "(T, D) plus one singleton batch dimension, "
+                                "got {}."
+                            ).format(
+                                path, tuple(h.shape)
+                            )
+                        )
                     hidden_out[path][seq_idx].append(
                         h.cpu() if offload_to_cpu else h
                     )
 
-                    attention_index = hidden_index - 1
+                    attention_index = layer_to_idx[path]
                     a = None
                     if return_attentions and attentions is not None:
                         if attention_index < len(attentions):

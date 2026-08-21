@@ -98,11 +98,12 @@ def test_linear_probe_metrics_mark_missing_classes_nan():
         X[:4],
         np.array([[0, 0], [0, 0], [1, 1], [1, 1]]),
     )
-    multilabel = eval_multilabel(
-        multilabel_model,
-        X[:2],
-        np.zeros((2, 2), dtype=int),
-    )
+    with pytest.warns(UserWarning, match="A single label"):
+        multilabel = eval_multilabel(
+            multilabel_model,
+            X[:2],
+            np.zeros((2, 2), dtype=int),
+        )
     assert np.isnan(multilabel["auroc_macro"])
     assert np.isnan(multilabel["auprc_macro"])
 
@@ -116,12 +117,13 @@ def test_classification_metrics_handle_missing_and_nonstandard_classes():
     )
     assert binary["auprc"] == 1.0
 
-    missing = classification_metrics(
-        np.array([0, 0]),
-        np.array([[0.9, 0.1], [0.8, 0.2]]),
-        np.array([0, 1]),
-        missing_class_nan=True,
-    )
+    with pytest.warns(UserWarning, match="A single label"):
+        missing = classification_metrics(
+            np.array([0, 0]),
+            np.array([[0.9, 0.1], [0.8, 0.2]]),
+            np.array([0, 1]),
+            missing_class_nan=True,
+        )
     assert np.isnan(missing["auroc"])
     assert np.isnan(missing["auprc"])
 

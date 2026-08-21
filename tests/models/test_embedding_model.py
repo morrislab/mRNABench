@@ -163,6 +163,53 @@ def test_run_with_layer_capture_supports_multiple_paths(model):
     assert inputs.grad is not None
 
 
+def test_standard_hf_extract_captures_only_requested_layers():
+    """HF extraction uses hooks instead of materializing all hidden states."""
+    class ExtractBackbone(torch.nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.layers = torch.nn.Sequential(
+                torch.nn.Identity(),
+                torch.nn.ReLU(),
+            )
+            self.requested_hidden_states = None
+
+        def forward(
+            self,
+            input_ids,
+            output_hidden_states=False,
+            output_attentions=False,
+        ):
+            self.requested_hidden_states = output_hidden_states
+            hidden = self.layers[0](input_ids.float())
+            hidden = self.layers[1](hidden.relu().transpose(0, 1))
+            return SimpleNamespace(
+                last_hidden_state=hidden,
+                attentions=None,
+            )
+
+    extract_model = MockEmbeddingModel(torch.device("cpu"))
+    extract_model.model = ExtractBackbone()
+    extract_model.hookable_layer_patterns = [r"layers\.\d+"]
+
+    hidden, scores = extract_model._standard_hf_extract(
+        sequences=["AC"],
+        tokenize_fn=lambda seqs: {
+            "input_ids": -torch.ones(1, len(seqs[0]), 2)
+        },
+        max_chunk_length=10,
+        layers=[1],
+    )
+
+    assert extract_model.model.requested_hidden_states is False
+    assert list(hidden) == ["layers.1"]
+    torch.testing.assert_close(
+        hidden["layers.1"][0][0],
+        torch.zeros(2, 2),
+    )
+    assert scores["layers.1"] is None
+
+
 def test_embed_with_chunking_applies_pooling_mask(model):
     """Test that pooling_mask is used to filter tokens."""
     sequences = ["A", "ATGATG"]

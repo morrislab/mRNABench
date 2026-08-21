@@ -362,3 +362,12 @@ conda activate mrna_bench_dev
 pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.7.1
 pip install -e .[base_models,dev]
 ```
+
+Enable the tracked pre-commit hook for local development. This will run the pre-commit checks on every commit, including flake8, mypy, and CPU-only tests:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook runs flake8, mypy, and CPU-only tests. Run `./precommit.sh` manually
+for the complete suite, including model tests that require a GPU.
