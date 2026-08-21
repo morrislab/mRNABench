@@ -189,3 +189,33 @@ without retaining the original 1.17 GB padded arrays.
 `build_go_dataset()` recreates sequence, CDS, splice, and chromosome features
 from GenomeKit's GENCODE v41 annotation. The resulting dataframes match every
 ordered value in the published GO parquets.
+
+## eCLIP RBP binding source tables
+
+`eclip_peakhood_transcript_tables.tar.gz` stores the four Peakhood
+`transcripts_with_sites` tables used for the K562 and HepG2 tasks. The
+benchmark retains transcripts selected by each `.sel_tr.tsv` table while
+assigning their RBP labels from the corresponding `.all_tr.tsv` table.
+GenomeKit's Ensembl v112 annotation supplies transcript sequences, CDS tracks,
+splice tracks, genes, and chromosomes.
+
+The tables came from
+[Peakhood](https://github.com/BackofenLab/Peakhood) runs over 244
+[ENCODE](https://www.encodeproject.org/) RBP eCLIP datasets targeting 168
+unique proteins: 139 experiments in K562 and 105 in HepG2. For each experiment,
+the most recent BED file and the BAM files from which it was derived were
+downloaded. Peakhood used the Ensembl release 112 GTF, the UCSC hg38 genome,
+and `--pre-merge`. For 223 paired-end experiments, it used only R2 reads with
+`--bam-pp-mode 2`; the remaining 21 single-end experiments used
+`--bam-pp-mode 1`.
+
+The ENCODE accessions, retrieval date, and Peakhood version were not retained,
+so "most recent" refers to the original download and a new portal query may
+select different BED or BAM files. The archived Peakhood output tables are the
+reproducible starting point for the benchmark builder.
+
+The retained tables contain expanded collections of 98 K562 and 83 HepG2 RBPs;
+the smaller 40/36-RBP collections published with Peakhood do not reproduce the
+benchmark. The 3.8 MB source archive is managed by Git LFS and excluded from
+Python wheels. Raw rebuilding downloads it on demand and reproduces 15,717
+K562 rows and 13,879 HepG2 rows.

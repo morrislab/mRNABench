@@ -1,9 +1,40 @@
+import hashlib
+from pathlib import Path
+import shutil
+
+import numpy as np
 import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import (
     BenchmarkDataset,
     DatasetMetadata,
 )
+from mrna_bench.datasets.dataset_utils import (
+    create_cds_track,
+    create_sequence,
+    create_splice_track,
+)
+from mrna_bench.utils import download_file
+
+
+SOURCE_ARCHIVE = "eclip_peakhood_transcript_tables.tar.gz"
+SOURCE_URL = (
+    "https://github.com/morrislab/mRNABench/raw/main/"
+    f"resources/{SOURCE_ARCHIVE}"
+)
+SOURCE_SHA256 = (
+    "8495dc56f3aa2d7d9b52caf6291e2b328781d4d83a2ecfded209dd1919b94df2"
+)
+SOURCE_FILES = {
+    "k562": (
+        "K562_transcripts_with_sites.all_tr.tsv",
+        "K562_transcripts_with_sites.sel_tr.tsv",
+    ),
+    "hepg2": (
+        "HepG2_transcripts_with_sites.all_tr.tsv",
+        "HepG2_transcripts_with_sites.sel_tr.tsv",
+    ),
+}
 
 ECLIP_K562_RBPS_LIST = [
     "AATF",
@@ -246,6 +277,52 @@ ECLIP_K562_TOP_RBPS_LIST = [
 ECLIP_HEPG2_TOP_RBPS_LIST = [
     "target_" + col for col in ECLIP_HEPG2_TOP_RBPS_LIST
 ]
+ECLIP_TARGET_COLUMNS = sorted(
+    set(ECLIP_K562_RBPS_LIST + ECLIP_HEPG2_RBPS_LIST)
+)
+
+
+def _source_archive_is_valid(path: Path) -> bool:
+    """Return whether the archive has the expected checksum."""
+    if not path.is_file():
+        return False
+    with path.open("rb") as handle:
+        checksum = hashlib.file_digest(handle, "sha256").hexdigest()
+    return checksum == SOURCE_SHA256
+
+
+def _extract_source_tables(
+    archive: Path,
+    output_dir: Path,
+) -> dict[str, tuple[Path, Path]]:
+    """Extract the Peakhood transcript tables."""
+    output_dir.mkdir(parents=True, exist_ok=True)
+    shutil.unpack_archive(
+        str(archive),
+        str(output_dir),
+        filter="data",
+    )
+    paths = {
+        cell_line: (
+            output_dir / all_transcripts,
+            output_dir / selected_transcripts,
+        )
+        for cell_line, (
+            all_transcripts,
+            selected_transcripts,
+        ) in SOURCE_FILES.items()
+    }
+    missing = [
+        path.name
+        for cell_paths in paths.values()
+        for path in cell_paths
+        if not path.is_file()
+    ]
+    if missing:
+        raise RuntimeError(
+            f"{SOURCE_ARCHIVE} is missing files: {sorted(missing)}"
+        )
+    return paths
 
 
 class eCLIPBinding(BenchmarkDataset):
@@ -267,6 +344,7 @@ class eCLIPBinding(BenchmarkDataset):
         if type(self) is eCLIPBinding:
             raise TypeError("eCLIPBinding is an abstract class.")
 
+        self.cell_line = self.METADATA.dataset_name.rsplit("-", 1)[-1]
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
@@ -274,7 +352,99 @@ class eCLIPBinding(BenchmarkDataset):
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
-        raise NotImplementedError("eCLIP binding from raw under construction.")
+        """Rebuild eCLIP binding data from Peakhood transcript tables."""
+        try:
+            import genome_kit as gk
+        except ImportError:
+            print(
+                "GenomeKit is required for raw processing with Ensembl v112. "
+                "Install the mrna-bench dev dependencies."
+            )
+            raise
+
+        repository_root = Path(__file__).resolve().parents[2]
+        source_archive = repository_root / "resources" / SOURCE_ARCHIVE
+        if not _source_archive_is_valid(source_archive):
+            source_archive = Path(
+                download_file(
+                    SOURCE_URL,
+                    self.raw_data_dir,
+                    expected_sha256=SOURCE_SHA256,
+                )
+            )
+        source_paths = _extract_source_tables(
+            source_archive,
+            Path(self.raw_data_dir),
+        )
+        all_path, selected_path = source_paths[self.cell_line]
+        all_rows = pd.read_csv(
+            all_path,
+            sep="\t",
+            usecols=["transript_id", "site_ids"],
+        )
+        selected_ids = set(
+            pd.read_csv(
+                selected_path,
+                sep="\t",
+                usecols=["transript_id"],
+            )["transript_id"]
+        )
+        rows = all_rows.loc[
+            all_rows["transript_id"].isin(selected_ids)
+        ].copy()
+        rows["bound_rbps"] = rows["site_ids"].map(
+            lambda site_ids: {
+                site.split("_", 1)[0]
+                for site in site_ids.split(",")
+            }
+        )
+
+        genome = gk.Genome("ensembl.v112")
+        transcript_ids = set(rows["transript_id"])
+        transcripts = {
+            transcript.id.split(".")[0]: transcript
+            for transcript in genome.transcripts
+            if transcript.id.split(".")[0] in transcript_ids
+        }
+        missing = sorted(transcript_ids - set(transcripts))
+        if missing:
+            raise ValueError(
+                f"{len(missing)} transcripts are absent from Ensembl v112: "
+                f"{missing[:5]}"
+            )
+
+        target_index = {
+            column.removeprefix("target_"): index
+            for index, column in enumerate(ECLIP_TARGET_COLUMNS)
+        }
+        targets = np.zeros(
+            (len(rows), len(ECLIP_TARGET_COLUMNS)),
+            dtype=np.int64,
+        )
+        records = []
+        for output_index, row in enumerate(rows.itertuples(index=False)):
+            transcript = transcripts[row.transript_id]
+            for rbp in row.bound_rbps:
+                targets[output_index, target_index[rbp]] = 1
+            records.append({
+                "transcript_id": transcript.id,
+                "gene": transcript.gene.name,
+                "chromosome": transcript.chrom.removeprefix("chr"),
+                "sequence": create_sequence(transcript, genome).upper(),
+                "cds": create_cds_track(transcript),
+                "splice": create_splice_track(transcript),
+            })
+
+        return pd.concat(
+            [
+                pd.DataFrame(records),
+                pd.DataFrame(
+                    targets,
+                    columns=ECLIP_TARGET_COLUMNS,
+                ),
+            ],
+            axis=1,
+        )
 
 
 class eCLIPBindingK562(eCLIPBinding):
