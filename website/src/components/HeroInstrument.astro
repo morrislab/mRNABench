@@ -1,0 +1,74 @@
+<div class="instrument" aria-hidden="true">
+  <svg class="instrument__mark" viewBox="0 0 400 400">
+    <g class="instrument__stems">
+      <path d="M68 171V229"></path>
+      <path d="M112 143V176"></path>
+      <path class="instrument__red" d="M112 186V214"></path>
+      <path d="M112 224V257"></path>
+      <path d="M156 131V166"></path>
+      <path d="M156 176V224"></path>
+      <path class="instrument__red" d="M156 234V269"></path>
+      <path d="M200 128V164"></path>
+      <path class="instrument__red" d="M200 174V226"></path>
+      <path d="M200 236V272"></path>
+      <path d="M244 131V166"></path>
+      <path d="M244 176V224"></path>
+      <path d="M244 234V269"></path>
+      <path class="instrument__red" d="M288 143V176"></path>
+      <path d="M288 186V214"></path>
+      <path d="M288 224V257"></path>
+      <path d="M332 171V229"></path>
+    </g>
+  </svg>
+</div>
+
+<style>
+  .instrument {
+    position: relative;
+    min-height: 34rem;
+    overflow: hidden;
+    background: var(--paper-soft);
+    border: 1px solid var(--line-strong);
+  }
+
+  .instrument::before {
+    position: absolute;
+    right: 1.2rem;
+    bottom: 1.2rem;
+    width: 3rem;
+    height: 3px;
+    background: var(--red);
+    content: "";
+  }
+
+  .instrument__mark {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: min(76%, 29rem);
+    transform: translate(-50%, -50%);
+  }
+
+  .instrument__stems {
+    fill: none;
+    stroke: var(--ink);
+    stroke-linecap: round;
+    stroke-width: 12;
+  }
+
+  .instrument__stems .instrument__red {
+    stroke: var(--red);
+  }
+
+  @media (max-width: 960px) {
+    .instrument {
+      min-height: min(28rem, 70vw);
+    }
+  }
+
+  @media (max-width: 520px) {
+    .instrument__mark {
+      width: 68%;
+    }
+  }
+</style>

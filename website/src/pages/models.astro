@@ -1,0 +1,471 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import Callout from "../components/Callout.astro";
+import PageIntro from "../components/PageIntro.astro";
+import { modelDefaults, models, versionBehaviors } from "../data/models";
+
+const versionCount = models.reduce((total, model) => total + model.versions.length, 0);
+const groupCounts = {
+  "RNA model": models.filter((model) => model.group === "RNA model").length,
+  "DNA model": models.filter((model) => model.group === "DNA model").length,
+  Baseline: models.filter((model) => model.group === "Baseline").length,
+};
+const behaviorLabels: Record<string, string> = {
+  "pseudo likelihood": "pseudo-likelihood",
+};
+---
+
+<BaseLayout
+  title="Model catalog | mRNABench"
+  description="Browse model adapters and versions in the unreleased mRNABench v2.0.0 source registry, including checkpoint-specific behaviors."
+>
+  <PageIntro
+    eyebrow="Model catalog"
+    title="Model adapters and supported inference behaviors"
+    lead="The registry includes RNA and DNA language models, sequence-to-function models, and non-pretrained references. Capabilities are declared per adapter rather than inferred from a model name."
+    index="04"
+  />
+
+  <section class="model-summary shell">
+    <Callout label="Unreleased v2.0.0 catalog">
+      <p>
+        This page reflects the unreleased v2.0.0 source catalog. The current
+        PyPI release may contain fewer adapters or versions; install the source
+        checkout to use the catalog shown here.
+      </p>
+    </Callout>
+    <dl>
+      <div><dt>Model families</dt><dd>{models.length}</dd></div>
+      <div><dt>Registered versions</dt><dd>{versionCount}</dd></div>
+      <div><dt>RNA models</dt><dd>{groupCounts["RNA model"]}</dd></div>
+      <div><dt>DNA models</dt><dd>{groupCounts["DNA model"]}</dd></div>
+      <div><dt>Baselines</dt><dd>{groupCounts.Baseline}</dd></div>
+    </dl>
+    <div class="model-summary__notes">
+      <p>
+        <strong>Gated access:</strong> NucleotideTransformerV3 requires model
+        access on Hugging Face and an authenticated <code>hf auth login</code>.
+      </p>
+      <p>
+        <strong>Evo2:</strong> hardware varies by checkpoint. The 7B port uses
+        bfloat16, while the 1B, 20B, and 40B Transformer Engine ports require
+        Hopper-class GPUs. The 20B and 40B checkpoints require multiple
+        H100-class devices. Expand Evo2 below and open the selected version's
+        checkpoint card before allocating hardware.
+      </p>
+    </div>
+    <p class="model-summary__hardware">
+      This catalog records inference behavior, not complete CPU, VRAM, context,
+      attention-backend, or required-track compatibility. Check the adapter and
+      checkpoint card before scheduling a run.
+    </p>
+  </section>
+
+  <section class="model-catalog shell" data-model-catalog>
+    <div class="model-filters">
+      <label>
+        <span>Find a model</span>
+        <input type="search" placeholder="Name, version, or behavior" data-model-search />
+      </label>
+      <label>
+        <span>Model group</span>
+        <select data-model-group>
+          <option value="">All groups</option>
+          <option value="RNA model">RNA models</option>
+          <option value="DNA model">DNA models</option>
+          <option value="Baseline">Baselines</option>
+        </select>
+      </label>
+      <label>
+        <span>Behavior</span>
+        <select data-model-behavior>
+          <option value="">All behaviors</option>
+          <option value="embedding">Embedding</option>
+          <option value="causal likelihood">Causal likelihood</option>
+          <option value="pseudo likelihood">Pseudo-likelihood</option>
+          <option value="tracks">Track prediction</option>
+        </select>
+      </label>
+      <p role="status" aria-live="polite"><strong data-visible-models>{models.length}</strong> families shown</p>
+    </div>
+
+    <div class="model-list">
+      {
+        models.map((model) => (
+          <article
+            data-model-row
+            data-group={model.group}
+            data-behaviors={model.behaviors.join("|")}
+            data-search={`${model.name} ${model.description} ${model.versions.join(" ")} ${model.behaviors.join(" ")}`.toLowerCase()}
+          >
+            <div class="model-list__name">
+              <span>{model.group}</span>
+              <h2>{model.name}</h2>
+            </div>
+            <p>{model.description}</p>
+            <div class="model-list__behaviors">
+              <small>Available in family</small>
+              {model.behaviors.map((behavior) => <span>{behaviorLabels[behavior] ?? behavior}</span>)}
+            </div>
+            <details>
+              <summary>{model.versions.length} version{model.versions.length === 1 ? "" : "s"}</summary>
+              <div>
+                {
+                  model.versions.map((version) => (
+                    <span class="model-list__version">
+                      {
+                        model.name === "Evo2" ? (
+                          <a href={`https://huggingface.co/Taykhoom/${version}`} aria-label={`${version} checkpoint card`}>
+                            <code>{version}</code>
+                          </a>
+                        ) : (
+                          <code>{version}</code>
+                        )
+                      }
+                      {version === modelDefaults[model.name] && <b>default</b>}
+                      {(versionBehaviors[model.name]?.[version] ?? model.behaviors).map(
+                        (behavior) => <i>{behaviorLabels[behavior] ?? behavior}</i>,
+                      )}
+                    </span>
+                  ))
+                }
+              </div>
+            </details>
+            <div class="model-list__links">
+              {model.sourceUrl && <a href={model.sourceUrl} aria-label={`${model.name} project`}>Project</a>}
+              {model.implementationUrl && <a href={model.implementationUrl} aria-label={`${model.name} implementation`}>Implementation</a>}
+              {model.weightsUrl && <a href={model.weightsUrl} aria-label={`${model.name} weights`}>Weights</a>}
+              {!model.sourceUrl && <span class="model-list__internal">mRNABench baseline</span>}
+            </div>
+          </article>
+        ))
+      }
+    </div>
+    <p class="model-empty" data-model-empty role="status" aria-live="polite" hidden>No models match those filters.</p>
+  </section>
+</BaseLayout>
+
+<script>
+  function initializeModelCatalog() {
+    const catalog = document.querySelector<HTMLElement>("[data-model-catalog]");
+    if (!catalog) return;
+    const search = catalog.querySelector<HTMLInputElement>("[data-model-search]");
+    const group = catalog.querySelector<HTMLSelectElement>("[data-model-group]");
+    const behavior = catalog.querySelector<HTMLSelectElement>("[data-model-behavior]");
+    const rows = [...catalog.querySelectorAll<HTMLElement>("[data-model-row]")];
+    const count = catalog.querySelector<HTMLElement>("[data-visible-models]");
+    const empty = catalog.querySelector<HTMLElement>("[data-model-empty]");
+    if (!search || !group || !behavior || !count || !empty) return;
+
+    const filter = () => {
+      const query = search.value.trim().toLowerCase();
+      let visible = 0;
+      rows.forEach((row) => {
+        const matches =
+          (!query || row.dataset.search?.includes(query)) &&
+          (!group.value || row.dataset.group === group.value) &&
+          (!behavior.value || row.dataset.behaviors?.split("|").includes(behavior.value));
+        row.hidden = !matches;
+        if (matches) visible += 1;
+      });
+      count.textContent = String(visible);
+      empty.hidden = visible !== 0;
+    };
+
+    search.addEventListener("input", filter);
+    group.addEventListener("change", filter);
+    behavior.addEventListener("change", filter);
+  }
+
+  initializeModelCatalog();
+</script>
+
+<style>
+  .model-summary {
+    padding-block: 2rem 4rem;
+  }
+
+  .model-summary dl {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    margin: 0;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+  }
+
+  .model-summary__notes {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2rem;
+    margin-top: 1.5rem;
+  }
+
+  .model-summary__notes p {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .model-summary__notes strong {
+    color: var(--ink);
+  }
+
+  .model-summary__hardware {
+    margin: 1rem 0 0;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .model-summary__notes code {
+    overflow-wrap: anywhere;
+  }
+
+  .model-summary dl div {
+    padding: 1rem;
+  }
+
+  .model-summary dl div + div {
+    border-left: 1px solid var(--line);
+  }
+
+  .model-summary dt {
+    color: var(--ink-muted);
+    font-size: 0.72rem;
+    font-weight: 680;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .model-summary dd {
+    margin: 0.5rem 0 0;
+    font-size: var(--text-lg);
+    font-weight: 580;
+  }
+
+  .model-catalog {
+    margin-bottom: clamp(6rem, 12vw, 11rem);
+  }
+
+  .model-filters {
+    position: sticky;
+    z-index: 5;
+    top: 4.5rem;
+    display: grid;
+    grid-template-columns: 1.3fr repeat(2, 0.7fr) auto;
+    gap: 0.75rem;
+    align-items: end;
+    padding: 1rem;
+    background: var(--paper-soft);
+    border: 1px solid var(--line-strong);
+  }
+
+  .model-filters label {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .model-filters label > span {
+    color: var(--ink-muted);
+    font-size: 0.72rem;
+    font-weight: 680;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .model-filters input,
+  .model-filters select {
+    height: 2.7rem;
+    padding: 0 0.65rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--line-strong);
+    border-radius: 0;
+  }
+
+  .model-filters > p {
+    margin: 0 0 0.65rem;
+    color: var(--ink-muted);
+    font-size: var(--text-xs);
+    white-space: nowrap;
+  }
+
+  .model-list {
+    border-bottom: 1px solid var(--line-strong);
+  }
+
+  .model-list article {
+    display: grid;
+    grid-template-columns: 0.55fr 1.2fr 0.8fr 0.55fr 5rem;
+    gap: 1.4rem;
+    align-items: start;
+    padding: 1.5rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .model-list article:hover {
+    background: var(--paper-soft);
+  }
+
+  .model-list__name > span {
+    color: var(--red-deep);
+    font-size: 0.75rem;
+    font-weight: 680;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .model-list h2 {
+    margin: 0.35rem 0 0;
+    font-size: var(--text-base);
+    font-weight: 620;
+  }
+
+  .model-list article > p {
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .model-list__behaviors {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .model-list__behaviors small {
+    flex-basis: 100%;
+    color: var(--ink-muted);
+    font-size: 0.68rem;
+  }
+
+  .model-list__behaviors span {
+    padding: 0.2rem 0.35rem;
+    background: var(--paper-soft);
+    border: 1px solid var(--line);
+    font-size: 0.72rem;
+  }
+
+  .model-list details {
+    font-size: var(--text-xs);
+  }
+
+  .model-list summary {
+    cursor: pointer;
+    font-weight: 620;
+  }
+
+  .model-list details div {
+    display: grid;
+    gap: 0.35rem;
+    margin-top: 0.7rem;
+  }
+
+  .model-list code {
+    overflow-wrap: anywhere;
+    color: var(--ink-muted);
+    font-size: 0.72rem;
+  }
+
+  .model-list__links {
+    display: grid;
+    gap: 0.35rem;
+  }
+
+  .model-list__links a,
+  .model-list__internal {
+    width: fit-content;
+    font-size: 0.75rem;
+    font-weight: 620;
+  }
+
+  .model-list__internal {
+    color: var(--ink-muted);
+  }
+
+  .model-list__version {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    align-items: center;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .model-list__version b,
+  .model-list__version i {
+    padding: 0.1rem 0.25rem;
+    font-size: 0.62rem;
+    font-style: normal;
+    font-weight: 620;
+  }
+
+  .model-list__version > a {
+    width: fit-content;
+  }
+
+  .model-list__version b {
+    color: var(--on-red);
+    background: var(--red);
+  }
+
+  .model-list__version i {
+    color: var(--ink-muted);
+    background: var(--paper-soft);
+  }
+
+  .model-empty {
+    padding: 4rem 1rem;
+    color: var(--ink-muted);
+    text-align: center;
+  }
+
+  @media (max-width: 1100px) {
+    .model-list article {
+      grid-template-columns: 0.6fr 1.2fr 0.8fr;
+    }
+
+    .model-list details,
+    .model-list__links,
+    .model-list__internal {
+      grid-column: auto;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .model-summary dl,
+    .model-filters {
+      grid-template-columns: repeat(2, 1fr);
+    }
+
+    .model-summary dl div:nth-child(n + 3) {
+      border-top: 1px solid var(--line);
+    }
+
+    .model-summary dl div:nth-child(odd) {
+      border-left: 0;
+    }
+
+    .model-list article {
+      grid-template-columns: 1fr;
+    }
+
+    .model-summary__notes {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 520px) {
+    .model-summary dl,
+    .model-filters {
+      grid-template-columns: 1fr;
+    }
+
+    .model-summary dl div + div {
+      border-top: 1px solid var(--line);
+      border-left: 0;
+    }
+
+    .model-filters {
+      position: static;
+    }
+  }
+</style>

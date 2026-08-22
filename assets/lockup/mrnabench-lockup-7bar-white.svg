@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="200" viewBox="0 0 700 200" fill="none">
+  <path d="M34 71V129" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M56 43V76" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M56 86V114" stroke="#FF4A4A" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M56 124V157" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M78 31V66M78 76V124" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M78 134V169" stroke="#FF4A4A" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M100 28V64" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M100 74V126" stroke="#FF4A4A" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M100 136V172" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M122 31V66M122 76V124M122 134V169" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M144 43V76" stroke="#FF4A4A" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M144 86V114M144 124V157" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <path d="M166 71V129" stroke="#FFFFFF" stroke-width="12" stroke-linecap="round" fill="none"></path>
+  <text x="234" y="126" font-family="Archivo, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="62" font-weight="500" letter-spacing="-1.86" fill="#FFFFFF">m<tspan fill="#FF4A4A">RNA</tspan>Bench</text>
+</svg>

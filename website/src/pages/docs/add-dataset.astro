@@ -1,0 +1,115 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import Callout from "../../components/Callout.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+
+const template = `import pandas as pd
+
+from mrna_bench.datasets import (
+    BenchmarkDataset,
+    DatasetMetadata,
+)
+
+
+class MyDataset(BenchmarkDataset):
+    METADATA = DatasetMetadata(
+        dataset_name="my-dataset",
+        species="human",
+        task=["regression"],
+        target_col=["target"],
+        default_split_type="homology",
+        benchmark_set="extended",
+        evaluations=("linear_probe",),
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+    ):
+        super().__init__(
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
+            hf_url="https://.../my-dataset.parquet",
+        )
+
+    def _get_data_from_raw(self) -> pd.DataFrame:
+        return pd.DataFrame(
+            {
+                "sequence": ...,
+                "gene": ...,
+                "chromosome": ...,
+                "target": ...,
+            }
+        )`;
+
+const dataframe = `from mrna_bench.embedder import DatasetEmbedder
+
+embedder = DatasetEmbedder.from_dataframe(
+    model,
+    dataframe,  # must contain a sequence column
+)`;
+---
+
+<DocsLayout
+  title="Add a dataset"
+  description="Define metadata, produce the shared dataframe schema, choose a split, and register a reusable dataset."
+  section="Extend"
+>
+  <h2>The dataset contract</h2>
+  <p>
+    A registered dataset subclasses <code>BenchmarkDataset</code>, declares a
+    <code>DatasetMetadata</code> record, and implements
+    <code>_get_data_from_raw()</code>. Hosting processed data as Parquet lets
+    users load the dataset without installing raw-data dependencies.
+  </p>
+
+  <CodeBlock code={template} language="python" label="Dataset adapter" />
+
+  <Callout tone="important" label="Method name">
+    <p>
+      Override <code>_get_data_from_raw()</code>. The older README instruction
+      to override <code>process_raw_data()</code> does not match the current
+      abstract interface.
+    </p>
+  </Callout>
+
+  <h2>Required and conditional columns</h2>
+  <table tabindex="0" aria-label="Dataset columns">
+    <thead>
+      <tr><th>Column</th><th>When it is needed</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>sequence</code></td><td>Always. One nucleotide sequence per row.</td></tr>
+      <tr><td>Target column</td><td>One column for each name in <code>target_col</code>.</td></tr>
+      <tr><td><code>gene</code></td><td>Homology splitting.</td></tr>
+      <tr><td><code>chromosome</code></td><td>Chromosome splitting.</td></tr>
+      <tr><td><code>cds</code></td><td>Models that use codon-position tracks.</td></tr>
+      <tr><td><code>splice</code></td><td>Models that use splice-site tracks.</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Dataset metadata requirements</h2>
+  <ul>
+    <li>Dataset identifiers cannot contain underscores because persisted embedding filenames use underscores as separators. Metadata validation does not yet enforce this rule.</li>
+    <li>Use <code>core</code> only for datasets intended for the central comparison.</li>
+    <li>List every supported route in <code>evaluations</code>.</li>
+    <li>Implement <code>get_vep_pairs()</code> for paired variant datasets.</li>
+    <li>Match the default split to the information available in the dataframe.</li>
+  </ul>
+
+  <h2>Register and check the output</h2>
+  <p>
+    Add the class to <code>DATASET_CATALOG</code> in
+    <code>mrna_bench/datasets/dataset_catalog.py</code>. Before using it in a
+    comparison, check metadata validation, processed schema, download and cache
+    behavior, and the selected split with focused tests for the new adapter.
+  </p>
+
+  <h2>Use an ad hoc dataframe</h2>
+  <p>
+    Registration is unnecessary when you only need embeddings for a temporary
+    table of sequences.
+  </p>
+  <CodeBlock code={dataframe} language="python" />
+</DocsLayout>

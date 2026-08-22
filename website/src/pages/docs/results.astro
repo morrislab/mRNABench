@@ -1,0 +1,114 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import Callout from "../../components/Callout.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+
+const storage = `<data_path>/
+  <dataset-name>/
+    data_df.parquet
+    raw_data/
+    embeddings/
+      <dataset>_<model-short-name>.npz
+    results.db
+    results.db.lock
+    ft_results/
+      result_ft_....json`;
+
+const query = `python scripts/management/query_lp_db_results.py \\
+  --dataset go-mf \\
+  --model orthrus \\
+  --metrics \\
+  --all-metrics`;
+
+const incomplete = `python scripts/management/query_lp_db_results.py --incomplete`;
+
+const summarize = `python scripts/linear_probe/summarize_metrics.py \\
+  --data go-mf \\
+  --task multilabel \\
+  --split_type homology \\
+  --target target`;
+
+const embeddings = `python scripts/management/manage_embeddings.py \\
+  --model orthrus \\
+  --stats`;
+---
+
+<DocsLayout
+  title="Results and analysis"
+  description="Find persisted outputs, query run metadata, combine seeds, and interpret each metric."
+  section="Run"
+>
+  <h2>Storage layout</h2>
+  <CodeBlock code={storage} language="text" />
+  <p>
+    Pooled embeddings use compressed NPZ files with an
+    <code>embedding</code> key. Ragged token embeddings use an HDF5
+    <code>embeddings</code> group. Half-precision tensors are converted to
+    float32 before they are saved.
+  </p>
+
+  <h2>Query linear-probe results</h2>
+  <CodeBlock code={query} language="shell" />
+  <p>
+    Each <code>results.db</code> row records the model, task, target, split,
+    seed, metrics, and creation time. Rerunning the same model, task, target,
+    split, and seed replaces that row.
+  </p>
+  <Callout tone="important" label="Result identity">
+    <p>
+      The database key does not include split ratios or
+      <code>eval_all_splits</code>. Runs that differ only in those settings can
+      replace one another. Keep those settings fixed for one result database or
+      use separate dataset output paths.
+    </p>
+  </Callout>
+
+  <h3>Find incomplete seeded runs</h3>
+  <CodeBlock code={incomplete} language="shell" />
+
+  <h3>Combine completed seeds</h3>
+  <CodeBlock code={summarize} language="shell" />
+  <p>
+    The summary writes an <code>all</code> seed row containing the mean and a
+    95% interval computed as 1.96 times the standard error.
+  </p>
+
+  <Callout tone="important" label="Evaluation split">
+    <p>
+      <code>LinearProbeBuilder</code> evaluates validation data by default.
+      The repository benchmark scripts set <code>eval_all_splits=True</code>
+      and can write train, validation, and test metrics. Check the stored split
+      before comparing values.
+    </p>
+  </Callout>
+
+  <h2>Metric reference</h2>
+  <table tabindex="0" aria-label="Metric reference">
+    <thead>
+      <tr><th>Task</th><th>Metrics written by the package</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Regression</td><td>MSE, Pearson r, Spearman rho (stored under the legacy key <code>p</code>)</td></tr>
+      <tr><td>Binary classification</td><td>MCC, balanced accuracy, AUROC, AUPRC</td></tr>
+      <tr><td>Multiclass</td><td>MCC, balanced accuracy, accuracy, macro F1, micro/macro AUROC and AUPRC</td></tr>
+      <tr><td>Multilabel</td><td>Micro MCC and micro/macro AUROC and AUPRC</td></tr>
+      <tr><td>Zero-shot variant-effect classification</td><td>AUROC and AUPRC</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Inspect embedding inventory</h2>
+  <CodeBlock code={embeddings} language="shell" />
+  <p>
+    Use this before scheduling probes to check which model and dataset
+    combinations are already present and how much storage they use.
+  </p>
+
+  <h2>Paper-specific aggregation</h2>
+  <p>
+    Paper figure scripts include publication-specific exclusions, renames, seed
+    expectations, and baseline choices. Treat them as paper reproduction code,
+    not as the general result API. The website leaderboard has its own
+    documented normalization step so a new parquet snapshot can be validated
+    before it is shown.
+  </p>
+</DocsLayout>

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="200" viewBox="0 0 700 200" fill="none">
+  <path d="M40 68V132" stroke="#0B0B0C" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <path d="M70 36V92" stroke="#E5232B" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <path d="M70 108V164" stroke="#0B0B0C" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <path d="M100 28V92" stroke="#0B0B0C" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <path d="M100 108V172" stroke="#E5232B" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <path d="M130 36V92" stroke="#E5232B" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <path d="M130 108V164" stroke="#0B0B0C" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <path d="M160 68V132" stroke="#0B0B0C" stroke-width="18" stroke-linecap="round" fill="none"></path>
+  <text x="234" y="126" font-family="Archivo, 'Helvetica Neue', Helvetica, Arial, sans-serif" font-size="62" font-weight="500" letter-spacing="-1.86" fill="#0B0B0C">m<tspan fill="#E5232B">RNA</tspan>Bench</text>
+</svg>

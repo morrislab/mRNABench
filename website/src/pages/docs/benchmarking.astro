@@ -1,0 +1,147 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import Callout from "../../components/Callout.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+
+const embed = `python scripts/embedding/embed_dataset.py \\
+  --model_name Orthrus \\
+  --model_version orthrus-large-6-track \\
+  --dataset_name go-mf \\
+  --batch_size 8`;
+
+const chunks = `for chunk in {0..7}; do
+  python scripts/embedding/embed_dataset.py \\
+    --model_name Orthrus \\
+    --model_version orthrus-large-6-track \\
+    --dataset_name go-mf \\
+    --d_chunk_ind "$chunk" \\
+    --d_num_chunks 8
+done`;
+
+const probe = `python scripts/linear_probe/by_modelname.py \\
+  --model_name Orthrus \\
+  --model_version orthrus-large-6-track \\
+  --dataset_name go-mf \\
+  --task multilabel \\
+  --target target \\
+  --split_type homology`;
+
+const embeddingVep = `python scripts/linear_probe/by_modelname.py \\
+  --model_name Orthrus \\
+  --model_version orthrus-large-4-track \\
+  --dataset_name vep-traitgym-mendelian \\
+  --task embedding_vep \\
+  --target target`;
+
+const embedVepDataset = `python scripts/embedding/embed_dataset.py \\
+  --model_name Orthrus \\
+  --model_version orthrus-large-4-track \\
+  --dataset_name vep-traitgym-mendelian \\
+  --batch_size 8`;
+
+const likelihoodVep = `python scripts/linear_probe/by_modelname.py \\
+  --model_name Evo2 \\
+  --model_version Evo2-7B-8K \\
+  --dataset_name vep-traitgym-mendelian \\
+  --task likelihood_vep \\
+  --target target \\
+  --score_method causal_likelihood \\
+  --normalization sum \\
+  --attn_implementation flash_attention_2`;
+
+const fineTune = `python scripts/finetune/run_finetune.py \\
+  --model_name Orthrus \\
+  --model_version orthrus-large-4-track \\
+  --dataset_name mrl-sugimoto \\
+  --learning_rates '[1e-5, 1e-4]' \\
+  --lora_ranks '[4, 8]' \\
+  --lora_alphas '[16]' \\
+  --epochs 15 \\
+  --batch_size 32 \\
+  --seeds '[0, 1, 2]' \\
+  --lr_schedule cosine \\
+  --eval_test`;
+---
+
+<DocsLayout
+  title="Run a benchmark"
+  description="Persist embeddings, run probes across seeds, score variant effects, and launch optional fine-tuning."
+  section="Run"
+>
+  <p>
+    Use the in-memory quickstart for small experiments. Use repository scripts
+    for full datasets, cluster jobs, and resumable output.
+  </p>
+
+  <h2>1. Generate embeddings</h2>
+  <CodeBlock code={embed} language="shell" />
+  <p>
+    Embeddings are written below the configured dataset path. The embedder keeps
+    dataframe order and passes coding-sequence and splice tracks when both the
+    dataset and model use them.
+  </p>
+
+  <h3>Split a large embedding job into chunks</h3>
+  <CodeBlock code={chunks} language="shell" />
+  <p>
+    Run every zero-based chunk index. The embedder does not create the merged
+    embedding until all eight chunk files are present.
+  </p>
+
+  <h2>2. Run the probe</h2>
+  <CodeBlock code={probe} language="shell" />
+  <p>
+    The script runs the standard seeded evaluation and writes metrics to the
+    dataset's <code>results.db</code>. Use the exact task names
+    <code>regression_ols</code> and <code>regression_ridge</code> when querying
+    current persisted regression results.
+  </p>
+
+  <h2>Variant-effect prediction</h2>
+  <h3>Embedding distance</h3>
+  <p>Generate the matching dataset and model embeddings first.</p>
+  <CodeBlock code={embedVepDataset} language="shell" />
+  <CodeBlock code={embeddingVep} language="shell" />
+  <p>
+    The default embedding score is the L2 distance between pooled alternate and
+    reference embeddings.
+  </p>
+
+  <h3>Likelihood scoring</h3>
+  <CodeBlock code={likelihoodVep} language="shell" />
+  <p>
+    Available score methods are <code>causal_likelihood</code>,
+    <code>pseudo_likelihood</code>, and <code>masked_marginal</code>. Masked
+    marginal scoring excludes indels.
+  </p>
+  <Callout tone="important" label="Method detail">
+    <p>
+      Attention backend, dtype, pooling, normalization, and score direction are
+      part of a variant-effect method. Generate reference and alternate scores
+      with identical settings.
+    </p>
+  </Callout>
+
+  <h2>Optional fine-tuning</h2>
+  <p>
+    Install both optional groups first:
+    <code>python -m pip install -e '.[base_models,fine_tune]'</code>.
+  </p>
+  <CodeBlock code={fineTune} language="shell" />
+  <p>
+    The script creates a task head, applies LoRA, selects the best validation
+    state, optionally evaluates the test split, and writes a JSON result
+    containing selected hyperparameters and metrics. The values passed
+    through <code>--seeds</code> control data
+    splitting and result identity. They do not currently seed every source of
+    training randomness, so fine-tuning remains nondeterministic.
+  </p>
+  <Callout tone="important" label="Fine-tuning result identity">
+    <p>
+      The persisted filename does not include every training option. Use
+      separate output directories for runs that differ only in epochs, batch
+      size, accumulation, schedule, warmup, patience, attention backend, or
+      test-evaluation settings.
+    </p>
+  </Callout>
+</DocsLayout>

@@ -1,0 +1,129 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import Callout from "../../components/Callout.astro";
+import CodeBlock from "../../components/CodeBlock.astro";
+
+const paths = `import mrna_bench as mb
+
+mb.update_data_path("/data/mrnabench")
+mb.update_model_weights_path("/models/mrnabench")`;
+
+const explicit = `probe = (
+    LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance(
+        model.short_name,
+        embeddings,
+    )
+    .build_splitter(
+        "homology",
+        split_ratios=(0.7, 0.15, 0.15),
+        species="human",
+        eval_all_splits=True,
+    )
+    .build_evaluator("multilabel")
+    .set_target("target")
+    .build()
+)`;
+
+const regression = `probe = (
+    LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance(
+        model.short_name,
+        embeddings,
+    )
+    .set_regressor("ridge")  # or "ols"
+    .build()
+)`;
+
+const homology = `from mrna_bench.data_splitter.homology_split import (
+    HomologySplitter,
+)
+
+# Published map: Ensembl 110, strict 35% identity
+published = HomologySplitter(species="human")
+
+# Rebuild groups at a different threshold
+threshold_ablation = HomologySplitter(
+    species="human",
+    similarity_threshold=50,
+)
+
+# Use a newer Ensembl release
+new_release = HomologySplitter(
+    species="human",
+    ensembl_version=115,
+)`;
+---
+
+<DocsLayout
+  title="Configuration"
+  description="Storage paths, metadata defaults, split strategies, evaluators, and regression estimators."
+  section="Run"
+>
+  <h2>Storage paths</h2>
+  <CodeBlock code={paths} language="python" />
+  <p>
+    mRNABench stores processed datasets, embeddings, results, and downloaded
+    weights under these paths and persists the configured values. Use absolute
+    paths because repository-local configuration is machine-specific.
+  </p>
+
+  <h2>Override metadata defaults</h2>
+  <CodeBlock code={explicit} language="python" />
+  <p>
+    Split ratios must sum to one. A zero-sized validation or test split is
+    supported when the analysis only needs the remaining partitions.
+  </p>
+
+  <h3>Choose a regression estimator</h3>
+  <CodeBlock code={regression} language="python" />
+  <p>
+    <code>ols</code> uses ordinary least squares. <code>ridge</code> uses
+    cross-validated ridge regression over alpha values from 0.001 to 10. The
+    persisted task names are <code>regression_ols</code> and
+    <code>regression_ridge</code>.
+  </p>
+
+  <h2>Split strategies</h2>
+  <table tabindex="0" aria-label="Split strategies">
+    <thead>
+      <tr><th>Key</th><th>Grouping rule</th><th>Requirements</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>default</code></td>
+        <td>Random scikit-learn split.</td>
+        <td>No grouping column.</td>
+      </tr>
+      <tr>
+        <td><code>homology</code></td>
+        <td>Keeps homologous genes together.</td>
+        <td>Non-null <code>gene</code> and a species.</td>
+      </tr>
+      <tr>
+        <td><code>chromosome</code></td>
+        <td>Holds out complete chromosomes.</td>
+        <td><code>chromosome</code> column.</td>
+      </tr>
+      <tr>
+        <td><code>kmer</code></td>
+        <td>Clusters unnormalized character k-mer counts; sequence length also affects grouping.</td>
+        <td>Sequence plus optional <code>k</code> and cluster count.</td>
+      </tr>
+      <tr>
+        <td><code>hard-kmer</code></td>
+        <td>Uses coarser, more stringent k-mer groups.</td>
+        <td>Sequence.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Homology maps</h2>
+  <CodeBlock code={homology} language="python" />
+  <Callout tone="important">
+    <p>
+      Custom datasets must use gene names from the same Ensembl release as the
+      Compara map. Unmatched names are treated as unrelated genes.
+    </p>
+  </Callout>
+</DocsLayout>

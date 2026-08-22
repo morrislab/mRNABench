@@ -1,0 +1,143 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import Callout from "../../components/Callout.astro";
+
+const apiGroups = [
+  {
+    importPath: "import mrna_bench as mb",
+    objects: "load_dataset, load_model, path setters/getters, model cache helpers",
+    use: "Top-level loaders, path configuration, and model-cache helpers for registered datasets and models.",
+  },
+  {
+    importPath: "mrna_bench.datasets",
+    objects: "BenchmarkDataset, DatasetMetadata, TaskSpec, EvaluationMethod, DATASET_CATALOG",
+    use: "Dataset contracts, metadata, and registration.",
+  },
+  {
+    importPath: "mrna_bench.models",
+    objects: "EmbeddingModel, ModelBehavior, TrackOutput, mean_pool, MODEL_CATALOG",
+    use: "Model adapters, capabilities, pooling, and registration.",
+  },
+  {
+    importPath: "mrna_bench.embedder",
+    objects: "DatasetEmbedder, get_embedding_filepath",
+    use: "In-memory and persisted embedding generation.",
+  },
+  {
+    importPath: "mrna_bench.linear_probe",
+    objects: "LinearProbe, LinearProbeBuilder",
+    use: "Builder-based split, evaluator, estimator, and probing workflows.",
+  },
+  {
+    importPath: "mrna_bench.zeroshot",
+    objects: "ZeroShotVEP",
+    use: "Embedding and likelihood variant-effect scoring.",
+  },
+  {
+    importPath: "mrna_bench.fine_tune",
+    objects: "FineTuneWrapper, TaskHead, FineTuneTrainer, TrainerConfig, create_dataloaders, FineTunePersister",
+    use: "Optional task heads, LoRA training, dataloaders, and persistence.",
+  },
+];
+---
+
+<DocsLayout
+  title="API map"
+  description="A compact guide to the stable package surfaces and where lower-level split classes live."
+  section="Extend"
+>
+  <p>
+    The website documents workflows rather than repeating every docstring. Use
+    this map to locate the public object behind a guide, then read the source
+    signature for less common parameters.
+  </p>
+
+  <div class="api-map">
+    {
+      apiGroups.map((group) => (
+        <article>
+          <code>{group.importPath}</code>
+          <h2>{group.objects}</h2>
+          <p>{group.use}</p>
+        </article>
+      ))
+    }
+  </div>
+
+  <h2>Split classes</h2>
+  <p>
+    Split implementations are imported from their modules below
+    <code>mrna_bench.data_splitter</code>:
+  </p>
+  <ul>
+    <li><code>data_splitter.DataSplitter</code></li>
+    <li><code>sklearn_split.SklearnSplitter</code></li>
+    <li><code>homology_split.HomologySplitter</code></li>
+    <li><code>kmer_split.KMerSplitter</code></li>
+    <li><code>kmer_split.HardKMerSplitter</code></li>
+    <li><code>chromosome_split.ChromosomeSplitter</code></li>
+  </ul>
+
+  <Callout label="Import detail">
+    <p>
+      The <code>mrna_bench.data_splitter</code> package initializer does not
+      re-export these classes. Import them from their defining modules.
+    </p>
+  </Callout>
+
+  <h2>Repository scripts</h2>
+  <table tabindex="0" aria-label="Repository scripts">
+    <thead>
+      <tr><th>Path</th><th>Purpose</th></tr>
+    </thead>
+    <tbody>
+      <tr><td><code>scripts/embedding/embed_dataset.py</code></td><td>Generate and persist embeddings, including chunked runs.</td></tr>
+      <tr><td><code>scripts/linear_probe/by_modelname.py</code></td><td>Run linear probes or variant-effect scoring.</td></tr>
+      <tr><td><code>scripts/linear_probe/summarize_metrics.py</code></td><td>Aggregate seeded metrics.</td></tr>
+      <tr><td><code>scripts/management/query_lp_db_results.py</code></td><td>Filter, inspect, and audit result databases.</td></tr>
+      <tr><td><code>scripts/management/manage_embeddings.py</code></td><td>Inspect persisted embedding inventory.</td></tr>
+      <tr><td><code>scripts/finetune/run_finetune.py</code></td><td>Run optional LoRA fine-tuning.</td></tr>
+    </tbody>
+  </table>
+</DocsLayout>
+
+<style>
+  .api-map {
+    margin: 2rem 0 4rem;
+    border-top: 1px solid var(--line-strong);
+  }
+
+  .api-map article {
+    display: grid;
+    grid-template-columns: 13rem 1.2fr 1fr;
+    gap: 1.5rem;
+    padding: 1.2rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .api-map code {
+    width: fit-content;
+    height: fit-content;
+    font-size: 0.72rem;
+  }
+
+  .api-map h2 {
+    margin: 0;
+    padding: 0;
+    font-size: var(--text-sm);
+    font-weight: 620;
+    line-height: 1.5;
+  }
+
+  .api-map p {
+    margin: 0;
+    font-size: var(--text-sm);
+  }
+
+  @media (max-width: 700px) {
+    .api-map article {
+      grid-template-columns: 1fr;
+      gap: 0.65rem;
+    }
+  }
+</style>

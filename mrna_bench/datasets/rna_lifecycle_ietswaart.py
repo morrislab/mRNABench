@@ -24,7 +24,7 @@ HF_URL = (
 )
 SOURCE_ARCHIVE = "ietswaart_wf_transcript_tables.tar.gz"
 SOURCE_URL = (
-    "https://github.com/morrislab/mRNABench/raw/main/"
+    "https://github.com/morrislab/mRNABench/raw/t_dev/"
     f"resources/{SOURCE_ARCHIVE}"
 )
 SOURCE_SHA256 = (

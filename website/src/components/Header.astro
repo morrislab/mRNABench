@@ -1,0 +1,244 @@
+---
+import { site, withBase } from "../lib/site";
+import Logo from "./Logo.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+
+const navigation = [
+  { href: "/overview", label: "Overview" },
+  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/datasets", label: "Datasets" },
+  { href: "/models", label: "Models" },
+  { href: "/docs", label: "Docs" },
+];
+
+const currentPath = Astro.url.pathname;
+
+function isCurrentPath(href: string): boolean {
+  const target = withBase(href).replace(/\/$/, "");
+  return currentPath === target || currentPath.startsWith(`${target}/`);
+}
+
+function isExactPath(href: string): boolean {
+  return currentPath === withBase(href).replace(/\/$/, "");
+}
+---
+
+<header class="site-header" data-site-header>
+  <div class="site-header__inner shell">
+    <Logo />
+    <nav class="site-nav" id="primary-navigation" aria-label="Primary navigation" data-site-nav>
+      {
+        navigation.map((item) => (
+          <a
+            class:list={[
+              "site-nav__link",
+              { "site-nav__link--active": isCurrentPath(item.href) },
+            ]}
+            href={withBase(item.href)}
+            aria-current={isExactPath(item.href) ? "page" : undefined}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+    <div class="site-header__actions">
+      <a class="site-header__github" href={site.repository}>
+        GitHub
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M5 11L11 5M6 5H11V10"></path>
+        </svg>
+      </a>
+      <ThemeToggle />
+      <button class="menu-toggle" type="button" aria-label="Open menu" aria-controls="primary-navigation" aria-expanded="false" data-menu-toggle>
+        <span></span>
+        <span></span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<script>
+  function initializeMenu() {
+    const button = document.querySelector<HTMLButtonElement>("[data-menu-toggle]");
+    const navigation = document.querySelector<HTMLElement>("[data-site-nav]");
+    if (!button || !navigation) return;
+
+    const setOpen = (isOpen: boolean, returnFocus = false) => {
+      button.setAttribute("aria-expanded", String(isOpen));
+      button.setAttribute("aria-label", isOpen ? "Close menu" : "Open menu");
+      navigation.dataset.open = String(isOpen);
+      if (isOpen) {
+        window.requestAnimationFrame(() => {
+          navigation.querySelector<HTMLAnchorElement>("a")?.focus();
+        });
+      } else if (returnFocus) {
+        button.focus();
+      }
+    };
+
+    button.addEventListener("click", () => {
+      setOpen(button.getAttribute("aria-expanded") !== "true");
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (
+        event.key === "Escape"
+        && button.getAttribute("aria-expanded") === "true"
+      ) {
+        setOpen(false, true);
+      }
+    });
+
+    window.addEventListener("resize", () => {
+      if (window.innerWidth > 880) setOpen(false);
+    });
+  }
+
+  initializeMenu();
+</script>
+
+<style>
+  .site-header {
+    position: sticky;
+    z-index: 20;
+    top: 0;
+    background: var(--paper);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(12px);
+  }
+
+  .site-header__inner {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    min-height: 4.5rem;
+  }
+
+  .site-nav {
+    display: flex;
+    align-items: stretch;
+    align-self: stretch;
+    gap: 1.8rem;
+  }
+
+  .site-nav__link {
+    position: relative;
+    display: flex;
+    align-items: center;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+    font-weight: 540;
+    text-decoration: none;
+  }
+
+  .site-nav__link::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 2px;
+    background: var(--red);
+    content: "";
+    opacity: 0;
+    transform: scaleX(0.4);
+    transition:
+      opacity 160ms ease,
+      transform 160ms ease;
+  }
+
+  .site-nav__link:hover,
+  .site-nav__link--active {
+    color: var(--ink);
+  }
+
+  .site-nav__link--active::after {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+
+  .site-header__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 1.15rem;
+  }
+
+  .site-header__github {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    color: var(--ink);
+    font-size: var(--text-sm);
+    font-weight: 540;
+    text-decoration: none;
+  }
+
+  .site-header__github svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.4;
+  }
+
+  .menu-toggle {
+    display: none;
+    width: 2.3rem;
+    height: 2.3rem;
+    padding: 0.55rem;
+    background: transparent;
+    border: 1px solid var(--line-strong);
+  }
+
+  .menu-toggle span {
+    display: block;
+    width: 100%;
+    height: 1px;
+    margin: 0.28rem 0;
+    background: var(--ink);
+  }
+
+  @media (max-width: 880px) {
+    .site-header__inner {
+      grid-template-columns: 1fr auto;
+    }
+
+    .site-nav {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      left: 0;
+      display: grid;
+      gap: 0;
+      align-items: stretch;
+      padding: 0.75rem var(--gutter) 1.25rem;
+      background: var(--paper);
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    :global(.js) .site-nav {
+      display: none;
+    }
+
+    :global(.js) .site-nav[data-open="true"] {
+      display: grid;
+    }
+
+    .site-nav__link {
+      min-height: 2.8rem;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .site-header__github {
+      display: none;
+    }
+
+    :global(.js) .menu-toggle {
+      display: block;
+    }
+  }
+</style>

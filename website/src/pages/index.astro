@@ -1,0 +1,476 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+import BenchmarkDiagram from "../components/BenchmarkDiagram.astro";
+import HeroInstrument from "../components/HeroInstrument.astro";
+import { site, withBase } from "../lib/site";
+
+const paths = [
+  {
+    number: "01",
+    title: "Read the benchmark",
+    text: "See how the task collection, controls, splits, and evaluation rules fit together.",
+    href: "/overview",
+    label: "Paper overview",
+  },
+  {
+    number: "02",
+    title: "Compare models",
+    text: "Compare model-task results with their metric, split, and result coverage attached.",
+    href: "/leaderboard",
+    label: "Open leaderboard",
+  },
+  {
+    number: "03",
+    title: "Run a probe",
+    text: "Generate embeddings, run a seeded probe, and inspect metrics with the Python API or repository scripts.",
+    href: "/docs/quickstart",
+    label: "Open the quickstart",
+  },
+];
+---
+
+<BaseLayout>
+  <section class="hero">
+    <div class="shell hero__grid">
+      <div class="hero__copy">
+        <p class="eyebrow">A benchmark for mRNA representation learning</p>
+        <h1>Evaluating frozen mRNA representations <em>across prediction tasks</em></h1>
+        <p class="hero__lead">
+          mRNABench compares frozen representations across translation, RNA
+          stability, localization, molecular interactions, transcript lifecycle,
+          and UTR single-nucleotide variant (SNV) pathogenicity classification.
+          Within each dataset, all models use the same probe and split protocol.
+        </p>
+        <div class="hero__actions">
+          <a class="button" href={withBase("/leaderboard")}>Open the result archive</a>
+          <a class="button button--quiet" href={withBase("/docs/quickstart")}>Run the benchmark</a>
+        </div>
+        <dl class="hero__meta">
+          <div>
+            <dt>Scope</dt>
+            <dd>mRNA sequence and function</dd>
+          </div>
+          <div>
+            <dt>Evaluation</dt>
+            <dd>Linear probes and paired variant scores</dd>
+          </div>
+          <div>
+            <dt>Access</dt>
+            <dd>Open source Python package</dd>
+          </div>
+        </dl>
+        <a class="hero__paper" href={site.paper}>
+          <span>bioRxiv v1</span>
+          <strong>mRNABench: A curated benchmark for mature mRNA property and function prediction</strong>
+          <i>Posted July 8, 2025</i>
+        </a>
+      </div>
+      <HeroInstrument />
+    </div>
+  </section>
+
+  <section class="premise section">
+    <div class="shell premise__grid">
+      <div>
+        <p class="eyebrow">Why this benchmark</p>
+        <h2>Controlled evaluation across mRNA tasks.</h2>
+      </div>
+      <div class="premise__body">
+        <p>
+          Model reports often use different datasets, preprocessing, splits,
+          and downstream heads. A higher published score can reflect any part
+          of that setup, not only the learned representation.
+        </p>
+        <p>
+          For each dataset, mRNABench evaluates every model's frozen
+          representation with the same task-specific split and probe settings.
+        </p>
+        <a href={withBase("/overview")}>Read the benchmark rationale <span aria-hidden="true">-&gt;</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="flow section">
+    <div class="shell">
+      <div class="flow__heading">
+        <p class="eyebrow">Evaluation routes</p>
+        <h2>From sequence input to task-specific evaluation.</h2>
+      </div>
+      <BenchmarkDiagram />
+    </div>
+  </section>
+
+  <section class="leaderboard-peek section">
+    <div class="shell leaderboard-peek__grid">
+      <div class="leaderboard-peek__copy">
+        <p class="eyebrow">Leaderboard</p>
+        <h2>Compare model-task results.</h2>
+        <p>
+          Filter the result set by task and dataset, then compare the underlying
+          metric, evaluator, split, and result coverage. The overall ordering
+          is one view of the data, not a replacement for task-level scores.
+        </p>
+        <a class="button" href={withBase("/leaderboard")}>See all results</a>
+      </div>
+      <div class="leaderboard-peek__fields">
+        <div><span>Overall</span><strong>Source-balanced task ranks</strong></div>
+        <div><span>Drill down</span><strong>Dataset and task results</strong></div>
+        <div><span>Context</span><strong>Metric, evaluator, and split</strong></div>
+        <div><span>Coverage</span><strong>Visible for every model</strong></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="paths section">
+    <div class="shell">
+      <p class="eyebrow">Use the project</p>
+      <div class="paths__grid">
+        {
+          paths.map((path) => (
+            <a href={withBase(path.href)}>
+              <span>{path.number}</span>
+              <h2>{path.title}</h2>
+              <p>{path.text}</p>
+              <strong>{path.label} <i aria-hidden="true">-&gt;</i></strong>
+            </a>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .hero {
+    padding: clamp(3rem, 6vw, 6rem) 0 clamp(5rem, 9vw, 9rem);
+  }
+
+  .hero__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(24rem, 0.95fr);
+    gap: clamp(2.5rem, 6vw, 7rem);
+    align-items: center;
+  }
+
+  .hero h1 {
+    max-width: 11ch;
+    margin: 0;
+    font-size: var(--text-2xl);
+    font-weight: 520;
+    letter-spacing: -0.07em;
+    line-height: 0.9;
+  }
+
+  .hero h1 em {
+    position: relative;
+    display: inline-block;
+    margin-left: 0.08em;
+    color: var(--red);
+    font-style: normal;
+  }
+
+  .hero h1 em::after {
+    position: absolute;
+    right: 0.02em;
+    bottom: -0.09em;
+    width: 0.45em;
+    height: 0.08em;
+    background: currentColor;
+    content: "";
+  }
+
+  .hero__lead {
+    max-width: 40rem;
+    margin: 2rem 0 0;
+    color: var(--ink-muted);
+    font-size: var(--text-lg);
+    line-height: 1.45;
+  }
+
+  .hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.7rem;
+    margin-top: 2rem;
+  }
+
+  .hero__meta {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: clamp(3rem, 7vw, 6rem) 0 0;
+    padding-top: 1.2rem;
+    border-top: 1px solid var(--line-strong);
+  }
+
+  .hero__meta div {
+    display: grid;
+    gap: 0.28rem;
+  }
+
+  .hero__meta dt {
+    color: var(--ink-muted);
+    font-size: 0.63rem;
+    font-weight: 680;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .hero__meta dd {
+    margin: 0;
+    font-size: 0.78rem;
+    line-height: 1.35;
+  }
+
+  .hero__paper {
+    display: grid;
+    grid-template-columns: 6rem minmax(0, 1fr) auto;
+    gap: 1rem;
+    align-items: baseline;
+    margin-top: 1.4rem;
+    padding: 1rem 0;
+    color: var(--ink);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+
+  .hero__paper span,
+  .hero__paper i {
+    color: var(--ink-muted);
+    font-style: normal;
+  }
+
+  .hero__paper span {
+    font-weight: 680;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .hero__paper strong {
+    font-weight: 560;
+  }
+
+  .hero__paper:hover strong {
+    color: var(--red-deep);
+  }
+
+  .premise {
+    background: var(--black);
+    color: var(--white);
+  }
+
+  .premise .eyebrow {
+    color: var(--red-on-dark);
+  }
+
+  .premise h2 {
+    color: var(--white);
+  }
+
+  .premise__grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 0.75fr);
+    gap: clamp(3rem, 8vw, 9rem);
+  }
+
+  .premise h2 {
+    max-width: 14ch;
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: 520;
+    letter-spacing: -0.055em;
+    line-height: 1.03;
+  }
+
+  .premise__body p {
+    margin: 0 0 1.4rem;
+    color: var(--footer-muted);
+  }
+
+  .premise__body a {
+    display: inline-flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    color: var(--white);
+    font-size: var(--text-sm);
+    font-weight: 620;
+  }
+
+  .flow__heading {
+    display: grid;
+    grid-template-columns: 1fr 1.45fr;
+    align-items: end;
+    gap: 2rem;
+    margin-bottom: clamp(4rem, 8vw, 7rem);
+  }
+
+  .flow__heading .eyebrow {
+    align-self: start;
+  }
+
+  .flow h2,
+  .leaderboard-peek h2 {
+    margin: 0;
+    font-size: var(--text-xl);
+    font-weight: 530;
+    letter-spacing: -0.055em;
+    line-height: 1.05;
+  }
+
+  .leaderboard-peek {
+    background: var(--paper-soft);
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+  }
+
+  .leaderboard-peek__grid {
+    display: grid;
+    grid-template-columns: 0.8fr 1.2fr;
+    gap: clamp(3rem, 8vw, 8rem);
+    align-items: center;
+  }
+
+  .leaderboard-peek__copy > p:not(.eyebrow) {
+    max-width: 34rem;
+    margin: 1.5rem 0 2rem;
+    color: var(--ink-muted);
+  }
+
+  .leaderboard-peek__fields {
+    display: grid;
+    background: var(--paper-raised);
+    border: 1px solid var(--line-strong);
+  }
+
+  .leaderboard-peek__fields div {
+    display: grid;
+    grid-template-columns: 7rem 1fr;
+    gap: 1rem;
+    min-height: 5.5rem;
+    align-items: center;
+    padding: 1rem 1.4rem;
+  }
+
+  .leaderboard-peek__fields div + div {
+    border-top: 1px solid var(--line);
+  }
+
+  .leaderboard-peek__fields span {
+    color: var(--red-deep);
+    font-size: var(--text-xs);
+    font-weight: 680;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+
+  .leaderboard-peek__fields strong {
+    font-size: var(--text-base);
+    font-weight: 560;
+  }
+
+  .paths__grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    margin-top: 3rem;
+    border-top: 1px solid var(--line-strong);
+    border-bottom: 1px solid var(--line-strong);
+  }
+
+  .paths__grid > a {
+    min-height: 19rem;
+    padding: 1.6rem;
+    color: var(--ink);
+    text-decoration: none;
+    transition: background 180ms ease;
+  }
+
+  .paths__grid > a + a {
+    border-left: 1px solid var(--line-strong);
+  }
+
+  .paths__grid > a:hover {
+    background: var(--paper-soft);
+  }
+
+  .paths__grid span {
+    color: var(--red-deep);
+    font-size: var(--text-xs);
+    font-weight: 650;
+  }
+
+  .paths__grid h2 {
+    margin: 3rem 0 1rem;
+    font-size: var(--text-lg);
+    font-weight: 560;
+    letter-spacing: -0.04em;
+  }
+
+  .paths__grid p {
+    max-width: 19rem;
+    margin: 0;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .paths__grid strong {
+    display: block;
+    margin-top: 2.4rem;
+    font-size: var(--text-sm);
+    font-weight: 620;
+  }
+
+  .paths__grid i {
+    color: var(--red);
+    font-style: normal;
+  }
+
+  @media (max-width: 960px) {
+    .hero__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .hero__copy {
+      padding-top: 2rem;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .premise__grid,
+    .flow__heading,
+    .leaderboard-peek__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .paths__grid {
+      grid-template-columns: 1fr;
+    }
+
+    .paths__grid > a {
+      min-height: 0;
+      padding-block: 2rem;
+    }
+
+    .paths__grid > a + a {
+      border-top: 1px solid var(--line-strong);
+      border-left: 0;
+    }
+  }
+
+  @media (max-width: 560px) {
+    .hero__meta {
+      grid-template-columns: 1fr;
+    }
+
+    .hero__paper {
+      grid-template-columns: 1fr;
+      gap: 0.35rem;
+    }
+
+    .leaderboard-peek__fields div {
+      grid-template-columns: 1fr;
+      gap: 0.35rem;
+    }
+  }
+</style>

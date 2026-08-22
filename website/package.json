@@ -1,0 +1,23 @@
+{
+  "name": "mrnabench-website",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "sync-assets": "node scripts/sync-assets.mjs",
+    "prepare-data": "python scripts/build_leaderboard.py",
+    "dev": "npm run sync-assets && npm run prepare-data && astro dev",
+    "check": "npm run sync-assets && npm run prepare-data && astro check",
+    "build": "npm run sync-assets && npm run prepare-data && astro check && astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/sitemap": "^3.7.3",
+    "@fontsource-variable/archivo": "^5.3.0",
+    "astro": "^7.2.4"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "typescript": "^6.0.3"
+  }
+}

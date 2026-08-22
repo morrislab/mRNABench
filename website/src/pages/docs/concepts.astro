@@ -1,0 +1,144 @@
+---
+import DocsLayout from "../../layouts/DocsLayout.astro";
+import Callout from "../../components/Callout.astro";
+
+const parts = [
+  {
+    name: "Dataset",
+    object: "BenchmarkDataset",
+    text: "A processed dataframe plus metadata describing tasks, targets, species, split defaults, and compatible evaluation routes.",
+  },
+  {
+    name: "Model",
+    object: "EmbeddingModel",
+    text: "A common sequence-model adapter whose declared behaviors specify support for embeddings, likelihood scoring, and track prediction.",
+  },
+  {
+    name: "Evaluator",
+    object: "LinearProbe",
+    text: "A simple downstream estimator used to measure what is accessible in a frozen representation.",
+  },
+  {
+    name: "Analysis",
+    object: "Results and scripts",
+    text: "Persisted metrics and seed summaries keyed by task, target, split, and model.",
+  },
+];
+---
+
+<DocsLayout
+  title="Core concepts"
+  description="The objects and defaults that connect a dataset, model output, split, evaluator, and result."
+  section="Start"
+>
+  <p>
+    mRNABench keeps data loading, model inference, splitting, probing, and
+    persistence separate. A typical run connects one object from each layer.
+  </p>
+
+  <div class="concept-list">
+    {
+      parts.map((part, index) => (
+        <article>
+          <span>{String(index + 1).padStart(2, "0")}</span>
+          <div>
+            <h2>{part.name}</h2>
+            <code>{part.object}</code>
+            <p>{part.text}</p>
+          </div>
+        </article>
+      ))
+    }
+  </div>
+
+  <h2>Dataset metadata defines evaluation defaults</h2>
+  <p>Every registered dataset declares:</p>
+  <ul>
+    <li>its stable identifier and species;</li>
+    <li>one or more task and target columns;</li>
+    <li>a default split strategy;</li>
+    <li>whether it belongs to the core or extended benchmark;</li>
+    <li>supported linear-probe and variant-effect routes;</li>
+    <li>an optional variant region and VEP target column.</li>
+  </ul>
+  <p>
+    Calling <code>LinearProbeBuilder(dataset).build()</code> uses the first
+    task and target, the metadata split, and the evaluator matching that task.
+    Explicit builder methods override those defaults.
+  </p>
+
+  <h2>Evaluation routes</h2>
+  <table tabindex="0" aria-label="Evaluation routes">
+    <thead>
+      <tr><th>Route</th><th>What is evaluated</th><th>Typical output</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><code>linear_probe</code></td>
+        <td>A simple estimator fitted on frozen embeddings.</td>
+        <td>Regression, classification, or multilabel metrics.</td>
+      </tr>
+      <tr>
+        <td><code>embedding_vep</code></td>
+        <td>A scalar function of the pooled alternate-minus-reference embedding difference.</td>
+        <td>The default L2 score supports classification; regression requires a custom signed <code>scoring_fn</code> through the Python API.</td>
+      </tr>
+      <tr>
+        <td><code>likelihood_vep</code></td>
+        <td>A task-oriented difference of normalized reference and alternate log-likelihoods.</td>
+        <td>Reference minus alternate for classification; alternate minus reference for regression.</td>
+      </tr>
+    </tbody>
+  </table>
+  <p>
+    Paired datasets used for variant-effect prediction (VEP) implement
+    <code>get_vep_pairs()</code>, which constructs the canonical reference and
+    alternate value columns used for VEP scoring.
+  </p>
+
+  <h2>Frozen probing and fine-tuning answer different questions</h2>
+  <p>
+    A linear probe asks whether the representation already organizes useful
+    task information. Fine-tuning asks how well the model can adapt when its
+    parameters or added LoRA weights are trained for that task. The paper's
+    central model comparison uses frozen representations.
+  </p>
+  <Callout>
+    <p>
+      Do not compare a fine-tuned score and a frozen-probe score as if they were
+      the same evaluation setting.
+    </p>
+  </Callout>
+</DocsLayout>
+
+<style>
+  .concept-list {
+    margin: 2rem 0 4rem;
+    border-top: 1px solid var(--line-strong);
+  }
+
+  .concept-list article {
+    display: grid;
+    grid-template-columns: 3rem 1fr;
+    gap: 1rem;
+    padding: 1.35rem 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .concept-list article > span {
+    color: var(--red-deep);
+    font-size: var(--text-xs);
+    font-weight: 680;
+  }
+
+  .concept-list h2 {
+    display: inline;
+    margin: 0 0.55rem 0 0;
+    padding: 0;
+    font-size: var(--text-lg);
+  }
+
+  .concept-list p {
+    margin-bottom: 0;
+  }
+</style>

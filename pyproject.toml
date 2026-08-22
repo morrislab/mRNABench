@@ -32,6 +32,8 @@ dependencies = [
 
 [project.urls]
 Repository = "https://github.com/morrislab/mRNABench"
+Documentation = "https://morrislab.github.io/mRNABench/"
+Paper = "https://doi.org/10.1101/2025.07.05.662870"
 
 [project.optional-dependencies]
 base_models = [

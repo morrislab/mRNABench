@@ -1,0 +1,24 @@
+{
+  "release_id": "legacy-may-2026",
+  "release_label": "May 2026 linear-probe archive",
+  "data_status": "legacy",
+  "expected_runs": 10,
+  "regression_result_task": "regression_ridge",
+  "legacy_regression_source_priority": [
+    "reg_ridge",
+    "regression"
+  ],
+  "legacy_regression_max_abs_difference": 0.003,
+  "excluded_datasets": {
+    "eclip-binding-k562": "Dataset rebuilt after this result snapshot.",
+    "eclip-binding-hepg2": "Dataset rebuilt after this result snapshot.",
+    "mrl-hl-lbkwk": "Dataset rebuilt after this result snapshot.",
+    "rna-lifecycle-ietswaart": "Dataset rebuilt after this result snapshot.",
+    "utr-variants-bohn-utr3": "Dataset rebuilt after this result snapshot.",
+    "utr-variants-bohn-utr5": "Dataset rebuilt after this result snapshot."
+  },
+  "excluded_models": {
+    "dilated_resnet": "Supervised task-specific reference, not a catalog model.",
+    "orthrus-large-6-splice-only-10cl-randseed0": "Removed experimental checkpoint."
+  }
+}

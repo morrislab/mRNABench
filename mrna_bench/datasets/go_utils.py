@@ -14,7 +14,7 @@ from mrna_bench.utils import download_file
 
 SOURCE_FILE = "go_annotations.tsv.gz"
 SOURCE_URL = (
-    "https://github.com/morrislab/mRNABench/raw/main/"
+    "https://github.com/morrislab/mRNABench/raw/t_dev/"
     f"resources/{SOURCE_FILE}"
 )
 SOURCE_SHA256 = (
