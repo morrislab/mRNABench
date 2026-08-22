@@ -35,6 +35,46 @@ def test_dataset_metadata_expands_task_specs():
     assert [spec.target_col for spec in metadata.task_specs] == [
         "label",
     ]
+    assert metadata.vep_task_spec == metadata.task_specs[0]
+
+
+def test_dataset_metadata_supports_distinct_vep_target():
+    """A dataset can separate row-level and paired regression targets."""
+    metadata = DatasetMetadata(
+        dataset_name="test",
+        species="human",
+        task=["regression"],
+        target_col=["absolute", "reference_only"],
+        default_split_type="chromosome",
+        benchmark_set="core",
+        evaluations=("linear_probe", "embedding_vep", "likelihood_vep"),
+        variant_region="utr",
+        vep_target_col="effect",
+    )
+
+    assert [spec.target_col for spec in metadata.task_specs] == [
+        "absolute",
+        "reference_only",
+    ]
+    assert metadata.vep_task_spec == type(metadata.task_specs[0])(
+        "regression",
+        "effect",
+    )
+
+
+def test_dataset_metadata_rejects_vep_target_without_route():
+    """A separate paired target requires a VEP evaluation route."""
+    with pytest.raises(ValueError, match="requires a VEP"):
+        DatasetMetadata(
+            dataset_name="test",
+            species="human",
+            task=["regression"],
+            target_col=["absolute"],
+            default_split_type="default",
+            benchmark_set="core",
+            evaluations=("linear_probe",),
+            vep_target_col="effect",
+        )
 
 
 def test_dataset_metadata_rejects_ambiguous_task_targets():

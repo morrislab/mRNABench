@@ -83,7 +83,10 @@ class LinearProbeBuilder:
         self.task = self._resolve_default_task(metadata)
         self.regressor = "ols"
         self.split_type = self._resolve_default_split_type(metadata)
-        self.is_vep = self._resolve_default_vep(metadata)
+        self.is_vep = self._target_uses_vep(
+            metadata,
+            self.target_col,
+        )
         self.eval_all_splits = False
 
         self.model_short_name: str | None = None
@@ -122,8 +125,15 @@ class LinearProbeBuilder:
         return "default"
 
     @staticmethod
-    def _resolve_default_vep(metadata: object | None) -> bool:
+    def _target_uses_vep(
+        metadata: object | None,
+        target_col: str,
+    ) -> bool:
         if metadata is not None:
+            vep_spec = getattr(metadata, "vep_task_spec", None)
+            vep_target = getattr(vep_spec, "target_col", None)
+            if isinstance(vep_target, str):
+                return vep_target == target_col
             is_vep = getattr(metadata, "is_vep", None)
             if isinstance(is_vep, bool):
                 return is_vep
@@ -262,6 +272,10 @@ class LinearProbeBuilder:
             LinearProbeBuilder with set task and target column.
         """
         self.target_col = target_col
+        self.is_vep = self._target_uses_vep(
+            getattr(self.dataset, "metadata", None),
+            target_col,
+        )
 
         return self
 

@@ -255,6 +255,7 @@ The current datasets catalogued are:
 |---|---|---|---|---|
 | RNA Half-life (Human) | <code>rnahl&#8209;human</code> | RNA half-life of human transcripts measured using time-course RNA-seq after transcription inhibition. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
 | RNA Half-life (Mouse) | <code>rnahl&#8209;mouse</code> | RNA half-life of mouse transcripts measured using time-course RNA-seq after transcription inhibition. | `regression` | [paper](https://genomebiology.biomedcentral.com/articles/10.1186/s13059-022-02811-x) |
+| 3′ UTR Stability MPRA (Siegel) | <code>rna&#8209;stability&#8209;siegel&#8209;jurkat</code><br><code>rna&#8209;stability&#8209;siegel&#8209;beas2b</code> | Reporter stability of native, naturally varied, and designed 3′ UTR fragments in Jurkat and BEAS-2B cells. Supports full-library, reference-only, and paired perturbation regression. | `regression` | [paper](https://doi.org/10.1093/g3journal/jkab404) |
 
 ### Protein-RNA Interactions
 | Dataset Name | Catalogue Identifier | Description | Tasks | Citation |

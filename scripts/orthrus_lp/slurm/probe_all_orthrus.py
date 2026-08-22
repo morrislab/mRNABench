@@ -99,15 +99,23 @@ if __name__ == "__main__":
 
         print("Dataset name: ", dataset_name)
 
-        jobs = [
+        standard_jobs = [
             (spec.task, spec.target_col)
             for spec in dataset.metadata.task_specs
         ]
-        if "embedding_vep" in dataset_info["evaluations"]:
-            jobs.extend(
-                ("embedding_vep", target)
-                for target in dataset.metadata.target_col
-            )
+        vep_spec = dataset.metadata.vep_task_spec
+        vep_jobs = (
+            [(vep_spec.task, vep_spec.target_col)]
+            if vep_spec is not None
+            else []
+        )
+        jobs = list(dict.fromkeys(standard_jobs + vep_jobs))
+        if (
+            "embedding_vep" in dataset_info["evaluations"]
+            and vep_spec is not None
+            and vep_spec.task != "regression"
+        ):
+            jobs.append(("embedding_vep", vep_spec.target_col))
 
         for task, target_col in jobs:
 

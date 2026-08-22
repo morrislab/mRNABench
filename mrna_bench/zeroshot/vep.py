@@ -6,6 +6,7 @@ import pandas as pd
 from sklearn.metrics import average_precision_score, roc_auc_score
 
 from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.metrics import regression_metrics
 
 if TYPE_CHECKING:
     from mrna_bench.datasets import BenchmarkDataset
@@ -27,12 +28,14 @@ class ZeroShotVEP:
         model: "EmbeddingModel | None" = None,
         score_method: "ModelBehavior | str | None" = None,
         normalization: str = "mean",
+        task: str = "classification",
+        likelihood_direction: str | None = None,
     ):
         """Initialize ZeroShotVEP.
 
         Args:
             data_df: Dataset-specific VEP rows normalized to ref/alt columns.
-            target_col: Binary label column for AUROC/AUPRC evaluation.
+            target_col: Classification or regression label column.
             persister: Optional persister for writing results to results.db.
             scoring_fn: Callable mapping an (N, D) delta matrix to (N,)
                 scalar scores. Defaults to row-wise L2 norm.
@@ -41,9 +44,24 @@ class ZeroShotVEP:
                 marginal scoring.
             normalization: Sum for a likelihood ratio or mean for a
                 length-normalized score.
+            task: Classification or regression.
+            likelihood_direction: Order of the likelihood score difference.
         """
         if target_col not in data_df.columns:
             raise ValueError(f"Target column '{target_col}' not in dataframe.")
+        if task not in {"classification", "regression"}:
+            raise ValueError("VEP task must be classification or regression.")
+        if likelihood_direction is None:
+            likelihood_direction = self.default_likelihood_direction(task)
+        if likelihood_direction not in {"ref-alt", "alt-ref"}:
+            raise ValueError(
+                "likelihood_direction must be ref-alt or alt-ref."
+            )
+        if model is None and task == "regression" and scoring_fn is None:
+            raise ValueError(
+                "Embedding VEP regression requires a signed scoring_fn; "
+                "the default L2 norm discards effect direction."
+            )
 
         self.data_df = data_df.copy()
         self.target_col = target_col
@@ -51,19 +69,60 @@ class ZeroShotVEP:
         self.model = model
         self.score_method = score_method
         self.normalization = normalization
-        self.result_key = (
-            _ZEROSHOT_SEED
-            if model is None
-            else "{}-{}-attn-{}".format(
+        self.task = task
+        self.likelihood_direction = likelihood_direction
+        if model is None:
+            self.result_key = _ZEROSHOT_SEED
+        else:
+            self.result_key = self.likelihood_result_key(
                 score_method,
                 normalization,
                 getattr(model, "attn_implementation", None) or "none",
+                likelihood_direction,
             )
-        )
         self.scoring_fn: Callable[[np.ndarray], np.ndarray] = (
             scoring_fn if scoring_fn is not None
             else lambda X: np.linalg.norm(X, axis=1)
         )
+
+    @staticmethod
+    def likelihood_result_key(
+        score_method: object,
+        normalization: str,
+        attention: str,
+        direction: str,
+    ) -> str:
+        """Return the persisted key for a likelihood VEP configuration."""
+        result_key = "{}-{}-attn-{}".format(
+            score_method,
+            normalization,
+            attention,
+        )
+        if direction != "ref-alt":
+            result_key += "-{}".format(direction)
+        return result_key
+
+    @staticmethod
+    def default_likelihood_direction(task: str) -> str:
+        """Return the score direction matching a VEP task's target."""
+        return "alt-ref" if task == "regression" else "ref-alt"
+
+    @staticmethod
+    def _resolve_target_and_task(
+        metadata: object,
+        target_col: str | None,
+        task: str | None,
+    ) -> tuple[str, str]:
+        """Resolve a VEP target and task from dataset metadata."""
+        spec = getattr(metadata, "vep_task_spec", None)
+        if spec is not None:
+            selected_target = target_col or spec.target_col
+            selected_task = task or spec.task
+            return selected_target, selected_task
+
+        targets = getattr(metadata, "target_col", ["target"])
+        tasks = getattr(metadata, "task", ["classification"])
+        return target_col or targets[0], task or tasks[0]
 
     @classmethod
     def from_embeddings(
@@ -71,6 +130,7 @@ class ZeroShotVEP:
         dataset: "BenchmarkDataset",
         embeddings: np.ndarray,
         target_col: str | None = None,
+        task: str | None = None,
         **kwargs,
     ) -> "ZeroShotVEP":
         """Build embedding VEP directly from a dataset and embeddings."""
@@ -82,9 +142,15 @@ class ZeroShotVEP:
             )
         data_df = dataset.data_df.copy()
         data_df["embeddings"] = list(embeddings)
+        target_col, task = cls._resolve_target_and_task(
+            dataset.metadata,
+            target_col,
+            task,
+        )
         return cls(
             dataset.get_vep_pairs(data_df, ("embeddings",)),
-            target_col or dataset.metadata.target_col[0],
+            target_col,
+            task=task,
             **kwargs,
         )
 
@@ -95,7 +161,9 @@ class ZeroShotVEP:
         model: "EmbeddingModel",
         score_method: "ModelBehavior | str | None" = None,
         target_col: str | None = None,
+        task: str | None = None,
         normalization: str = "sum",
+        likelihood_direction: str | None = None,
         **kwargs,
     ) -> "ZeroShotVEP":
         """Build likelihood VEP directly from a dataset and model."""
@@ -109,6 +177,11 @@ class ZeroShotVEP:
                 f"{dataset.dataset_name}."
             )
         data_df = dataset.get_vep_pairs(dataset.data_df)
+        target_col, task = cls._resolve_target_and_task(
+            dataset.metadata,
+            target_col,
+            task,
+        )
         from mrna_bench.models import ModelBehavior
 
         supported = model.behaviors.intersection({
@@ -138,10 +211,12 @@ class ZeroShotVEP:
                 )
         return cls(
             data_df,
-            target_col or dataset.metadata.target_col[0],
+            target_col,
             model=model,
             score_method=score_method,
             normalization=normalization,
+            task=task,
+            likelihood_direction=likelihood_direction,
             **kwargs,
         )
 
@@ -158,7 +233,7 @@ class ZeroShotVEP:
             persist: Write results to results.db when True.
 
         Returns:
-            Dict with ``auroc`` and ``auprc`` keys.
+            Classification or regression metrics.
         """
         scored_df = self.data_df.dropna(subset=[self.target_col])
         if self.model is None:
@@ -219,13 +294,17 @@ class ZeroShotVEP:
                     dtype=float,
                 )
                 scores = ref_scores - alt_scores
+            if self.likelihood_direction == "alt-ref":
+                scores = -scores
 
         labels = scored_df[self.target_col].to_numpy()
-
-        metrics: dict[str, float] = {
-            "auroc": float(roc_auc_score(labels, scores)),
-            "auprc": float(average_precision_score(labels, scores)),
-        }
+        if self.task == "regression":
+            metrics = regression_metrics(labels, scores)
+        else:
+            metrics = {
+                "auroc": float(roc_auc_score(labels, scores)),
+                "auprc": float(average_precision_score(labels, scores)),
+            }
 
         if persist:
             if self.persister is None:

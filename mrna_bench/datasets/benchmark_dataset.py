@@ -48,6 +48,7 @@ class DatasetMetadata:
     benchmark_set: str
     evaluations: tuple[EvaluationMethod | str, ...]
     variant_region: str | None = None
+    vep_target_col: str | None = None
 
     @property
     def is_vep(self) -> bool:
@@ -105,6 +106,10 @@ class DatasetMetadata:
             raise ValueError(
                 "variant_region must be one of full, utr, cds, or None."
             )
+        if self.vep_target_col is not None and not self.is_vep:
+            raise ValueError(
+                "vep_target_col requires a VEP evaluation route."
+            )
 
     @property
     def task_specs(self) -> tuple[TaskSpec, ...]:
@@ -123,6 +128,15 @@ class DatasetMetadata:
             )
         )
         return tuple(TaskSpec(task, target) for task, target in pairs)
+
+    @property
+    def vep_task_spec(self) -> TaskSpec | None:
+        """Return the target specification for paired VEP evaluation."""
+        if not self.is_vep:
+            return None
+        if self.vep_target_col is None:
+            return self.task_specs[0]
+        return TaskSpec(self.task[0], self.vep_target_col)
 
     def compatible_evaluations(
         self,

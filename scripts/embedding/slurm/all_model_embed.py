@@ -20,6 +20,8 @@ DATASET_CHUNKINGS = {
     "go-mf": 4,
     "rnahl-human": 4,
     "rna-lifecycle-ietswaart": 4,
+    "rna-stability-siegel-beas2b": 10,
+    "rna-stability-siegel-jurkat": 10,
     "translation-efficiency-human": 4,
     "translation-efficiency-mouse": 4,
     "apa-isoform": 25,

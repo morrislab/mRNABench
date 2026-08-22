@@ -22,6 +22,10 @@ from .rna_hl_human import RNAHalfLifeHuman
 from .rna_hl_mouse import RNAHalfLifeMouse
 from .rna_lifecycle_ietswaart import RNALifecycleIetswaart
 from .rna_loc_fazal import RNALocalizationFazal
+from .rna_stability_siegel import (
+    RNAStabilitySiegelBeas2B,
+    RNAStabilitySiegelJurkat,
+)
 from .translation_efficiency_human import TranslationEfficiencyHuman
 from .translation_efficiency_mouse import TranslationEfficiencyMouse
 from .utr_variants_bohn import UTRVariantsBohnUTR5, UTRVariantsBohnUTR3
@@ -40,6 +44,8 @@ DATASET_CATALOG: dict[str, type[BenchmarkDataset]] = {
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
     "rna-lifecycle-ietswaart": RNALifecycleIetswaart,
+    "rna-stability-siegel-beas2b": RNAStabilitySiegelBeas2B,
+    "rna-stability-siegel-jurkat": RNAStabilitySiegelJurkat,
     "prot-loc": ProteinLocalization,
     "mirna-target": MiRNATarget,
     "mrl-hl-lbkwk": MRLHLLBKWK,

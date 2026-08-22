@@ -82,6 +82,74 @@ def test_zeroshot_vep_from_embeddings():
     assert metrics == {"auroc": 1.0, "auprc": 1.0}
 
 
+def test_zeroshot_vep_regression_uses_custom_signed_score():
+    """Continuous effects use a caller-selected signed embedding score."""
+    dataframe = pd.DataFrame({
+        "ref_embeddings": [
+            np.array([0.0, 0.0]),
+            np.array([0.0, 0.0]),
+            np.array([0.0, 0.0]),
+        ],
+        "alt_embeddings": [
+            np.array([-1.0, 4.0]),
+            np.array([0.0, 3.0]),
+            np.array([2.0, 2.0]),
+        ],
+        "effect": [-1.0, 0.0, 2.0],
+    })
+
+    evaluator = ZeroShotVEP(
+        dataframe,
+        "effect",
+        task="regression",
+        scoring_fn=lambda delta: delta[:, 0],
+    )
+
+    assert evaluator.run() == {"mse": 0.0, "r": 1.0, "p": 1.0}
+    assert evaluator.result_key == "embedding_vep"
+
+
+def test_zeroshot_vep_regression_rejects_unsigned_default():
+    """Regression requires an explicit signed embedding score."""
+    dataframe = pd.DataFrame({
+        "ref_embeddings": [np.array([0.0])],
+        "alt_embeddings": [np.array([1.0])],
+        "effect": [1.0],
+    })
+
+    with pytest.raises(ValueError, match="signed scoring_fn"):
+        ZeroShotVEP(dataframe, "effect", task="regression")
+
+
+def test_zeroshot_vep_uses_distinct_metadata_target():
+    """VEP constructors resolve their task independently of LP targets."""
+    dataframe = pd.DataFrame({
+        "absolute": [0.1, 0.2],
+        "effect": [-0.4, 0.4],
+    })
+    dataset = PairedDataset(
+        data_df=dataframe,
+        dataset_name="vep-regression",
+        metadata=SimpleNamespace(
+            evaluations=(EvaluationMethod.EMBEDDING_VEP,),
+            vep_task_spec=SimpleNamespace(
+                task="regression",
+                target_col="effect",
+            ),
+        ),
+    )
+    embeddings = np.array([[-0.4], [0.4]])
+
+    evaluator = ZeroShotVEP.from_embeddings(
+        dataset,
+        embeddings,
+        scoring_fn=lambda delta: delta[:, 0],
+    )
+
+    assert evaluator.target_col == "effect"
+    assert evaluator.task == "regression"
+
+
 def test_zeroshot_vep_from_sequence_scores():
     class ScoringModel:
         calls = []
@@ -131,6 +199,58 @@ def test_zeroshot_vep_from_sequence_scores():
     assert model.calls[1][0][0].sum() == 4
     assert model.calls[0][1][0].tolist() == [0, 1, 2, 3]
     assert evaluator.result_key == "pseudo_likelihood-sum-attn-none"
+
+
+def test_likelihood_vep_supports_alt_minus_ref_direction():
+    """Datasets can orient likelihood scores to match signed effects."""
+    class ScoringModel:
+        behaviors = {ModelBehavior.PSEUDO_LIKELIHOOD}
+
+        def sequence_score(
+            self,
+            sequences,
+            method,
+            normalization,
+            cds=None,
+            splice=None,
+        ):
+            return [sequence.count("G") for sequence in sequences]
+
+    dataframe = pd.DataFrame({
+        "ref_sequence": ["AAAA", "AAAA", "AAAA"],
+        "alt_sequence": ["AAAG", "AAGG", "AGGG"],
+        "effect": [1.0, 2.0, 3.0],
+    })
+    dataset = PairedDataset(
+        data_df=dataframe,
+        dataset_name="vep-regression",
+        metadata=SimpleNamespace(
+            compatible_evaluations=lambda model: (
+                EvaluationMethod.LIKELIHOOD_VEP,
+            ),
+            vep_task_spec=SimpleNamespace(
+                task="regression",
+                target_col="effect",
+            ),
+        ),
+    )
+
+    evaluator = ZeroShotVEP.from_model(
+        dataset,
+        ScoringModel(),
+        score_method="pseudo_likelihood",
+    )
+    direct = ZeroShotVEP(
+        dataframe,
+        "effect",
+        model=ScoringModel(),
+        score_method="pseudo_likelihood",
+        task="regression",
+    )
+
+    assert evaluator.run()["mse"] == 0.0
+    assert evaluator.result_key.endswith("-alt-ref")
+    assert direct.likelihood_direction == "alt-ref"
 
 
 def test_zeroshot_vep_from_model_pairs_row_schema():

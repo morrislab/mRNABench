@@ -1,4 +1,5 @@
 import pytest
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import numpy as np
@@ -255,6 +256,46 @@ def test_builder_uses_dataset_vep_pairing():
     dataset.get_vep_pairs.assert_called_once()
     np.testing.assert_array_equal(
         probe.data_df.iloc[0]["embeddings"],
+        np.array([2.0, 3.0]),
+    )
+
+
+def test_builder_pairs_only_declared_vep_target():
+    """Mixed datasets retain row targets and pair only effect targets."""
+    dataset = Mock()
+    dataset.__class__ = BenchmarkDataset
+    dataset.data_df = pd.DataFrame({
+        "sequence": ["AAA", "CAA"],
+        "absolute": [0.2, 0.8],
+        "effect": [np.nan, 0.6],
+    })
+    dataset.metadata = Mock()
+    dataset.metadata.target_col = ["absolute"]
+    dataset.metadata.task = ["regression"]
+    dataset.metadata.default_split_type = "default"
+    dataset.metadata.vep_task_spec = SimpleNamespace(
+        task="regression",
+        target_col="effect",
+    )
+    dataset.get_vep_pairs.return_value = pd.DataFrame({
+        "ref_embeddings": [np.array([1.0, 1.0])],
+        "alt_embeddings": [np.array([3.0, 4.0])],
+        "effect": [0.6],
+    })
+    builder = LinearProbeBuilder(dataset)
+    builder.embeddings = np.array([[1.0, 1.0], [3.0, 4.0]])
+    builder.splitter = Mock()
+
+    assert not builder.is_vep
+    absolute_probe = builder.build()
+    assert len(absolute_probe.data_df) == 2
+    dataset.get_vep_pairs.assert_not_called()
+
+    builder.set_target("effect")
+    effect_probe = builder.build()
+    dataset.get_vep_pairs.assert_called_once()
+    np.testing.assert_array_equal(
+        effect_probe.data_df.iloc[0]["embeddings"],
         np.array([2.0, 3.0]),
     )
 

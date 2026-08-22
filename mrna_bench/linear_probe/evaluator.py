@@ -1,10 +1,13 @@
 import numpy as np
-from scipy.stats import pearsonr, spearmanr
 
 from sklearn.base import RegressorMixin, ClassifierMixin
 from sklearn.multioutput import MultiOutputClassifier
 
-from mrna_bench.metrics import classification_metrics, multilabel_metrics
+from mrna_bench.metrics import (
+    classification_metrics,
+    multilabel_metrics,
+    regression_metrics,
+)
 
 
 def eval_regression(
@@ -23,14 +26,7 @@ def eval_regression(
         Dictionary of regression metrics from linear probe.
     """
     y_pred = model.predict(X)
-
-    metrics = {
-        "mse": np.mean((y_pred - y) ** 2),
-        "r": pearsonr(y_pred, y).statistic,
-        "p": spearmanr(y_pred, y).statistic
-    }
-
-    return metrics
+    return regression_metrics(y, y_pred)
 
 
 def eval_classification(

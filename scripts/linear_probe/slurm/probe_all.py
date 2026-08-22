@@ -7,6 +7,7 @@ from mrna_bench.linear_probe.persister import LinearProbePersister
 from mrna_bench.models import ModelBehavior
 from mrna_bench.models.model_catalog import MODEL_VERSION_MAP, MODEL_CATALOG
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
+from mrna_bench.zeroshot import ZeroShotVEP
 
 # NAIVE BASELINE FEATURES
 K = 21824  # number of all possible unique 3-7mers
@@ -67,25 +68,33 @@ if __name__ == "__main__":
             "ernierna-mrl",
         ]
 
-        jobs = [
+        standard_jobs = [
             (spec.task, spec.target_col)
             for spec in dataset.metadata.task_specs
         ]
-        if "embedding_vep" in dataset_info["evaluations"]:
-            jobs.extend(
-                ("embedding_vep", target)
-                for target in dataset.metadata.target_col
-            )
+        vep_spec = dataset.metadata.vep_task_spec
+        vep_jobs = (
+            [(vep_spec.task, vep_spec.target_col)]
+            if vep_spec is not None
+            else []
+        )
+        jobs = list(dict.fromkeys(standard_jobs + vep_jobs))
+        if (
+            "embedding_vep" in dataset_info["evaluations"]
+            and vep_spec is not None
+            and vep_spec.task != "regression"
+        ):
+            jobs.append(("embedding_vep", vep_spec.target_col))
         if (
             args.likelihood_vep
             and "likelihood_vep" in dataset_info["evaluations"]
+            and vep_spec is not None
         ):
-            jobs.extend(
-                ("likelihood_vep", target)
-                for target in dataset.metadata.target_col
-            )
+            jobs.append(("likelihood_vep", vep_spec.target_col))
 
-        for target_col in dataset.metadata.target_col:
+        for target_col in dict.fromkeys(
+            target for _, target in jobs
+        ):
             tasks = [
                 task
                 for task, job_target in jobs
@@ -140,9 +149,13 @@ if __name__ == "__main__":
                                         .default_attn_implementation
                                     )
                                 )
-                                result_key = "{}-sum-attn-{}".format(
+                                result_key = ZeroShotVEP.likelihood_result_key(
                                     method,
+                                    "sum",
                                     effective_attn or "none",
+                                    ZeroShotVEP.default_likelihood_direction(
+                                        vep_spec.task
+                                    ),
                                 )
                                 persister = LinearProbePersister(
                                     dataset,

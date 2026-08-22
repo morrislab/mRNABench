@@ -1,4 +1,5 @@
 import numpy as np
+from scipy.stats import pearsonr, spearmanr
 from sklearn.metrics import (
     accuracy_score,
     average_precision_score,
@@ -8,6 +9,18 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.preprocessing import label_binarize
+
+
+def regression_metrics(
+    targets: np.ndarray,
+    predictions: np.ndarray,
+) -> dict[str, float]:
+    """Compute regression error and correlation metrics."""
+    return {
+        "mse": float(np.mean((predictions - targets) ** 2)),
+        "r": float(pearsonr(predictions, targets).statistic),
+        "p": float(spearmanr(predictions, targets).statistic),
+    }
 
 
 def classification_metrics(
