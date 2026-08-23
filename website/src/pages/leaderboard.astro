@@ -1,7 +1,6 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
 import Callout from "../components/Callout.astro";
-import LoadingMark from "../components/LoadingMark.astro";
 import PageIntro from "../components/PageIntro.astro";
 import { withBase } from "../lib/site";
 import leaderboardConfig from "../../leaderboard.config.json";
@@ -18,7 +17,6 @@ const modelExclusions = Object.entries(leaderboardConfig.excluded_models);
     eyebrow="Result archive"
     title="Compare models by prediction task and dataset"
     lead="Each rank uses the dataset's declared default split. Results are reported as a complete-coverage consensus, by prediction task, and by dataset."
-    index="02"
   />
 
   <section class="leaderboard-intro shell">
@@ -26,11 +24,11 @@ const modelExclusions = Object.entries(leaderboardConfig.excluded_models);
       <p>
         This leaderboard reports the May 2026 linear-probe archive. It is
         separate from the model cohort summarized in bioRxiv v1 and does not
-        represent a complete v2.0.0 benchmark release. Six datasets rebuilt
+        represent a complete current benchmark release. Six datasets rebuilt
         after these runs are excluded, and the source parquet contains no
-        zero-shot results. TraitGym uses the v2.0.0 chromosome split, which
-        keeps each transcript's reference and variant rows together. Each
-        retained result unit contains ten split-seed runs.
+        zero-shot results. TraitGym uses chromosome splitting, which keeps
+        each transcript's reference and variant rows together. Each retained
+        result unit contains ten split-seed runs.
       </p>
     </Callout>
     <details class="archive-exclusions">
@@ -95,8 +93,14 @@ const modelExclusions = Object.entries(leaderboardConfig.excluded_models);
       </a>
     </div>
 
-    <div class="leaderboard-status" data-loading-container>
-      <LoadingMark label="Reading benchmark results" />
+    <div
+      class="leaderboard-status"
+      data-loading-container
+      role="status"
+      aria-live="polite"
+    >
+      <span aria-hidden="true"></span>
+      <strong>Loading result archive</strong>
     </div>
     <noscript>
       <style>[data-loading-container] { display: none; }</style>
@@ -557,14 +561,12 @@ const modelExclusions = Object.entries(leaderboardConfig.excluded_models);
         viewSelect.disabled = false;
         search.disabled = false;
         loader.hidden = true;
-        document.dispatchEvent(new CustomEvent("mrnabench:loading-change"));
         output.hidden = false;
         render();
       })
       .catch((requestError: unknown) => {
         console.error("Unable to load leaderboard data.", requestError);
         loader.hidden = true;
-        document.dispatchEvent(new CustomEvent("mrnabench:loading-change"));
         error.hidden = false;
         error.textContent =
           "The result archive could not be loaded. Retry the request or use the CSV download above.";
@@ -745,9 +747,23 @@ const modelExclusions = Object.entries(leaderboardConfig.excluded_models);
   }
 
   .leaderboard-status {
-    display: grid;
-    min-height: 28rem;
-    place-items: center;
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    min-height: 8rem;
+    justify-content: center;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
+  }
+
+  .leaderboard-status > span {
+    width: 1.8rem;
+    height: 3px;
+    background: var(--red);
+  }
+
+  .leaderboard-status strong {
+    font-weight: 580;
   }
 
   .leaderboard-error,

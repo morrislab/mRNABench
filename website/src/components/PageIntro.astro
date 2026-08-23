@@ -3,10 +3,9 @@ interface Props {
   eyebrow: string;
   title: string;
   lead: string;
-  index?: string;
 }
 
-const { eyebrow, title, lead, index } = Astro.props;
+const { eyebrow, title, lead } = Astro.props;
 ---
 
 <header class="page-intro">
@@ -16,59 +15,38 @@ const { eyebrow, title, lead, index } = Astro.props;
       <h1>{title}</h1>
       <p class="page-intro__lead">{lead}</p>
     </div>
-    {index && <span class="page-intro__index" aria-hidden="true">{index}</span>}
   </div>
 </header>
 
 <style>
   .page-intro {
-    padding: clamp(4.5rem, 9vw, 8.5rem) 0 clamp(3.5rem, 7vw, 6rem);
+    padding: clamp(3.5rem, 6vw, 5.5rem) 0 clamp(2.5rem, 5vw, 4rem);
     border-bottom: 1px solid var(--line-strong);
   }
 
   .page-intro__grid {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: end;
-    gap: 2rem;
+    display: block;
   }
 
   .page-intro__copy {
-    max-width: 68rem;
+    max-width: 74rem;
   }
 
   h1 {
-    max-width: 18ch;
+    max-width: 24ch;
     margin: 0;
-    font-size: clamp(3rem, 7vw, 7.6rem);
+    font-size: clamp(2.5rem, 4vw, 4.2rem);
     font-weight: 520;
-    letter-spacing: -0.065em;
-    line-height: 0.92;
+    letter-spacing: -0.05em;
+    line-height: 1;
   }
 
   .page-intro__lead {
     max-width: 44rem;
-    margin: clamp(1.8rem, 4vw, 3.2rem) 0 0;
+    margin: clamp(1.3rem, 3vw, 2rem) 0 0;
     color: var(--ink-muted);
     font-size: var(--text-lg);
     line-height: 1.45;
   }
 
-  .page-intro__index {
-    color: var(--red);
-    font-size: clamp(3.5rem, 8vw, 8rem);
-    font-weight: 380;
-    letter-spacing: -0.07em;
-    line-height: 0.75;
-  }
-
-  @media (max-width: 650px) {
-    .page-intro__grid {
-      grid-template-columns: 1fr;
-    }
-
-    .page-intro__index {
-      display: none;
-    }
-  }
 </style>

@@ -1,6 +1,5 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import Callout from "../components/Callout.astro";
 import PageIntro from "../components/PageIntro.astro";
 import { datasets } from "../data/datasets";
 
@@ -16,23 +15,15 @@ const splitLabel = {
 
 <BaseLayout
   title="Dataset catalog | mRNABench"
-  description="Browse datasets in the unreleased mRNABench v2.0.0 source registry, including task, species, default split, evaluation routes, and citation."
+  description="Browse registered mRNABench datasets, including task, species, default split, evaluation routes, and citation."
 >
   <PageIntro
     eyebrow="Dataset catalog"
     title="Datasets by sequence region and prediction task"
     lead="The catalog spans short regulatory signals, single variants, and transcript-wide outcomes. Each entry lists its default split, source, and supported evaluation routes, including variant-effect prediction (VEP)."
-    index="03"
   />
 
   <section class="catalog-summary shell">
-    <Callout label="Unreleased v2.0.0 catalog">
-      <p>
-        This page reflects the unreleased v2.0.0 source catalog. The current
-        PyPI release may contain fewer dataset identifiers; install the source
-        checkout to use the catalog shown here.
-      </p>
-    </Callout>
     <dl>
       <div><dt>Registered identifiers</dt><dd>{datasets.length}</dd></div>
       <div><dt>Core benchmark</dt><dd>{coreCount}</dd></div>

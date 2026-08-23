@@ -1,6 +1,5 @@
 ---
 import BaseLayout from "../layouts/BaseLayout.astro";
-import Callout from "../components/Callout.astro";
 import PageIntro from "../components/PageIntro.astro";
 import { modelDefaults, models, versionBehaviors } from "../data/models";
 
@@ -8,6 +7,9 @@ const versionCount = models.reduce((total, model) => total + model.versions.leng
 const groupCounts = {
   "RNA model": models.filter((model) => model.group === "RNA model").length,
   "DNA model": models.filter((model) => model.group === "DNA model").length,
+  "Sequence-to-function model": models.filter(
+    (model) => model.group === "Sequence-to-function model",
+  ).length,
   Baseline: models.filter((model) => model.group === "Baseline").length,
 };
 const behaviorLabels: Record<string, string> = {
@@ -17,28 +19,21 @@ const behaviorLabels: Record<string, string> = {
 
 <BaseLayout
   title="Model catalog | mRNABench"
-  description="Browse model adapters and versions in the unreleased mRNABench v2.0.0 source registry, including checkpoint-specific behaviors."
+  description="Browse registered mRNABench model adapters and versions, including checkpoint-specific behaviors."
 >
   <PageIntro
     eyebrow="Model catalog"
     title="Model adapters and supported inference behaviors"
     lead="The registry includes RNA and DNA language models, sequence-to-function models, and non-pretrained references. Capabilities are declared per adapter rather than inferred from a model name."
-    index="04"
   />
 
   <section class="model-summary shell">
-    <Callout label="Unreleased v2.0.0 catalog">
-      <p>
-        This page reflects the unreleased v2.0.0 source catalog. The current
-        PyPI release may contain fewer adapters or versions; install the source
-        checkout to use the catalog shown here.
-      </p>
-    </Callout>
     <dl>
       <div><dt>Model families</dt><dd>{models.length}</dd></div>
       <div><dt>Registered versions</dt><dd>{versionCount}</dd></div>
       <div><dt>RNA models</dt><dd>{groupCounts["RNA model"]}</dd></div>
       <div><dt>DNA models</dt><dd>{groupCounts["DNA model"]}</dd></div>
+      <div><dt>Sequence-to-function</dt><dd>{groupCounts["Sequence-to-function model"]}</dd></div>
       <div><dt>Baselines</dt><dd>{groupCounts.Baseline}</dd></div>
     </dl>
     <div class="model-summary__notes">
@@ -73,6 +68,7 @@ const behaviorLabels: Record<string, string> = {
           <option value="">All groups</option>
           <option value="RNA model">RNA models</option>
           <option value="DNA model">DNA models</option>
+          <option value="Sequence-to-function model">Sequence-to-function</option>
           <option value="Baseline">Baselines</option>
         </select>
       </label>
@@ -96,7 +92,7 @@ const behaviorLabels: Record<string, string> = {
             data-model-row
             data-group={model.group}
             data-behaviors={model.behaviors.join("|")}
-            data-search={`${model.name} ${model.description} ${model.versions.join(" ")} ${model.behaviors.join(" ")}`.toLowerCase()}
+            data-family-search={`${model.name} ${model.description} ${model.group} ${model.behaviors.join(" ")}`.toLowerCase()}
           >
             <div class="model-list__name">
               <span>{model.group}</span>
@@ -108,26 +104,39 @@ const behaviorLabels: Record<string, string> = {
               {model.behaviors.map((behavior) => <span>{behaviorLabels[behavior] ?? behavior}</span>)}
             </div>
             <details>
-              <summary>{model.versions.length} version{model.versions.length === 1 ? "" : "s"}</summary>
+              <summary data-version-summary>
+                {model.versions.length} version{model.versions.length === 1 ? "" : "s"}
+              </summary>
               <div>
                 {
-                  model.versions.map((version) => (
-                    <span class="model-list__version">
-                      {
-                        model.name === "Evo2" ? (
-                          <a href={`https://huggingface.co/Taykhoom/${version}`} aria-label={`${version} checkpoint card`}>
+                  model.versions.map((version) => {
+                    const behaviors = (
+                      versionBehaviors[model.name]?.[version]
+                      ?? model.behaviors
+                    );
+                    return (
+                      <span
+                        class="model-list__version"
+                        data-version-row
+                        data-version-search={version.toLowerCase()}
+                        data-version-behaviors={behaviors.join("|")}
+                      >
+                        {
+                          model.name === "Evo2" ? (
+                            <a href={`https://huggingface.co/Taykhoom/${version}`} aria-label={`${version} checkpoint card`}>
+                              <code>{version}</code>
+                            </a>
+                          ) : (
                             <code>{version}</code>
-                          </a>
-                        ) : (
-                          <code>{version}</code>
-                        )
-                      }
-                      {version === modelDefaults[model.name] && <b>default</b>}
-                      {(versionBehaviors[model.name]?.[version] ?? model.behaviors).map(
-                        (behavior) => <i>{behaviorLabels[behavior] ?? behavior}</i>,
-                      )}
-                    </span>
-                  ))
+                          )
+                        }
+                        {version === modelDefaults[model.name] && <b>default</b>}
+                        {behaviors.map(
+                          (behavior) => <i>{behaviorLabels[behavior] ?? behavior}</i>,
+                        )}
+                      </span>
+                    );
+                  })
                 }
               </div>
             </details>
@@ -157,24 +166,86 @@ const behaviorLabels: Record<string, string> = {
     const empty = catalog.querySelector<HTMLElement>("[data-model-empty]");
     if (!search || !group || !behavior || !count || !empty) return;
 
-    const filter = () => {
+    const parameters = new URLSearchParams(window.location.search);
+    search.value = parameters.get("q") ?? "";
+    if ([...group.options].some((option) => option.value === parameters.get("group"))) {
+      group.value = parameters.get("group") ?? "";
+    }
+    if ([...behavior.options].some((option) => option.value === parameters.get("behavior"))) {
+      behavior.value = parameters.get("behavior") ?? "";
+    }
+
+    const filter = (updateUrl = true) => {
       const query = search.value.trim().toLowerCase();
       let visible = 0;
       rows.forEach((row) => {
-        const matches =
-          (!query || row.dataset.search?.includes(query)) &&
-          (!group.value || row.dataset.group === group.value) &&
-          (!behavior.value || row.dataset.behaviors?.split("|").includes(behavior.value));
-        row.hidden = !matches;
-        if (matches) visible += 1;
+        const familyMatchesQuery = (
+          !query || row.dataset.familySearch?.includes(query)
+        );
+        const versions = [
+          ...row.querySelectorAll<HTMLElement>("[data-version-row]"),
+        ];
+        let visibleVersions = 0;
+        versions.forEach((version) => {
+          const matchesBehavior = (
+            !behavior.value
+            || version.dataset.versionBehaviors
+              ?.split("|")
+              .includes(behavior.value)
+          );
+          const matchesQuery = (
+            !query
+            || familyMatchesQuery
+            || version.dataset.versionSearch?.includes(query)
+          );
+          version.hidden = !(matchesBehavior && matchesQuery);
+          if (!version.hidden) visibleVersions += 1;
+        });
+
+        const matchesGroup = (
+          !group.value || row.dataset.group === group.value
+        );
+        row.hidden = !matchesGroup || visibleVersions === 0;
+        if (!row.hidden) visible += 1;
+
+        const summary = row.querySelector<HTMLElement>(
+          "[data-version-summary]",
+        );
+        if (summary) {
+          const total = versions.length;
+          const noun = visibleVersions === 1 ? "version" : "versions";
+          summary.textContent = (
+            visibleVersions === total
+              ? `${total} ${total === 1 ? "version" : "versions"}`
+              : `${visibleVersions} matching ${noun} of ${total}`
+          );
+        }
+        const details = row.querySelector<HTMLDetailsElement>("details");
+        if (details) {
+          details.open = Boolean(query || behavior.value);
+        }
       });
       count.textContent = String(visible);
       empty.hidden = visible !== 0;
+
+      if (updateUrl) {
+        const next = new URLSearchParams();
+        if (query) next.set("q", query);
+        if (group.value) next.set("group", group.value);
+        if (behavior.value) next.set("behavior", behavior.value);
+        const queryString = next.toString();
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${queryString ? `?${queryString}` : ""}`,
+        );
+      }
     };
 
-    search.addEventListener("input", filter);
-    group.addEventListener("change", filter);
-    behavior.addEventListener("change", filter);
+    search.addEventListener("input", () => filter());
+    group.addEventListener("change", () => filter());
+    behavior.addEventListener("change", () => filter());
+    filter(false);
   }
 
   initializeModelCatalog();
@@ -187,7 +258,7 @@ const behaviorLabels: Record<string, string> = {
 
   .model-summary dl {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(6, 1fr);
     margin: 0;
     border-top: 1px solid var(--line-strong);
     border-bottom: 1px solid var(--line-strong);

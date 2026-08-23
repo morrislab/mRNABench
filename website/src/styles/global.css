@@ -27,7 +27,7 @@
   --text-base: clamp(1rem, 0.96rem + 0.18vw, 1.12rem);
   --text-lg: clamp(1.18rem, 1.05rem + 0.5vw, 1.55rem);
   --text-xl: clamp(1.65rem, 1.2rem + 1.8vw, 2.75rem);
-  --text-2xl: clamp(2.5rem, 1.45rem + 4.5vw, 6.4rem);
+  --text-2xl: clamp(2.5rem, 1.7rem + 3.5vw, 4.9rem);
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -191,7 +191,7 @@ a:hover {
 }
 
 .section {
-  padding-block: clamp(5rem, 9vw, 9rem);
+  padding-block: clamp(3.5rem, 6vw, 6rem);
 }
 
 .section-rule {

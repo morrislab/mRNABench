@@ -7,11 +7,11 @@ const repositoryRoot = resolve(websiteRoot, "..");
 
 const assets = [
   [
-    "assets/favicon/mrnabench-favicon-hex-black.svg",
+    "assets/favicon/mrnabench-favicon-black.svg",
     "public/brand/favicon-light.svg",
   ],
   [
-    "assets/favicon/mrnabench-favicon-hex-white.svg",
+    "assets/favicon/mrnabench-favicon-white.svg",
     "public/brand/favicon-dark.svg",
   ],
   [

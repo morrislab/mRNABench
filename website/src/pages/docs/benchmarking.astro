@@ -3,112 +3,245 @@ import DocsLayout from "../../layouts/DocsLayout.astro";
 import Callout from "../../components/Callout.astro";
 import CodeBlock from "../../components/CodeBlock.astro";
 
-const embed = `python scripts/embedding/embed_dataset.py \\
-  --model_name Orthrus \\
-  --model_version orthrus-large-6-track \\
-  --dataset_name go-mf \\
-  --batch_size 8`;
+const embed = `import torch
+import mrna_bench as mb
 
-const chunks = `for chunk in {0..7}; do
-  python scripts/embedding/embed_dataset.py \\
-    --model_name Orthrus \\
-    --model_version orthrus-large-6-track \\
-    --dataset_name go-mf \\
-    --d_chunk_ind "$chunk" \\
-    --d_num_chunks 8
-done`;
+from mrna_bench.embedder import DatasetEmbedder
 
-const probe = `python scripts/linear_probe/by_modelname.py \\
-  --model_name Orthrus \\
-  --model_version orthrus-large-6-track \\
-  --dataset_name go-mf \\
-  --task multilabel \\
-  --target target \\
-  --split_type homology`;
+device = torch.device("cuda")
+dataset = mb.load_dataset("go-mf")
+model = mb.load_model(
+    "Orthrus",
+    "orthrus-large-6-track",
+    device=device,
+)
 
-const embeddingVep = `python scripts/linear_probe/by_modelname.py \\
-  --model_name Orthrus \\
-  --model_version orthrus-large-4-track \\
-  --dataset_name vep-traitgym-mendelian \\
-  --task embedding_vep \\
-  --target target`;
+embedder = DatasetEmbedder(
+    model,
+    dataset,
+    batch_size=8,
+)
+embedding_tensors = embedder.embed_dataset()
+embedder.persist_embeddings(embedding_tensors)
 
-const embedVepDataset = `python scripts/embedding/embed_dataset.py \\
-  --model_name Orthrus \\
-  --model_version orthrus-large-4-track \\
-  --dataset_name vep-traitgym-mendelian \\
-  --batch_size 8`;
+embeddings = torch.stack(embedding_tensors).cpu().numpy()
+print(embeddings.shape)`;
 
-const likelihoodVep = `python scripts/linear_probe/by_modelname.py \\
-  --model_name Evo2 \\
-  --model_version Evo2-7B-8K \\
-  --dataset_name vep-traitgym-mendelian \\
-  --task likelihood_vep \\
-  --target target \\
-  --score_method causal_likelihood \\
-  --normalization sum \\
-  --attn_implementation flash_attention_2`;
+const probe = `from mrna_bench.linear_probe import LinearProbeBuilder
 
-const fineTune = `python scripts/finetune/run_finetune.py \\
-  --model_name Orthrus \\
-  --model_version orthrus-large-4-track \\
-  --dataset_name mrl-sugimoto \\
-  --learning_rates '[1e-5, 1e-4]' \\
-  --lora_ranks '[4, 8]' \\
-  --lora_alphas '[16]' \\
-  --epochs 15 \\
-  --batch_size 32 \\
-  --seeds '[0, 1, 2]' \\
-  --lr_schedule cosine \\
-  --eval_test`;
+probe = (
+    LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance(
+        model.short_name,
+        embeddings,
+    )
+    .build_splitter(
+        dataset.metadata.default_split_type,
+        eval_all_splits=True,
+    )
+    .use_persister()
+    .build()
+)
+
+seeds = [2541, 413, 411, 412, 2547]
+for seed in seeds:
+    metrics = probe.run_linear_probe(seed, persist=True)
+    test_metrics = {
+        name: value
+        for name, value in metrics.items()
+        if name.startswith("test_")
+    }
+    print(seed, test_metrics)`;
+
+const persistedProbe = `from mrna_bench.linear_probe import LinearProbeBuilder
+
+# Reuse embeddings saved by DatasetEmbedder.persist_embeddings().
+probe = (
+    LinearProbeBuilder(dataset)
+    .fetch_embedding_by_model_instance(model)
+    .build_splitter(
+        dataset.metadata.default_split_type,
+        eval_all_splits=True,
+    )
+    .build()
+)
+
+metrics = probe.run_linear_probe(random_seed=2541)
+print(metrics)`;
+
+const chunks = `from mrna_bench.embedder import DatasetEmbedder
+
+num_chunks = 8
+for chunk_index in range(num_chunks):
+    chunk_embedder = DatasetEmbedder(
+        model,
+        dataset,
+        d_chunk_ind=chunk_index,
+        d_num_chunks=num_chunks,
+        batch_size=8,
+    )
+    chunk = chunk_embedder.embed_dataset()
+    chunk_embedder.persist_embeddings(chunk)
+    chunk_embedder.merge_embeddings()
+
+# The merged file appears after the final chunk is present.`;
+
+const embeddingVep = `import torch
+import mrna_bench as mb
+
+from mrna_bench.embedder import DatasetEmbedder
+from mrna_bench.zeroshot import ZeroShotVEP
+
+dataset = mb.load_dataset("vep-traitgym-mendelian")
+model = mb.load_model(
+    "Orthrus",
+    "orthrus-large-4-track",
+    device=torch.device("cuda"),
+)
+
+embedding_tensors = DatasetEmbedder(
+    model,
+    dataset,
+    batch_size=8,
+).embed_dataset()
+embeddings = torch.stack(embedding_tensors).cpu().numpy()
+
+evaluator = ZeroShotVEP.from_embeddings(
+    dataset,
+    embeddings,
+)
+print(evaluator.run())`;
+
+const likelihoodVep = `import torch
+import mrna_bench as mb
+
+from mrna_bench.zeroshot import ZeroShotVEP
+
+dataset = mb.load_dataset("vep-traitgym-mendelian")
+model = mb.load_model(
+    "Evo2",
+    "Evo2-7B-8K",
+    device=torch.device("cuda"),
+    attn_implementation="flash_attention_2",
+)
+
+evaluator = ZeroShotVEP.from_model(
+    dataset,
+    model,
+    score_method="causal_likelihood",
+    normalization="sum",
+)
+print(evaluator.run())`;
+
+const fineTuneInstall = `python -m pip install --no-build-isolation \\
+  'mrna-bench[base_models,fine_tune]'`;
+
+const fineTune = `import numpy as np
+import torch
+import mrna_bench as mb
+
+from mrna_bench.fine_tune import (
+    FineTuneTrainer,
+    FineTuneWrapper,
+    TaskHead,
+    TrainerConfig,
+    create_dataloaders,
+)
+
+dataset = mb.load_dataset("mrl-sugimoto")
+model = mb.load_model(
+    "Orthrus",
+    "orthrus-large-4-track",
+    device=torch.device("cuda"),
+)
+
+row = dataset.data_df.iloc[0]
+sample_embedding = model.embed(
+    [row["sequence"]],
+    cds=[np.asarray(row["cds"])],
+    splice=[np.asarray(row["splice"])],
+)[0]
+
+head = TaskHead(
+    input_dim=sample_embedding.shape[-1],
+    output_dim=1,
+    task_type="regression",
+)
+wrapper = FineTuneWrapper(model, head)
+wrapper.apply_lora(rank=8, alpha=16)
+
+train, validation, test = create_dataloaders(
+    dataset=dataset,
+    target_col="target",
+    split_type=dataset.metadata.default_split_type,
+    random_seed=2541,
+    batch_size=32,
+)
+trainer = FineTuneTrainer(
+    wrapper,
+    TrainerConfig(
+        learning_rate=1e-4,
+        epochs=15,
+        lr_schedule="cosine",
+    ),
+)
+trainer.fit(train, validation)
+print(trainer.evaluate(test))`;
 ---
 
 <DocsLayout
   title="Run a benchmark"
-  description="Persist embeddings, run probes across seeds, score variant effects, and launch optional fine-tuning."
+  description="Generate embeddings, run probes across seeds, score variant effects, and optionally fine-tune a model."
   section="Run"
 >
   <p>
-    Use the in-memory quickstart for small experiments. Use repository scripts
-    for full datasets, cluster jobs, and resumable output.
+    These examples use the installed Python API. They work in a notebook or a
+    normal Python file and show the same objects used by the batch utilities.
   </p>
 
   <h2>1. Generate embeddings</h2>
-  <CodeBlock code={embed} language="shell" />
+  <CodeBlock code={embed} language="python" />
   <p>
-    Embeddings are written below the configured dataset path. The embedder keeps
-    dataframe order and passes coding-sequence and splice tracks when both the
-    dataset and model use them.
+    <code>DatasetEmbedder</code> keeps dataframe row order and supplies CDS and
+    splice tracks when the dataset contains them. The call to
+    <code>persist_embeddings()</code> writes a compressed NPZ below the
+    configured dataset path.
   </p>
 
-  <h3>Split a large embedding job into chunks</h3>
-  <CodeBlock code={chunks} language="shell" />
+  <h3>Process a large dataset in chunks</h3>
+  <CodeBlock code={chunks} language="python" />
   <p>
-    Run every zero-based chunk index. The embedder does not create the merged
-    embedding until all eight chunk files are present.
+    Each chunk can run as a separate job. Calling
+    <code>merge_embeddings()</code> is safe before all chunks exist; it creates
+    the merged file only after every zero-based chunk index is present.
   </p>
 
-  <h2>2. Run the probe</h2>
-  <CodeBlock code={probe} language="shell" />
+  <h2>2. Run seeded linear probes</h2>
+  <CodeBlock code={probe} language="python" />
   <p>
-    The script runs the standard seeded evaluation and writes metrics to the
-    dataset's <code>results.db</code>. Use the exact task names
-    <code>regression_ols</code> and <code>regression_ridge</code> when querying
-    current persisted regression results.
+    Dataset metadata selects the biological task and target. This example uses
+    the dataset's default split, evaluates train, validation, and test
+    partitions, and stores each seed in <code>results.db</code>.
+  </p>
+
+  <h3>Reuse saved embeddings</h3>
+  <CodeBlock code={persistedProbe} language="python" />
+  <p>
+    Use <code>fetch_embedding_by_model_instance()</code> when the embedding NPZ
+    already exists. You do not need to regenerate or manually load the array.
   </p>
 
   <h2>Variant-effect prediction</h2>
   <h3>Embedding distance</h3>
-  <p>Generate the matching dataset and model embeddings first.</p>
-  <CodeBlock code={embedVepDataset} language="shell" />
-  <CodeBlock code={embeddingVep} language="shell" />
+  <CodeBlock code={embeddingVep} language="python" />
   <p>
-    The default embedding score is the L2 distance between pooled alternate and
-    reference embeddings.
+    Classification uses the L2 norm of the pooled alternate-minus-reference
+    embedding difference. Regression requires a custom signed scoring function
+    because L2 distance discards direction.
   </p>
 
   <h3>Likelihood scoring</h3>
-  <CodeBlock code={likelihoodVep} language="shell" />
+  <CodeBlock code={likelihoodVep} language="python" />
   <p>
     Available score methods are <code>causal_likelihood</code>,
     <code>pseudo_likelihood</code>, and <code>masked_marginal</code>. Masked
@@ -122,26 +255,42 @@ const fineTune = `python scripts/finetune/run_finetune.py \\
     </p>
   </Callout>
 
-  <h2>Optional fine-tuning</h2>
+  <h2>Optional LoRA fine-tuning</h2>
+  <CodeBlock code={fineTuneInstall} language="shell" label="Install" />
+  <CodeBlock code={fineTune} language="python" />
   <p>
-    Install both optional groups first:
-    <code>python -m pip install -e '.[base_models,fine_tune]'</code>.
+    The wrapper applies LoRA to the model adapter, while
+    <code>TaskHead</code> and <code>FineTuneTrainer</code> provide the
+    task-specific loss, early stopping, and metrics.
   </p>
-  <CodeBlock code={fineTune} language="shell" />
-  <p>
-    The script creates a task head, applies LoRA, selects the best validation
-    state, optionally evaluates the test split, and writes a JSON result
-    containing selected hyperparameters and metrics. The values passed
-    through <code>--seeds</code> control data
-    splitting and result identity. They do not currently seed every source of
-    training randomness, so fine-tuning remains nondeterministic.
-  </p>
-  <Callout tone="important" label="Fine-tuning result identity">
+  <Callout tone="important" label="Training reproducibility">
     <p>
-      The persisted filename does not include every training option. Use
-      separate output directories for runs that differ only in epochs, batch
-      size, accumulation, schedule, warmup, patience, attention backend, or
-      test-evaluation settings.
+      The random seed passed to <code>create_dataloaders()</code> controls the
+      data split. It does not currently seed every source of model-training
+      randomness.
     </p>
   </Callout>
+
+  <h2>Batch and cluster wrappers</h2>
+  <p>
+    A source checkout also includes thin command-line wrappers around these
+    APIs for scheduling larger runs:
+  </p>
+  <ul>
+    <li>
+      <a href="https://github.com/morrislab/mRNABench/blob/main/scripts/embedding/embed_dataset.py">
+        Embedding and chunk persistence
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/morrislab/mRNABench/blob/main/scripts/linear_probe/by_modelname.py">
+        Seeded probing and variant-effect evaluation
+      </a>
+    </li>
+    <li>
+      <a href="https://github.com/morrislab/mRNABench/blob/main/scripts/finetune/run_finetune.py">
+        Fine-tuning grids
+      </a>
+    </li>
+  </ul>
 </DocsLayout>

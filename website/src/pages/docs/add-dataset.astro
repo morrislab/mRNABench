@@ -43,12 +43,51 @@ class MyDataset(BenchmarkDataset):
             }
         )`;
 
-const dataframe = `from mrna_bench.embedder import DatasetEmbedder
+const dataframe = `import numpy as np
+import pandas as pd
+import torch
+import mrna_bench as mb
 
-embedder = DatasetEmbedder.from_dataframe(
-    model,
-    dataframe,  # must contain a sequence column
+from mrna_bench.embedder import DatasetEmbedder
+
+dataframe = pd.DataFrame(
+    {
+        "sample_id": ["transcript-a", "transcript-b"],
+        "sequence": [
+            "ACGTTGCAACGTTGCA",
+            "TTGCAACGTTGCAACG",
+        ],
+    }
+)
+
+model = mb.load_model(
+    "Orthrus",
+    "orthrus-large-4-track",
+    device=torch.device("cuda"),
+)
+embedder = DatasetEmbedder.from_dataframe(model, dataframe)
+embedding_tensors = embedder.embed_dataset()
+embeddings = torch.stack(embedding_tensors).cpu().numpy()
+
+# DatasetEmbedder preserves dataframe row order.
+assert embeddings.shape[0] == len(dataframe)
+np.savez_compressed(
+    "custom-sequence-embeddings.npz",
+    sample_id=dataframe["sample_id"].to_numpy(),
+    embedding=embeddings,
 )`;
+
+const dataframeTracks = `# Optional model tracks must match each sequence length.
+dataframe["cds"] = [
+    np.zeros(len(sequence), dtype=np.int8)
+    for sequence in dataframe["sequence"]
+]
+dataframe["splice"] = [
+    np.zeros(len(sequence), dtype=np.int8)
+    for sequence in dataframe["sequence"]
+]
+
+embedder = DatasetEmbedder.from_dataframe(model, dataframe)`;
 ---
 
 <DocsLayout
@@ -109,7 +148,33 @@ embedder = DatasetEmbedder.from_dataframe(
   <h2>Use an ad hoc dataframe</h2>
   <p>
     Registration is unnecessary when you only need embeddings for a temporary
-    table of sequences.
+    table or your own downstream analysis. The dataframe needs a
+    <code>sequence</code> column; identifier and metadata columns remain in
+    your dataframe but are not interpreted by the embedder.
   </p>
   <CodeBlock code={dataframe} language="python" />
+  <p>
+    The returned tensors follow the input row order. Save identifiers next to
+    the embedding matrix so downstream results can be joined back to the source
+    table.
+  </p>
+
+  <h3>Optional CDS and splice tracks</h3>
+  <p>
+    Add <code>cds</code> and <code>splice</code> columns only when the selected
+    model consumes those channels. Each cell contains a one-dimensional array
+    with the same length as its sequence. A CDS track marks the first base of
+    each codon with <code>1</code>; the all-zero example below represents a
+    noncoding sequence.
+  </p>
+  <CodeBlock code={dataframeTracks} language="python" />
+
+  <Callout label="When to register">
+    <p>
+      Register a <code>BenchmarkDataset</code> when you need reusable download
+      and caching behavior, metadata-driven targets, benchmark splits, linear
+      probes, or variant pairing. Keep the dataframe ad hoc when you only need
+      model outputs.
+    </p>
+  </Callout>
 </DocsLayout>

@@ -1,6 +1,10 @@
 export interface ModelEntry {
   name: string;
-  group: "RNA model" | "DNA model" | "Baseline";
+  group:
+    | "RNA model"
+    | "DNA model"
+    | "Sequence-to-function model"
+    | "Baseline";
   description: string;
   versions: string[];
   behaviors: Array<"embedding" | "causal likelihood" | "pseudo likelihood" | "tracks">;
@@ -156,7 +160,7 @@ export const models: ModelEntry[] = [
   },
   {
     name: "AlphaGenome",
-    group: "DNA model",
+    group: "Sequence-to-function model",
     description: "Long-context sequence-to-function model that predicts genomic activity tracks.",
     versions: ["alphagenome"],
     behaviors: ["embedding", "tracks"],
@@ -166,7 +170,7 @@ export const models: ModelEntry[] = [
   },
   {
     name: "Borzoi",
-    group: "DNA model",
+    group: "Sequence-to-function model",
     description: "Long-window sequence-to-function model for RNA-seq and regulatory tracks, including Flashzoi variants.",
     versions: ["borzoi-replicate-0", "borzoi-replicate-1", "borzoi-replicate-2", "borzoi-replicate-3", "flashzoi-replicate-0", "flashzoi-replicate-1", "flashzoi-replicate-2", "flashzoi-replicate-3", "borzoi", "flashzoi"],
     behaviors: ["embedding", "tracks"],
@@ -207,7 +211,7 @@ export const models: ModelEntry[] = [
   },
   {
     name: "Enformer",
-    group: "DNA model",
+    group: "Sequence-to-function model",
     description: "Long-range sequence-to-function model for RNA-seq, ATAC-seq, and ChIP-seq tracks.",
     versions: ["enformer-official-rough"],
     behaviors: ["embedding", "tracks"],

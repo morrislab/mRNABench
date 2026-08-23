@@ -14,23 +14,87 @@ const storage = `<data_path>/
     ft_results/
       result_ft_....json`;
 
-const query = `python scripts/management/query_lp_db_results.py \\
-  --dataset go-mf \\
-  --model orthrus \\
-  --metrics \\
-  --all-metrics`;
+const query = `import json
+import sqlite3
+import mrna_bench as mb
 
-const incomplete = `python scripts/management/query_lp_db_results.py --incomplete`;
+dataset = mb.load_dataset("go-mf")
+connection = sqlite3.connect(
+    f"{dataset.dataset_path}/results.db"
+)
+connection.row_factory = sqlite3.Row
 
-const summarize = `python scripts/linear_probe/summarize_metrics.py \\
-  --data go-mf \\
-  --task multilabel \\
-  --split_type homology \\
-  --target target`;
+rows = connection.execute(
+    """
+    SELECT model, task, target_col, split_type, seed, metrics
+    FROM lp_results
+    WHERE model = ? AND target_col = ?
+    ORDER BY task, seed
+    """,
+    ("orthrus-large-6", "target"),
+).fetchall()
+connection.close()
 
-const embeddings = `python scripts/management/manage_embeddings.py \\
-  --model orthrus \\
-  --stats`;
+results = [
+    {
+        **dict(row),
+        "metrics": json.loads(row["metrics"]),
+    }
+    for row in rows
+]`;
+
+const loadAll = `from mrna_bench.linear_probe.persister import (
+    LinearProbePersister,
+)
+
+results = LinearProbePersister.load_all_results(
+    dataset.dataset_path
+)
+for result in results[:3]:
+    print(result)`;
+
+const incomplete = `from collections import defaultdict
+
+expected_seeds = {2541, 413, 411, 412, 2547}
+seeds_by_run = defaultdict(set)
+
+for result in results:
+    if result["seed"] == "all":
+        continue
+    key = (
+        result["model"],
+        result["task"],
+        result["target_col"],
+        result["split_type"],
+    )
+    seeds_by_run[key].add(int(result["seed"]))
+
+incomplete_runs = {
+    key: sorted(expected_seeds - observed)
+    for key, observed in seeds_by_run.items()
+    if observed != expected_seeds
+}`;
+
+const summarize = `# probe is the LinearProbe built in the benchmarking guide.
+seed_metrics = probe.linear_probe_multirun(
+    random_seeds=[2541, 413, 411, 412, 2547],
+    persist=True,
+)
+summary = probe.compute_multirun_results(
+    seed_metrics,
+    print_output=True,
+    persist=True,
+)
+print(summary)`;
+
+const embeddings = `from pathlib import Path
+import mrna_bench as mb
+
+root = Path(mb.get_data_path())
+for embedding in sorted(root.glob("*/embeddings*/*")):
+    if embedding.suffix in {".npz", ".h5"}:
+        size_mb = embedding.stat().st_size / 1024**2
+        print(f"{embedding.relative_to(root)}\\t{size_mb:.1f} MB")`;
 ---
 
 <DocsLayout
@@ -48,12 +112,18 @@ const embeddings = `python scripts/management/manage_embeddings.py \\
   </p>
 
   <h2>Query linear-probe results</h2>
-  <CodeBlock code={query} language="shell" />
+  <p>
+    Load all persisted rows through <code>LinearProbePersister</code> for
+    normal analysis:
+  </p>
+  <CodeBlock code={loadAll} language="python" />
   <p>
     Each <code>results.db</code> row records the model, task, target, split,
-    seed, metrics, and creation time. Rerunning the same model, task, target,
-    split, and seed replaces that row.
+    seed, and metrics. Rerunning the same model, task, target, split, and seed
+    replaces that row.
   </p>
+  <h3>Use SQL for targeted queries</h3>
+  <CodeBlock code={query} language="python" />
   <Callout tone="important" label="Result identity">
     <p>
       The database key does not include split ratios or
@@ -64,10 +134,10 @@ const embeddings = `python scripts/management/manage_embeddings.py \\
   </Callout>
 
   <h3>Find incomplete seeded runs</h3>
-  <CodeBlock code={incomplete} language="shell" />
+  <CodeBlock code={incomplete} language="python" />
 
   <h3>Combine completed seeds</h3>
-  <CodeBlock code={summarize} language="shell" />
+  <CodeBlock code={summarize} language="python" />
   <p>
     The summary writes an <code>all</code> seed row containing the mean and a
     95% interval computed as 1.96 times the standard error.
@@ -76,9 +146,9 @@ const embeddings = `python scripts/management/manage_embeddings.py \\
   <Callout tone="important" label="Evaluation split">
     <p>
       <code>LinearProbeBuilder</code> evaluates validation data by default.
-      The repository benchmark scripts set <code>eval_all_splits=True</code>
-      and can write train, validation, and test metrics. Check the stored split
-      before comparing values.
+      Set <code>eval_all_splits=True</code> in
+      <code>build_splitter()</code> to write train, validation, and test
+      metrics. Check the stored split before comparing values.
     </p>
   </Callout>
 
@@ -97,7 +167,7 @@ const embeddings = `python scripts/management/manage_embeddings.py \\
   </table>
 
   <h2>Inspect embedding inventory</h2>
-  <CodeBlock code={embeddings} language="shell" />
+  <CodeBlock code={embeddings} language="python" />
   <p>
     Use this before scheduling probes to check which model and dataset
     combinations are already present and how much storage they use.

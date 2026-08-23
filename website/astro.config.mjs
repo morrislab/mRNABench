@@ -8,6 +8,9 @@ export default defineConfig({
   base,
   output: "static",
   trailingSlash: "never",
+  redirects: {
+    "/overview": "/",
+  },
   integrations: [sitemap()],
   vite: {
     server: {

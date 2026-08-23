@@ -16,13 +16,6 @@ property and function tasks. It provides a shared catalog of datasets, model
 adapters, biologically informed splits, linear probes, variant-effect scoring,
 and result persistence.
 
-> [!IMPORTANT]
-> This branch and website describe the unreleased v2.0.0 API. The public paper
-> is bioRxiv v1 (2025), and the website leaderboard is a separate May 2026
-> linear-probe archive. The current PyPI release may differ in catalog and
-> result schema. Install from a source checkout for the documented catalogs and
-> workflows.
-
 - **Website:** [morrislab.github.io/mRNABench](https://morrislab.github.io/mRNABench/)
 - **Paper:** [bioRxiv v1](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)
 - **Datasets:** [Hugging Face collection](https://huggingface.co/collections/morrislab/mrnabench-6825747c0b9253c3226078d9)
@@ -30,15 +23,12 @@ and result persistence.
 
 ## Install
 
-Clone the development branch:
+For datasets and scikit-learn evaluation:
 
 ```bash
-git clone --branch t_dev https://github.com/morrislab/mRNABench.git
-cd mRNABench
-
 conda create --name mrna_bench python=3.12
 conda activate mrna_bench
-python -m pip install -e .
+python -m pip install mrna-bench
 ```
 
 For model inference, add PyTorch and the model dependencies:
@@ -49,7 +39,7 @@ python -m pip install \
   torch==2.7.1
 
 python -m pip install wheel packaging ninja
-python -m pip install --no-build-isolation -e '.[base_models]'
+python -m pip install --no-build-isolation 'mrna-bench[base_models]'
 ```
 
 The model extra builds CUDA extensions for `flash-attn` and `mamba-ssm`.
@@ -133,7 +123,7 @@ python -m pip install \
   --index-url https://download.pytorch.org/whl/cu126 \
   torch==2.7.1
 
-python -m pip install -e '.[base_models,dev]'
+python -m pip install --no-build-isolation '.[base_models,dev]'
 git config core.hooksPath .githooks
 ```
 

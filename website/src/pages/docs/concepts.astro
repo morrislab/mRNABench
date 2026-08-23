@@ -68,7 +68,11 @@ const parts = [
   </p>
 
   <h2>Evaluation routes</h2>
-  <table tabindex="0" aria-label="Evaluation routes">
+  <table
+    class="evaluation-routes"
+    tabindex="0"
+    aria-label="Evaluation routes"
+  >
     <thead>
       <tr><th>Route</th><th>What is evaluated</th><th>Typical output</th></tr>
     </thead>
@@ -140,5 +144,25 @@ const parts = [
 
   .concept-list p {
     margin-bottom: 0;
+  }
+
+  .evaluation-routes :global(th:first-child),
+  .evaluation-routes :global(td:first-child) {
+    min-width: 11rem;
+    white-space: nowrap;
+  }
+
+  .evaluation-routes :global(th:nth-child(2)),
+  .evaluation-routes :global(td:nth-child(2)) {
+    min-width: 20rem;
+  }
+
+  .evaluation-routes :global(th:nth-child(3)),
+  .evaluation-routes :global(td:nth-child(3)) {
+    min-width: 18rem;
+  }
+
+  .evaluation-routes :global(td:first-child code) {
+    overflow-wrap: normal;
   }
 </style>

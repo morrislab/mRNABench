@@ -4,7 +4,7 @@ import Logo from "./Logo.astro";
 import ThemeToggle from "./ThemeToggle.astro";
 
 const navigation = [
-  { href: "/overview", label: "Overview" },
+  { href: "/", label: "Overview" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/datasets", label: "Datasets" },
   { href: "/models", label: "Models" },
@@ -14,12 +14,13 @@ const navigation = [
 const currentPath = Astro.url.pathname;
 
 function isCurrentPath(href: string): boolean {
-  const target = withBase(href).replace(/\/$/, "");
+  const target = withBase(href).replace(/\/$/, "") || "/";
   return currentPath === target || currentPath.startsWith(`${target}/`);
 }
 
 function isExactPath(href: string): boolean {
-  return currentPath === withBase(href).replace(/\/$/, "");
+  const target = withBase(href).replace(/\/$/, "") || "/";
+  return currentPath === target;
 }
 ---
 

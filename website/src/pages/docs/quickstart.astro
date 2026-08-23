@@ -3,12 +3,9 @@ import DocsLayout from "../../layouts/DocsLayout.astro";
 import Callout from "../../components/Callout.astro";
 import CodeBlock from "../../components/CodeBlock.astro";
 
-const datasetsInstall = `git clone --branch t_dev https://github.com/morrislab/mRNABench.git
-cd mRNABench
-
-conda create --name mrna_bench python=3.12
+const datasetsInstall = `conda create --name mrna_bench python=3.12
 conda activate mrna_bench
-python -m pip install -e .`;
+python -m pip install mrna-bench`;
 
 const paths = `import mrna_bench as mb
 
@@ -20,7 +17,7 @@ const sourceInstall = `python -m pip install \\
   torch==2.7.1
 
 python -m pip install wheel packaging ninja
-python -m pip install --no-build-isolation -e '.[base_models]'`;
+python -m pip install --no-build-isolation 'mrna-bench[base_models]'`;
 
 const loadDataset = `import mrna_bench as mb
 
@@ -71,12 +68,12 @@ print(metrics)`;
 >
   <h2>Choose the installation you need</h2>
   <p>
-    The commands below install the unreleased v2.0.0 source API. Do not
-    substitute the current PyPI package if you need the catalog and result
-    schema documented here.
+    Install from PyPI for normal dataset access, model inference, and in-memory
+    benchmarking. A repository checkout is only needed for contributor
+    development or the repository-local batch scripts.
   </p>
 
-  <h3>Datasets and evaluation from source</h3>
+  <h3>Datasets and evaluation</h3>
   <CodeBlock code={datasetsInstall} language="shell" />
 
   <h3>Model inference</h3>
@@ -121,7 +118,7 @@ print(metrics)`;
   <Callout>
     <p>
       Repository scripts are not installed as shell commands. Run them from a
-      source checkout with <code>python scripts/...</code>.
+      source checkout only when you need the batch or cluster workflows.
     </p>
   </Callout>
 </DocsLayout>

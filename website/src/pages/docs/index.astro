@@ -3,9 +3,7 @@ import DocsLayout from "../../layouts/DocsLayout.astro";
 import CodeBlock from "../../components/CodeBlock.astro";
 import { withBase } from "../../lib/site";
 
-const install = `git clone --branch t_dev https://github.com/morrislab/mRNABench.git
-cd mRNABench
-python -m pip install -e .`;
+const install = `python -m pip install mrna-bench`;
 
 const routes = [
   {
@@ -39,13 +37,7 @@ const routes = [
     Registered datasets and model adapters can be extended independently.
   </p>
 
-  <p>
-    These pages describe the unreleased v2.0.0 source API. The current PyPI
-    release may differ in catalog and result persistence; install the source
-    checkout for the documented behavior.
-  </p>
-
-  <CodeBlock code={install} language="shell" label="Install v2.0.0 development source" />
+  <CodeBlock code={install} language="shell" label="Install from PyPI" />
 
   <h2>Choose a workflow</h2>
   <div class="doc-routes">
@@ -55,7 +47,7 @@ const routes = [
           <span>{route.number}</span>
           <strong>{route.title}</strong>
           <p>{route.text}</p>
-          <i aria-hidden="true">-&gt;</i>
+          <i aria-hidden="true">→</i>
         </a>
       ))
     }
