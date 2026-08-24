@@ -239,7 +239,7 @@ export const datasets: DatasetEntry[] = [
     targetSummary: "target (default), target_reference; paired VEP target_effect",
     citationLabel: "Siegel et al.",
     citationUrl: "https://doi.org/10.1093/g3journal/jkab404",
-    accessNote: "Embedding VEP regression requires a custom signed scoring_fn through the Python API; the repository script does not choose one automatically.",
+    accessNote: "L2 embedding VEP is unsigned. Fit ridge or OLS to alternate-minus-reference embeddings for signed effects; this route trains on labeled examples.",
   },
   {
     id: "rna-stability-siegel-beas2b",
@@ -254,7 +254,7 @@ export const datasets: DatasetEntry[] = [
     targetSummary: "target (default), target_reference; paired VEP target_effect",
     citationLabel: "Siegel et al.",
     citationUrl: "https://doi.org/10.1093/g3journal/jkab404",
-    accessNote: "Embedding VEP regression requires a custom signed scoring_fn through the Python API; the repository script does not choose one automatically.",
+    accessNote: "L2 embedding VEP is unsigned. Fit ridge or OLS to alternate-minus-reference embeddings for signed effects; this route trains on labeled examples.",
   },
   {
     id: "eclip-binding-k562",

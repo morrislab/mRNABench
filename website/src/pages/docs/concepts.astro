@@ -79,13 +79,13 @@ const parts = [
     <tbody>
       <tr>
         <td><code>linear_probe</code></td>
-        <td>A simple estimator fitted on frozen embeddings.</td>
+        <td>A simple estimator fitted on frozen sequence embeddings or paired embedding differences.</td>
         <td>Regression, classification, or multilabel metrics.</td>
       </tr>
       <tr>
         <td><code>embedding_vep</code></td>
         <td>A scalar function of the pooled alternate-minus-reference embedding difference.</td>
-        <td>The default L2 score supports classification; regression requires a custom signed <code>scoring_fn</code> through the Python API.</td>
+        <td>The default L2 score is an unsigned zero-shot magnitude. Signed regression uses a supervised delta-embedding probe or a justified custom <code>scoring_fn</code>.</td>
       </tr>
       <tr>
         <td><code>likelihood_vep</code></td>

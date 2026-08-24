@@ -112,6 +112,47 @@ evaluator = ZeroShotVEP.from_embeddings(
 )
 print(evaluator.run())`;
 
+const signedEmbeddingVep = `import torch
+import mrna_bench as mb
+
+from mrna_bench.embedder import DatasetEmbedder
+from mrna_bench.linear_probe import LinearProbeBuilder
+
+dataset = mb.load_dataset("rna-stability-siegel-jurkat")
+model = mb.load_model(
+    "Orthrus",
+    "orthrus-large-4-track",
+    device=torch.device("cuda"),
+)
+
+embedding_tensors = DatasetEmbedder(
+    model,
+    dataset,
+    batch_size=8,
+).embed_dataset()
+embeddings = torch.stack(embedding_tensors).cpu().numpy()
+
+effect_spec = dataset.metadata.vep_task_spec
+assert effect_spec is not None
+
+effect_probe = (
+    LinearProbeBuilder(dataset)
+    .fetch_embedding_by_embedding_instance(
+        model.short_name,
+        embeddings,
+    )
+    .set_target(effect_spec.target_col)
+    .build_evaluator(effect_spec.task)
+    .set_regressor("ridge")
+    .build_splitter(
+        dataset.metadata.default_split_type,
+        eval_all_splits=True,
+    )
+    .build()
+)
+
+print(effect_probe.run_linear_probe(random_seed=2541))`;
+
 const likelihoodVep = `import torch
 import mrna_bench as mb
 
@@ -232,12 +273,29 @@ print(trainer.evaluate(test))`;
   </p>
 
   <h2>Variant-effect prediction</h2>
-  <h3>Embedding distance</h3>
+  <h3>Zero-shot embedding magnitude</h3>
   <CodeBlock code={embeddingVep} language="python" />
   <p>
     Classification uses the L2 norm of the pooled alternate-minus-reference
-    embedding difference. Regression requires a custom signed scoring function
-    because L2 distance discards direction.
+    embedding difference. This measures how much the embedding changed, not
+    whether the measured phenotype increased or decreased.
+  </p>
+
+  <h3>Signed regression effects</h3>
+  <CodeBlock code={signedEmbeddingVep} language="python" />
+  <p>
+    A pooled embedding has no built-in positive biological direction. For a
+    labeled regression dataset, the builder pairs each alternate with its
+    reference, forms the alternate-minus-reference embedding, and fits the
+    selected regressor on the training split. The held-out predictions retain
+    both direction and magnitude. Because the direction is learned from
+    measured effects, this is a supervised VEP result rather than a zero-shot
+    score.
+  </p>
+  <p>
+    A genuinely zero-shot regression still needs a custom
+    <code>scoring_fn</code> whose direction comes from the model or a
+    predeclared biological rule, never from the held-out effect label.
   </p>
 
   <h3>Likelihood scoring</h3>

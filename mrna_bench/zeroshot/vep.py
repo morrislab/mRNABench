@@ -60,7 +60,9 @@ class ZeroShotVEP:
         if model is None and task == "regression" and scoring_fn is None:
             raise ValueError(
                 "Embedding VEP regression requires a signed scoring_fn; "
-                "the default L2 norm discards effect direction."
+                "the default L2 norm discards effect direction. Use "
+                "LinearProbeBuilder with the dataset's VEP target for a "
+                "supervised signed delta-embedding probe."
             )
 
         self.data_df = data_df.copy()
