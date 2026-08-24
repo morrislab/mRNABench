@@ -159,66 +159,128 @@ const paperAffiliations = [
     </div>
   </section>
 
-  <nav class="overview-nav shell" aria-label="On this page">
-    <span>On this page</span>
-    <a href="#need">Why mRNA</a>
-    <a href="#design">Design</a>
-    <a href="#splits">Splits</a>
-    <a href="#findings">Findings</a>
-    <a href="#limits">Limits</a>
-    <a href="#citation">Citation</a>
-  </nav>
+  <div class="overview-switcher" data-overview-switcher>
+    <nav class="overview-nav shell" aria-label="Paper overview sections">
+      <span>Explore</span>
+      <div
+        class="overview-nav__tabs"
+        role="tablist"
+        aria-label="Paper overview sections"
+      >
+        <a
+          id="tab-need"
+          href="#need"
+          role="tab"
+          aria-controls="need"
+          aria-selected="true"
+          data-overview-tab
+        >Why mRNA</a>
+        <a
+          id="tab-design"
+          href="#design"
+          role="tab"
+          aria-controls="design"
+          aria-selected="false"
+          data-overview-tab
+        >Design</a>
+        <a
+          id="tab-splits"
+          href="#splits"
+          role="tab"
+          aria-controls="splits"
+          aria-selected="false"
+          data-overview-tab
+        >Splits</a>
+        <a
+          id="tab-findings"
+          href="#findings"
+          role="tab"
+          aria-controls="findings"
+          aria-selected="false"
+          data-overview-tab
+        >Findings</a>
+        <a
+          id="tab-limits"
+          href="#limits"
+          role="tab"
+          aria-controls="limits"
+          aria-selected="false"
+          data-overview-tab
+        >Limits</a>
+      </div>
+    </nav>
 
-  <section class="section" id="need">
-    <div class="shell two-column">
-      <div>
-        <p class="eyebrow">Why mRNA</p>
-        <h2>Why mature mRNA needs separate evaluation</h2>
-      </div>
-      <div class="prose">
-        <p>
-          Splicing joins selected exons into a transcript isoform, while
-          regulatory information is distributed across the 5' UTR, coding
-          sequence, splice architecture, and 3' UTR. These features affect
-          transcript localization, persistence, and translation.
-        </p>
-        <p>
-          Useful signals also appear at very different scales. An RNA-binding
-          protein may recognize a short motif. The benchmark's SNV tasks alter
-          one nucleotide at a time. Stability and translation can reflect
-          effects accumulated across a complete transcript. The suite includes
-          tasks spanning each of these scales.
-        </p>
-        <div class="transcript" aria-label="Schematic mature transcript with 5 prime UTR, coding sequence, and 3 prime UTR">
-          <span class="transcript__utr">5' UTR</span>
-          <span class="transcript__cds">coding sequence</span>
-          <span class="transcript__utr transcript__utr--end">3' UTR</span>
-        </div>
-      </div>
-    </div>
-  </section>
+    <div class="overview-panels">
+      <div
+        class="overview-panel is-active"
+        id="need"
+        role="tabpanel"
+        aria-labelledby="tab-need"
+        tabindex="0"
+        data-overview-panel
+      >
+        <section class="section">
+          <div class="shell two-column">
+            <div>
+              <p class="eyebrow">Why mRNA</p>
+              <h2>Why mature mRNA needs separate evaluation</h2>
+            </div>
+            <div class="prose">
+              <p>
+                Splicing joins selected exons into a transcript isoform, while
+                regulatory information is distributed across the 5' UTR, coding
+                sequence, splice architecture, and 3' UTR. These features affect
+                transcript localization, persistence, and translation.
+              </p>
+              <p>
+                Useful signals also appear at very different scales. An
+                RNA-binding protein may recognize a short motif. The benchmark's
+                SNV tasks alter one nucleotide at a time. Stability and
+                translation can reflect effects accumulated across a complete
+                transcript. The suite includes tasks spanning each of these
+                scales.
+              </p>
+              <div
+                class="transcript"
+                aria-label="Schematic mature transcript with 5 prime UTR, coding sequence, and 3 prime UTR"
+              >
+                <span class="transcript__utr">5' UTR</span>
+                <span class="transcript__cds">coding sequence</span>
+                <span class="transcript__utr transcript__utr--end">3' UTR</span>
+              </div>
+            </div>
+          </div>
+        </section>
 
-  <section class="section section-rule">
-    <div class="shell">
-      <div class="section-heading">
-        <p class="eyebrow">The gap</p>
-        <h2>Sources of variation in published model scores</h2>
+        <section class="section section-rule">
+          <div class="shell">
+            <div class="section-heading">
+              <p class="eyebrow">The gap</p>
+              <h2>Sources of variation in published model scores</h2>
+            </div>
+            <div class="gap-grid">
+              {
+                gaps.map((gap, index) => (
+                  <article>
+                    <span>{String(index + 1).padStart(2, "0")}</span>
+                    <h3>{gap.title}</h3>
+                    <p>{gap.text}</p>
+                  </article>
+                ))
+              }
+            </div>
+          </div>
+        </section>
       </div>
-      <div class="gap-grid">
-        {
-          gaps.map((gap, index) => (
-            <article>
-              <span>{String(index + 1).padStart(2, "0")}</span>
-              <h3>{gap.title}</h3>
-              <p>{gap.text}</p>
-            </article>
-          ))
-        }
-      </div>
-    </div>
-  </section>
 
-  <section class="section design-section" id="design">
+  <section
+    class="section design-section overview-panel"
+    id="design"
+    role="tabpanel"
+    aria-labelledby="tab-design"
+    tabindex="0"
+    data-overview-panel
+  >
     <div class="shell two-column">
       <div>
         <p class="eyebrow">Benchmark design</p>
@@ -292,7 +354,14 @@ const paperAffiliations = [
     </div>
   </section>
 
-  <section class="section section-rule" id="splits">
+  <section
+    class="section section-rule overview-panel"
+    id="splits"
+    role="tabpanel"
+    aria-labelledby="tab-splits"
+    tabindex="0"
+    data-overview-panel
+  >
     <div class="shell">
       <div class="section-heading section-heading--split">
         <div>
@@ -330,7 +399,14 @@ const paperAffiliations = [
     </div>
   </section>
 
-  <section class="section findings" id="findings">
+  <section
+    class="section findings overview-panel"
+    id="findings"
+    role="tabpanel"
+    aria-labelledby="tab-findings"
+    tabindex="0"
+    data-overview-panel
+  >
     <div class="shell">
       <div class="section-heading">
         <p class="eyebrow">Current development analysis</p>
@@ -349,7 +425,14 @@ const paperAffiliations = [
     </div>
   </section>
 
-  <section class="section section-rule" id="limits">
+  <section
+    class="section section-rule overview-panel"
+    id="limits"
+    role="tabpanel"
+    aria-labelledby="tab-limits"
+    tabindex="0"
+    data-overview-panel
+  >
     <div class="shell two-column">
       <div>
         <p class="eyebrow">Limits</p>
@@ -397,6 +480,8 @@ const paperAffiliations = [
       </div>
     </div>
   </section>
+    </div>
+  </div>
 
   <section class="section citation" id="citation">
     <div class="shell citation__grid">
@@ -417,6 +502,110 @@ const paperAffiliations = [
     </div>
   </section>
 </BaseLayout>
+
+<script>
+  function initializeOverviewSwitcher() {
+    const switcher = document.querySelector<HTMLElement>(
+      "[data-overview-switcher]",
+    );
+    if (!switcher || switcher.dataset.initialized === "true") return;
+
+    const tabs = Array.from(
+      switcher.querySelectorAll<HTMLAnchorElement>("[data-overview-tab]"),
+    );
+    const panels = Array.from(
+      switcher.querySelectorAll<HTMLElement>("[data-overview-panel]"),
+    );
+    const panelIds = new Set(panels.map((panel) => panel.id));
+    const firstPanelId = tabs[0]?.getAttribute("aria-controls");
+    if (!firstPanelId) return;
+
+    const activate = (panelId: string, updateUrl = false) => {
+      if (!panelIds.has(panelId)) return;
+
+      tabs.forEach((tab) => {
+        const selected = tab.getAttribute("aria-controls") === panelId;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      });
+      panels.forEach((panel) => {
+        const selected = panel.id === panelId;
+        panel.classList.toggle("is-active", selected);
+        panel.hidden = !selected;
+      });
+
+      if (updateUrl) {
+        const url = new URL(window.location.href);
+        url.hash = panelId;
+        window.history.replaceState(window.history.state, "", url);
+      }
+    };
+
+    const requestedPanel = window.location.hash.slice(1);
+    const initialPanel = panelIds.has(requestedPanel)
+      ? requestedPanel
+      : firstPanelId;
+    activate(initialPanel);
+    switcher.dataset.initialized = "true";
+
+    tabs.forEach((tab) => {
+      tab.addEventListener("click", (event) => {
+        if (
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        const panelId = tab.getAttribute("aria-controls");
+        if (panelId) activate(panelId, true);
+      });
+    });
+
+    const tabList = switcher.querySelector<HTMLElement>('[role="tablist"]');
+    tabList?.addEventListener("keydown", (event) => {
+      if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
+        return;
+      }
+      const currentIndex = tabs.indexOf(
+        document.activeElement as HTMLAnchorElement,
+      );
+      if (currentIndex < 0) return;
+
+      event.preventDefault();
+      let nextIndex = currentIndex;
+      if (event.key === "Home") nextIndex = 0;
+      if (event.key === "End") nextIndex = tabs.length - 1;
+      if (event.key === "ArrowLeft") {
+        nextIndex = (currentIndex - 1 + tabs.length) % tabs.length;
+      }
+      if (event.key === "ArrowRight") {
+        nextIndex = (currentIndex + 1) % tabs.length;
+      }
+
+      const nextTab = tabs[nextIndex];
+      const panelId = nextTab.getAttribute("aria-controls");
+      if (panelId) activate(panelId, true);
+      nextTab.focus();
+    });
+
+    window.addEventListener("hashchange", () => {
+      const panelId = window.location.hash.slice(1);
+      if (panelIds.has(panelId)) activate(panelId);
+    });
+
+    if (initialPanel !== firstPanelId) {
+      requestAnimationFrame(() => {
+        document.getElementById(initialPanel)?.scrollIntoView();
+      });
+    }
+  }
+
+  initializeOverviewSwitcher();
+</script>
 
 <style>
   .publication {
@@ -517,32 +706,63 @@ const paperAffiliations = [
   }
 
   .overview-nav {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.7rem 1.4rem;
-    padding-block: 1.1rem;
+    position: sticky;
+    z-index: 10;
+    top: 4.5rem;
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: center;
+    min-height: 3.8rem;
+    background: var(--paper);
+    background: color-mix(in srgb, var(--paper) 94%, transparent);
     border-bottom: 1px solid var(--line);
+    backdrop-filter: blur(12px);
   }
 
-  .overview-nav span,
+  .overview-nav > span,
   .overview-nav a {
     font-size: var(--text-xs);
   }
 
-  .overview-nav span {
+  .overview-nav > span {
     color: var(--ink-muted);
     font-weight: 680;
     letter-spacing: 0.08em;
     text-transform: uppercase;
   }
 
+  .overview-nav__tabs {
+    display: flex;
+    justify-content: flex-end;
+    align-self: stretch;
+    min-width: 0;
+  }
+
   .overview-nav a {
+    display: flex;
+    align-items: center;
+    padding: 0.25rem 0.9rem;
     color: var(--ink);
+    border-bottom: 2px solid transparent;
     text-decoration: none;
   }
 
-  .overview-nav a:hover {
+  .overview-nav a:hover,
+  .overview-nav a[aria-selected="true"] {
     color: var(--red-deep);
+  }
+
+  .overview-nav a[aria-selected="true"] {
+    border-bottom-color: var(--red);
+  }
+
+  .overview-switcher[data-initialized="true"] .overview-panel:not(.is-active) {
+    display: none;
+  }
+
+  .overview-panel {
+    scroll-margin-top: 9rem;
   }
 
   .two-column {
@@ -643,25 +863,16 @@ const paperAffiliations = [
   }
 
   .design-section {
-    color: var(--white);
-    background: var(--black);
-  }
-
-  .design-section h2 {
-    color: var(--white);
-  }
-
-  .design-section .eyebrow {
-    color: var(--red-on-dark);
+    background: var(--paper-soft);
   }
 
   .design-section .prose > p {
-    color: var(--footer-muted);
+    color: var(--ink-soft);
   }
 
   .method-list {
     margin: 2.5rem 0 0;
-    border-top: 1px solid var(--footer-line);
+    border-top: 1px solid var(--line-strong);
   }
 
   .method-list div {
@@ -669,24 +880,24 @@ const paperAffiliations = [
     grid-template-columns: 9rem 1fr;
     gap: 1rem;
     padding: 0.85rem 0;
-    border-bottom: 1px solid var(--footer-line);
+    border-bottom: 1px solid var(--line);
   }
 
   .method-list dt {
-    color: var(--red-on-dark);
+    color: var(--red-deep);
     font-size: var(--text-xs);
     font-weight: 650;
   }
 
   .method-list dd {
     margin: 0;
-    color: var(--footer-muted);
+    color: var(--ink-muted);
     font-size: var(--text-sm);
   }
 
   .method-caveat {
     margin-top: 1rem !important;
-    color: var(--footer-muted) !important;
+    color: var(--ink-muted) !important;
     font-size: var(--text-sm);
   }
 
@@ -702,18 +913,18 @@ const paperAffiliations = [
     grid-column: 1 / -1;
     max-width: 42rem;
     margin: 0 0 0.5rem;
-    color: var(--footer-muted);
+    color: var(--ink-muted);
     font-size: var(--text-sm);
   }
 
   .task-scale article {
     min-height: 15rem;
     padding: 1.4rem;
-    border: 1px solid var(--footer-line);
+    border: 1px solid var(--line-strong);
   }
 
   .task-scale article > span {
-    color: var(--red-on-dark);
+    color: var(--red-deep);
     font-size: var(--text-xs);
     font-weight: 680;
     letter-spacing: 0.08em;
@@ -731,7 +942,7 @@ const paperAffiliations = [
 
   .task-scale p {
     margin: 0;
-    color: var(--footer-muted);
+    color: var(--ink-muted);
     font-size: var(--text-sm);
   }
 
@@ -745,7 +956,7 @@ const paperAffiliations = [
   .task-scale__axis i {
     width: 0.42rem;
     height: var(--height, 2.2rem);
-    background: var(--white);
+    background: var(--ink);
     border-radius: 999px;
   }
 
@@ -841,6 +1052,7 @@ const paperAffiliations = [
 
   .citation {
     background: var(--paper-soft);
+    border-top: 1px solid var(--line-strong);
   }
 
   .citation__grid {
@@ -882,6 +1094,22 @@ const paperAffiliations = [
   }
 
   @media (max-width: 720px) {
+    .overview-nav {
+      grid-template-columns: 1fr;
+      gap: 0;
+      padding-top: 0.65rem;
+    }
+
+    .overview-nav__tabs {
+      justify-content: flex-start;
+      overflow-x: auto;
+    }
+
+    .overview-nav a {
+      flex: 0 0 auto;
+      min-height: 2.9rem;
+    }
+
     .publication {
       grid-template-columns: 1fr;
       gap: 1rem;
@@ -921,6 +1149,15 @@ const paperAffiliations = [
   }
 
   @media (max-width: 520px) {
+    .overview-nav {
+      display: block;
+      padding-top: 0;
+    }
+
+    .overview-nav > span {
+      display: none;
+    }
+
     .gap-grid,
     .split-table {
       grid-template-columns: 1fr;
@@ -944,4 +1181,5 @@ const paperAffiliations = [
       gap: 0.3rem;
     }
   }
+
 </style>
