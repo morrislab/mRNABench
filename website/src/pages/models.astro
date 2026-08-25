@@ -13,8 +13,21 @@ const groupCounts = {
   Baseline: models.filter((model) => model.group === "Baseline").length,
 };
 const behaviorLabels: Record<string, string> = {
-  "pseudo likelihood": "pseudo-likelihood",
+  embedding: "Embedding",
+  "causal likelihood": "Causal likelihood",
+  "pseudo likelihood": "Pseudo-likelihood",
+  tracks: "Track prediction",
 };
+
+function checkpointUrl(modelName: string, version: string): string | null {
+  if (modelName === "Evo2") {
+    return `https://huggingface.co/Taykhoom/${version}`;
+  }
+  if (modelName === "NucleotideTransformerV3") {
+    return `https://huggingface.co/InstaDeepAI/NT${version}`;
+  }
+  return null;
+}
 ---
 
 <BaseLayout
@@ -22,9 +35,9 @@ const behaviorLabels: Record<string, string> = {
   description="Browse registered mRNABench model adapters and versions, including checkpoint-specific behaviors."
 >
   <PageIntro
-    eyebrow="Model catalog"
-    title="Model adapters and supported inference behaviors"
-    lead="The registry includes RNA and DNA language models, sequence-to-function models, and non-pretrained references. Capabilities are declared per adapter rather than inferred from a model name."
+    eyebrow="Catalog"
+    title="Models"
+    lead="Browse model families and checkpoints, then filter by group or available output: embeddings, likelihood scores, or predicted tracks."
   />
 
   <section class="model-summary shell">
@@ -50,9 +63,9 @@ const behaviorLabels: Record<string, string> = {
       </p>
     </div>
     <p class="model-summary__hardware">
-      This catalog records inference behavior, not complete CPU, VRAM, context,
-      attention-backend, or required-track compatibility. Check the adapter and
-      checkpoint card before scheduling a run.
+      Hardware and input requirements vary by checkpoint. Check the adapter and
+      checkpoint card for memory, context length, attention backend, and
+      required sequence tracks before a large run.
     </p>
   </section>
 
@@ -82,7 +95,7 @@ const behaviorLabels: Record<string, string> = {
           <option value="tracks">Track prediction</option>
         </select>
       </label>
-      <p role="status" aria-live="polite"><strong data-visible-models>{models.length}</strong> families shown</p>
+      <p role="status" aria-live="polite" data-model-status>{models.length} families shown</p>
     </div>
 
     <div class="model-list">
@@ -92,7 +105,7 @@ const behaviorLabels: Record<string, string> = {
             data-model-row
             data-group={model.group}
             data-behaviors={model.behaviors.join("|")}
-            data-family-search={`${model.name} ${model.description} ${model.group} ${model.behaviors.join(" ")}`.toLowerCase()}
+            data-family-search={`${model.name} ${model.description} ${model.group}`.toLowerCase()}
           >
             <div class="model-list__name">
               <span>{model.group}</span>
@@ -114,16 +127,24 @@ const behaviorLabels: Record<string, string> = {
                       versionBehaviors[model.name]?.[version]
                       ?? model.behaviors
                     );
+                    const behaviorSearch = behaviors.flatMap(
+                      (behavior) => [
+                        behavior,
+                        behaviorLabels[behavior] ?? behavior,
+                      ],
+                    ).join(" ");
+                    const versionUrl = checkpointUrl(model.name, version);
                     return (
                       <span
                         class="model-list__version"
                         data-version-row
-                        data-version-search={version.toLowerCase()}
+                        data-version-name={version.toLowerCase()}
+                        data-version-search={`${version} ${behaviorSearch}`.toLowerCase()}
                         data-version-behaviors={behaviors.join("|")}
                       >
                         {
-                          model.name === "Evo2" ? (
-                            <a href={`https://huggingface.co/Taykhoom/${version}`} aria-label={`${version} checkpoint card`}>
+                          versionUrl ? (
+                            <a href={versionUrl} aria-label={`${version} checkpoint card`}>
                               <code>{version}</code>
                             </a>
                           ) : (
@@ -150,7 +171,6 @@ const behaviorLabels: Record<string, string> = {
         ))
       }
     </div>
-    <p class="model-empty" data-model-empty role="status" aria-live="polite" hidden>No models match those filters.</p>
   </section>
 </BaseLayout>
 
@@ -162,9 +182,8 @@ const behaviorLabels: Record<string, string> = {
     const group = catalog.querySelector<HTMLSelectElement>("[data-model-group]");
     const behavior = catalog.querySelector<HTMLSelectElement>("[data-model-behavior]");
     const rows = [...catalog.querySelectorAll<HTMLElement>("[data-model-row]")];
-    const count = catalog.querySelector<HTMLElement>("[data-visible-models]");
-    const empty = catalog.querySelector<HTMLElement>("[data-model-empty]");
-    if (!search || !group || !behavior || !count || !empty) return;
+    const status = catalog.querySelector<HTMLElement>("[data-model-status]");
+    if (!search || !group || !behavior || !status) return;
 
     const parameters = new URLSearchParams(window.location.search);
     search.value = parameters.get("q") ?? "";
@@ -221,12 +240,40 @@ const behaviorLabels: Record<string, string> = {
           );
         }
         const details = row.querySelector<HTMLDetailsElement>("details");
-        if (details) {
-          details.open = Boolean(query || behavior.value);
+        const versionsWereNarrowed = visibleVersions < versions.length;
+        const queryMatchedVersionName = Boolean(
+          query
+          && versions.some(
+            (version) => (
+              !version.hidden
+              && version.dataset.versionName?.includes(query)
+            ),
+          )
+        );
+        const shouldAutoOpen = Boolean(
+          !row.hidden
+          && (
+            versionsWereNarrowed
+            || queryMatchedVersionName
+          )
+        );
+        if (details && shouldAutoOpen && !details.open) {
+          details.dataset.autoOpened = "true";
+          details.open = true;
+        } else if (
+          details
+          && !shouldAutoOpen
+          && details.dataset.autoOpened === "true"
+        ) {
+          details.open = false;
+          delete details.dataset.autoOpened;
         }
       });
-      count.textContent = String(visible);
-      empty.hidden = visible !== 0;
+      status.textContent = (
+        visible === 0
+          ? "No model families match those filters."
+          : `${visible} ${visible === 1 ? "family" : "families"} shown`
+      );
 
       if (updateUrl) {
         const next = new URLSearchParams();
@@ -481,12 +528,6 @@ const behaviorLabels: Record<string, string> = {
   .model-list__version i {
     color: var(--ink-muted);
     background: var(--paper-soft);
-  }
-
-  .model-empty {
-    padding: 4rem 1rem;
-    color: var(--ink-muted);
-    text-align: center;
   }
 
   @media (max-width: 1100px) {

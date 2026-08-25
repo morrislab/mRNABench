@@ -67,12 +67,17 @@
 
 <style>
   .theme-toggle {
+    display: none;
     width: 3.4rem;
     padding: 0;
     color: var(--ink);
     background: transparent;
     border: 0;
     cursor: pointer;
+  }
+
+  :global(.js) .theme-toggle {
+    display: block;
   }
 
   .theme-toggle__track {

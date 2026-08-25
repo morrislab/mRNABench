@@ -4,7 +4,7 @@
 
 <img width="620" alt="mRNABench logo" src="assets/lockup/mrnabench-lockup-5bar-black-outlined.svg" />
 
-[![PyPI version](https://badge.fury.io/py/mrna-bench.svg)](https://badge.fury.io/py/mrna-bench)
+[![PyPI version](https://badge.fury.io/py/mrna-bench.svg)](https://pypi.org/project/mrna-bench/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![bioRxiv](https://img.shields.io/badge/bioRxiv-2025.07.05.662870-b31b1b.svg)](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)
@@ -108,6 +108,7 @@ fine-tuning, result analysis, and extension guides.
 | Query and interpret outputs | [Results and analysis](https://morrislab.github.io/mRNABench/docs/results/) |
 | Add a dataset | [Dataset extension guide](https://morrislab.github.io/mRNABench/docs/add-dataset/) |
 | Add a model | [Model extension guide](https://morrislab.github.io/mRNABench/docs/add-model/) |
+| Look up Python signatures | [Python API](https://morrislab.github.io/mRNABench/docs/api/) |
 | Browse supported datasets and models | [Dataset catalog](https://morrislab.github.io/mRNABench/datasets/) and [model catalog](https://morrislab.github.io/mRNABench/models/) |
 
 The Astro source for the site is in [`website/`](website/). Local setup and

@@ -62,7 +62,7 @@ model = mb.load_model(
 
 <DocsLayout
   title="Add a model"
-  description="Wrap model loading and embedding behind the common adapter, then declare only the behaviors the implementation supports."
+  description="Implement loading, embedding, and any supported scoring methods for a new model."
   section="Extend"
 >
   <h2>The adapter contract</h2>
@@ -74,7 +74,7 @@ model = mb.load_model(
   </p>
   <CodeBlock code={shape} language="python" label="Model adapter" />
 
-  <h2>Declare capabilities explicitly</h2>
+  <h2>Implement each supported output</h2>
   <table tabindex="0" aria-label="Model behaviors and required methods">
     <thead>
       <tr><th>Behavior</th><th>Required implementation</th></tr>
@@ -90,7 +90,7 @@ model = mb.load_model(
       </tr>
       <tr>
         <td><code>pseudo_likelihood</code></td>
-        <td>Masked-token likelihood over every non-special tokenizer position.</td>
+        <td>Expose the masked-language-model head with <code>_set_logits_model()</code>, or implement compatible <code>logits()</code> and <code>sequence_score()</code> methods.</td>
       </tr>
       <tr>
         <td><code>tracks</code></td>
@@ -111,9 +111,8 @@ model = mb.load_model(
   </p>
   <p>
     Add required third-party packages to <code>base_models</code> or a
-    dedicated optional dependency group in <code>pyproject.toml</code>. Check
-    model loading from a clean installation, not only the development
-    environment.
+    dedicated optional dependency group in <code>pyproject.toml</code>. Test
+    model loading from a clean installation.
   </p>
   <CodeBlock code={load} language="python" />
 
@@ -129,8 +128,8 @@ model = mb.load_model(
 
   <Callout>
     <p>
-      Define LoRA target modules only when the adapter is intended to support
-      fine-tuning. Do not advertise fine-tuning from embedding support alone.
+      List fine-tuning support for adapters with defined LoRA target modules
+      and a tested training path.
     </p>
   </Callout>
 </DocsLayout>

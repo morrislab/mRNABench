@@ -10,12 +10,12 @@
   ],
   "legacy_regression_max_abs_difference": 0.003,
   "excluded_datasets": {
-    "eclip-binding-k562": "Dataset rebuilt after this result snapshot.",
-    "eclip-binding-hepg2": "Dataset rebuilt after this result snapshot.",
-    "mrl-hl-lbkwk": "Dataset rebuilt after this result snapshot.",
-    "rna-lifecycle-ietswaart": "Dataset rebuilt after this result snapshot.",
-    "utr-variants-bohn-utr3": "Dataset rebuilt after this result snapshot.",
-    "utr-variants-bohn-utr5": "Dataset rebuilt after this result snapshot."
+    "eclip-binding-k562": "No compatible rows in the uploaded results.",
+    "eclip-binding-hepg2": "No compatible rows in the uploaded results.",
+    "mrl-hl-lbkwk": "No compatible rows in the uploaded results.",
+    "rna-lifecycle-ietswaart": "No compatible rows in the uploaded results.",
+    "utr-variants-bohn-utr3": "No compatible rows in the uploaded results.",
+    "utr-variants-bohn-utr5": "No compatible rows in the uploaded results."
   },
   "excluded_models": {
     "dilated_resnet": "Supervised task-specific reference, not a catalog model.",

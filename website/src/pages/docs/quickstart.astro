@@ -23,8 +23,9 @@ const loadDataset = `import mrna_bench as mb
 
 dataset = mb.load_dataset("go-mf")
 
-print(dataset.data_df.head())
-print(dataset.metadata)`;
+print(dataset.dataset_name)
+print(dataset.data_df.shape)
+print(dataset.metadata.task, dataset.metadata.default_split_type)`;
 
 const firstBenchmark = `import torch
 import mrna_bench as mb
@@ -66,11 +67,10 @@ print(metrics)`;
   description="Install the package, choose its storage paths, load a dataset, and run one linear probe."
   section="Start"
 >
-  <h2>Choose the installation you need</h2>
+  <h2>Install from PyPI</h2>
   <p>
-    Install from PyPI for normal dataset access, model inference, and in-memory
-    benchmarking. A repository checkout is only needed for contributor
-    development or the repository-local batch scripts.
+    The base package includes dataset loading and evaluation. Install the model
+    extra when you also need model inference.
   </p>
 
   <h3>Datasets and evaluation</h3>
@@ -84,8 +84,8 @@ print(metrics)`;
       The model extra builds <code>flash-attn</code> and
       <code>mamba-ssm</code> CUDA extensions from source. Use a CUDA 12.6
       development environment with matching headers and <code>nvcc</code>.
-      The model catalog lists inference behavior, not complete CPU, VRAM, or
-      hardware compatibility.
+      Check the model catalog and checkpoint card for GPU, memory, attention
+      backend, and track requirements.
     </p>
   </Callout>
 
@@ -101,24 +101,16 @@ print(metrics)`;
   <h2>Load a dataset</h2>
   <CodeBlock code={loadDataset} language="python" />
   <p>
-    The returned <code>BenchmarkDataset</code> contains the processed dataframe
-    and the metadata used to choose its task, target, default split, and
-    supported evaluation routes.
+    A successful load prints <code>go-mf</code>, the dataframe dimensions, and
+    metadata containing a multilabel task with a homology split.
   </p>
 
   <h2>Run one benchmark in memory</h2>
   <CodeBlock code={firstBenchmark} language="python" />
   <p>
-    <code>LinearProbeBuilder</code> reads defaults from dataset metadata. In
-    this example that includes the first declared task and target, the dataset's
-    default split, and the matching evaluator. The benchmarking guide shows how
-    to override each choice and how to persist larger runs.
+    <code>LinearProbeBuilder</code> uses the first task and target in the
+    dataset metadata, along with the dataset's default split. The benchmarking
+    guide shows how to change those choices and save larger runs. The printed
+    dictionary contains validation metrics with <code>val_</code> prefixes.
   </p>
-
-  <Callout>
-    <p>
-      Repository scripts are not installed as shell commands. Run them from a
-      source checkout only when you need the batch or cluster workflows.
-    </p>
-  </Callout>
 </DocsLayout>

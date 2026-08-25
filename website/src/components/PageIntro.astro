@@ -20,7 +20,7 @@ const { eyebrow, title, lead } = Astro.props;
 
 <style>
   .page-intro {
-    padding: clamp(3.5rem, 6vw, 5.5rem) 0 clamp(2.5rem, 5vw, 4rem);
+    padding: clamp(2.8rem, 5vw, 4.2rem) 0 clamp(2.2rem, 4vw, 3.2rem);
     border-bottom: 1px solid var(--line-strong);
   }
 
@@ -29,24 +29,24 @@ const { eyebrow, title, lead } = Astro.props;
   }
 
   .page-intro__copy {
-    max-width: 74rem;
+    max-width: 64rem;
   }
 
   h1 {
-    max-width: 24ch;
+    max-width: 30ch;
     margin: 0;
-    font-size: clamp(2.5rem, 4vw, 4.2rem);
-    font-weight: 520;
-    letter-spacing: -0.05em;
-    line-height: 1;
+    font-size: clamp(2rem, 3.2vw, 3.2rem);
+    font-weight: 560;
+    letter-spacing: -0.04em;
+    line-height: 1.05;
   }
 
   .page-intro__lead {
-    max-width: 44rem;
-    margin: clamp(1.3rem, 3vw, 2rem) 0 0;
+    max-width: 50rem;
+    margin: clamp(1rem, 2vw, 1.4rem) 0 0;
     color: var(--ink-muted);
-    font-size: var(--text-lg);
-    line-height: 1.45;
+    font-size: var(--text-base);
+    line-height: 1.55;
   }
 
 </style>

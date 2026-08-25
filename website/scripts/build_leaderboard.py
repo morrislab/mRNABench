@@ -300,6 +300,55 @@ def normalize_rows(
     )
     duplicate_rows = before_null_filter - null_metric_rows - len(frame)
 
+    expected_dataset_ids = set(DATASET_LABELS).difference(
+        excluded_datasets
+    )
+    observed_dataset_ids = set(frame["dataset"])
+    missing_datasets = sorted(
+        expected_dataset_ids.difference(observed_dataset_ids)
+    )
+    unexpected_datasets = sorted(
+        observed_dataset_ids.difference(expected_dataset_ids)
+    )
+    if missing_datasets or unexpected_datasets:
+        raise ValueError(
+            "Leaderboard dataset universe mismatch. Missing: {}; "
+            "unexpected: {}.".format(
+                ", ".join(missing_datasets) or "none",
+                ", ".join(unexpected_datasets) or "none",
+            )
+        )
+
+    expected_pairs = {
+        (dataset_id, target)
+        for dataset_id in expected_dataset_ids
+        for target in DATASET_CATALOG[dataset_id].METADATA.target_col
+    }
+    observed_pairs = set(
+        frame[["dataset", "target"]].itertuples(
+            index=False,
+            name=None,
+        )
+    )
+    missing_pairs = sorted(expected_pairs.difference(observed_pairs))
+    unexpected_pairs = sorted(observed_pairs.difference(expected_pairs))
+    if missing_pairs or unexpected_pairs:
+        missing_text = ", ".join(
+            f"{dataset}:{target}"
+            for dataset, target in missing_pairs
+        )
+        unexpected_text = ", ".join(
+            f"{dataset}:{target}"
+            for dataset, target in unexpected_pairs
+        )
+        raise ValueError(
+            "Leaderboard target universe mismatch. Missing: {}; "
+            "unexpected: {}.".format(
+                missing_text or "none",
+                unexpected_text or "none",
+            )
+        )
+
     stats = {
         "source_rows": initial_rows,
         "default_split_rows": default_split_rows,
@@ -570,8 +619,14 @@ def build_consensus(task_scores: pd.DataFrame) -> list[dict[str, Any]]:
             row["model_id"],
         )
     )
+    previous_key = None
+    current_rank = 0
     for index, row in enumerate(rows, start=1):
-        row["rank"] = index
+        rank_key = (row["rank_sum"], row["worst_task_rank"])
+        if rank_key != previous_key:
+            current_rank = index
+            previous_key = rank_key
+        row["rank"] = current_rank
         row["coverage_ratio"] = 1.0
     return rows
 

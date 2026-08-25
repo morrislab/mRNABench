@@ -2,6 +2,7 @@ import { defineConfig } from "astro/config";
 import sitemap from "@astrojs/sitemap";
 
 const base = process.env.SITE_BASE ?? "/";
+const baseRoot = base.endsWith("/") ? base : `${base}/`;
 
 export default defineConfig({
   site: process.env.SITE_URL ?? "https://morrislab.github.io",
@@ -9,7 +10,7 @@ export default defineConfig({
   output: "static",
   trailingSlash: "never",
   redirects: {
-    "/overview": "/",
+    "/overview": baseRoot,
   },
   integrations: [sitemap()],
   vite: {

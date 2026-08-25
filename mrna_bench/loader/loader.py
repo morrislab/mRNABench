@@ -68,6 +68,9 @@ def load_dataset(
         dataset_name: Name of the dataset.
         force_redownload_hf: Forces redownload from HuggingFace.
         force_rebuild_raw: Forces rebuild from raw data source.
+
+    Returns:
+        Initialized benchmark dataset.
     """
     return DATASET_CATALOG[dataset_name](
         force_redownload_hf=force_redownload_hf,

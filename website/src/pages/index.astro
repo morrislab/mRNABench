@@ -18,39 +18,39 @@ const bibtex = `@article{shi_dalal_fradkin_2025_mrnabench,
 
 const gaps = [
   {
-    title: "Biological focus",
-    text: "DNA and non-coding RNA benchmarks do not directly test the mature-mRNA-centered tasks collected here.",
+    title: "Biological target",
+    text: "Every task measures a property or function of mature mRNA, including translation, stability, localization, and molecular interactions.",
   },
   {
-    title: "Sequence scale",
-    text: "Short-window benchmarks cannot test integration across UTRs, coding sequence, junction context, and a complete transcript.",
+    title: "Sequence context",
+    text: "Inputs range from short regulatory regions to complete transcripts containing UTRs, coding sequence, and splice context.",
   },
   {
     title: "Task breadth",
-    text: "One translation or localization assay cannot establish that a representation transfers across mRNA biology.",
+    text: "The same frozen model is evaluated across multiple assays and biological outcomes.",
   },
   {
-    title: "Split leakage",
-    text: "Random splits can place homologous or compositionally similar transcripts on both sides of an evaluation.",
+    title: "Split strategy",
+    text: "Each dataset records a split suited to its rows, including random, k-mer, chromosome, and homology grouping.",
   },
 ];
 
 const findings = [
   {
-    title: "Model size and aggregate performance",
-    text: "In the evaluated result snapshot, parameter count has only a weak association with mean standardized performance. Corpus, objective, architecture, and model family co-vary, so their individual effects cannot be isolated.",
+    title: "Model size",
+    text: "Across the models tested, parameter count was only weakly related to mean standardized performance. This comparison cannot separate model size from differences in training data, objective, architecture, or model family.",
   },
   {
-    title: "Controlled objective ablation",
-    text: "Within one backbone and pretraining dataset, combining masked-token and contrastive losses gave broader validation-task coverage than either loss alone. The largest gains were concentrated in transcript-level tasks.",
+    title: "Pretraining objective",
+    text: "For one backbone trained on one dataset, the combined masked-token and contrastive objective performed well on more validation tasks than either objective alone. Most of the difference came from transcript-level tasks.",
   },
   {
-    title: "Full-length mRNA exposure",
-    text: "In this model cohort, groups with explicit full-length mature-mRNA exposure had higher aggregate performance than the genome-only group. Model family, architecture, objective, and training corpus remain confounded.",
+    title: "Full-length mRNA training",
+    text: "Models trained on full mature mRNAs scored higher on average than genome-only models in this set. The groups also differ in architecture, objective, and training corpus, so this is an association rather than a controlled comparison.",
   },
   {
-    title: "Effect of stricter splits",
-    text: "On applicable non-synthetic datasets, raw k-mer-count splits reduced aggregate performance relative to random splits. These groups also reflect sequence length, so the result is not a motif-only leakage test. Homology splits produced smaller systematic gaps.",
+    title: "Split strategy",
+    text: "On applicable non-synthetic datasets, k-mer splits gave lower scores than random splits. The grouping uses raw k-mer counts, so sequence length also affects the split. Homology splits changed scores less consistently.",
   },
 ];
 
@@ -109,7 +109,7 @@ const paperAffiliations = [
 
 <BaseLayout
   title="mRNABench | A benchmark for mRNA representation learning"
-  description="Why mRNA needs its own benchmark, how mRNABench evaluates frozen representations, and what the benchmark can and cannot show."
+  description="Why mRNA needs its own benchmark, how mRNABench evaluates frozen representations, and how to interpret the results."
 >
   <PageIntro
     eyebrow="Benchmark overview"
@@ -164,47 +164,41 @@ const paperAffiliations = [
       <span>Explore</span>
       <div
         class="overview-nav__tabs"
-        role="tablist"
-        aria-label="Paper overview sections"
+        data-overview-tablist
       >
         <a
           id="tab-need"
           href="#need"
-          role="tab"
-          aria-controls="need"
-          aria-selected="true"
           data-overview-tab
         >Why mRNA</a>
         <a
+          id="tab-gap"
+          href="#gap"
+          data-overview-tab
+        >Comparison</a>
+        <a
           id="tab-design"
           href="#design"
-          role="tab"
-          aria-controls="design"
-          aria-selected="false"
           data-overview-tab
-        >Design</a>
+        >Evaluation</a>
+        <a
+          id="tab-tasks"
+          href="#tasks"
+          data-overview-tab
+        >Task scale</a>
         <a
           id="tab-splits"
           href="#splits"
-          role="tab"
-          aria-controls="splits"
-          aria-selected="false"
           data-overview-tab
         >Splits</a>
         <a
           id="tab-findings"
           href="#findings"
-          role="tab"
-          aria-controls="findings"
-          aria-selected="false"
           data-overview-tab
         >Findings</a>
         <a
           id="tab-limits"
           href="#limits"
-          role="tab"
-          aria-controls="limits"
-          aria-selected="false"
           data-overview-tab
         >Limits</a>
       </div>
@@ -214,9 +208,6 @@ const paperAffiliations = [
       <div
         class="overview-panel is-active"
         id="need"
-        role="tabpanel"
-        aria-labelledby="tab-need"
-        tabindex="0"
         data-overview-panel
       >
         <section class="section">
@@ -242,6 +233,7 @@ const paperAffiliations = [
               </p>
               <div
                 class="transcript"
+                role="img"
                 aria-label="Schematic mature transcript with 5 prime UTR, coding sequence, and 3 prime UTR"
               >
                 <span class="transcript__utr">5' UTR</span>
@@ -252,39 +244,41 @@ const paperAffiliations = [
           </div>
         </section>
 
-        <section class="section section-rule">
-          <div class="shell">
-            <div class="section-heading">
-              <p class="eyebrow">The gap</p>
-              <h2>Sources of variation in published model scores</h2>
-            </div>
-            <div class="gap-grid">
-              {
-                gaps.map((gap, index) => (
-                  <article>
-                    <span>{String(index + 1).padStart(2, "0")}</span>
-                    <h3>{gap.title}</h3>
-                    <p>{gap.text}</p>
-                  </article>
-                ))
-              }
-            </div>
-          </div>
-        </section>
       </div>
 
   <section
-    class="section design-section overview-panel"
+    class="section section-rule overview-panel"
+    id="gap"
+    data-overview-panel
+  >
+    <div class="shell">
+      <div class="section-heading">
+        <p class="eyebrow">Comparison</p>
+        <h2>What is held consistent across models</h2>
+      </div>
+      <div class="gap-grid">
+        {
+          gaps.map((gap, index) => (
+            <article>
+              <span>{String(index + 1).padStart(2, "0")}</span>
+              <h3>{gap.title}</h3>
+              <p>{gap.text}</p>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <section
+    class="section section-rule design-section overview-panel"
     id="design"
-    role="tabpanel"
-    aria-labelledby="tab-design"
-    tabindex="0"
     data-overview-panel
   >
     <div class="shell two-column">
       <div>
-        <p class="eyebrow">Benchmark design</p>
-        <h2>Evaluation of frozen model representations</h2>
+        <p class="eyebrow">Evaluation</p>
+        <h2>Frozen representations and linear probes</h2>
       </div>
       <div class="prose">
         <p>
@@ -294,16 +288,15 @@ const paperAffiliations = [
           mean-pooled over the reconstructed sequence.
         </p>
         <p>
-          Archived regression results use RidgeCV with internal cross-validation
-          on the training partition; the current API defaults to ordinary least
-          squares unless Ridge is selected. Binary tasks use logistic
-          regression; multilabel tasks use a multi-output wrapper around
-          logistic regression. These probes do not estimate the best result
-          possible after end-to-end fine-tuning.
+          Regression probes can use ordinary least squares or RidgeCV, with the
+          Ridge penalty selected on the training partition. Binary tasks use
+          logistic regression, and multilabel tasks fit one logistic model per
+          label. The leaderboard uses Ridge; the Python API defaults to
+          ordinary least squares.
         </p>
         <p>
           UTR SNV tasks compare alternate and reference transcripts. The
-          current package supports linear probes on sequences and paired
+          mRNABench supports linear probes on sequences and paired
           embedding differences, unsigned L2 distances between pooled
           embeddings, and normalized log-likelihood differences for compatible
           models.
@@ -327,27 +320,43 @@ const paperAffiliations = [
           </div>
         </dl>
         <p class="method-caveat">
-          AUPRC depends on class prevalence and should be interpreted within a
-          dataset rather than compared directly across datasets.
+          AUPRC changes with the frequency of positive labels. Compare models
+          within the same dataset rather than comparing raw AUPRC values across
+          datasets.
         </p>
       </div>
     </div>
+  </section>
 
+  <section
+    class="section section-rule overview-panel"
+    id="tasks"
+    data-overview-panel
+  >
+    <div class="shell two-column task-section__heading">
+      <div>
+        <p class="eyebrow">Task scale</p>
+        <h2>From short motifs to whole-transcript outcomes</h2>
+      </div>
+      <div class="prose">
+        <p>
+          The suite spans sequence-local inputs and whole-transcript
+          measurements. Interaction datasets use transcript-level labels even
+          when the underlying assay detects local binding sites.
+        </p>
+      </div>
+    </div>
     <div class="shell task-scale">
-      <p class="task-scale__note">
-        Signal scale is a useful way to read the suite, not a claim that every
-        assay is purely local or transcript-wide.
-      </p>
       <article>
-        <span>Local signal</span>
-        <h3>Short motifs, constrained regions, and single-nucleotide variants</h3>
-        <p>Transcript-level RNA-protein interactions, miRNA targeting, reporter 5' UTRs, and UTR SNV pathogenicity classification.</p>
+        <span>Sequence-local inputs</span>
+        <h3>Reporter regions and single-nucleotide changes</h3>
+        <p>These tasks include reporter 5' UTRs and UTR variant classification.</p>
       </article>
       <div class="task-scale__axis" aria-hidden="true">
         <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
       </div>
       <article>
-        <span>Transcript-wide outcome</span>
+        <span>Transcript-wide measurements</span>
         <h3>Effects distributed across the mature transcript</h3>
         <p>RNA half-life, translation efficiency, localization, and transcript lifecycle.</p>
       </article>
@@ -357,28 +366,24 @@ const paperAffiliations = [
   <section
     class="section section-rule overview-panel"
     id="splits"
-    role="tabpanel"
-    aria-labelledby="tab-splits"
-    tabindex="0"
     data-overview-panel
   >
     <div class="shell">
       <div class="section-heading section-heading--split">
         <div>
           <p class="eyebrow">Split design</p>
-          <h2>Split strategies reduce sequence-related overlap</h2>
+          <h2>Four ways to separate train and test data</h2>
         </div>
         <p>
-          mRNABench supports split strategies that reduce overlap under
-          different definitions of sequence relatedness. Each dataset stores
-          its default in metadata.
+          Each dataset uses a default split suited to its rows and labels. The
+          dataset catalog lists that choice.
         </p>
       </div>
       <div class="split-table">
         <article>
           <span>01</span>
-          <h3>Homology</h3>
-          <p>Keeps every gene in a precomputed paralog group within the same split.</p>
+          <h3>Random</h3>
+          <p>Assigns rows at random. This is used for synthetic constructs and matched variant sets when gene-level grouping does not fit the study design.</p>
         </article>
         <article>
           <span>02</span>
@@ -392,25 +397,22 @@ const paperAffiliations = [
         </article>
         <article>
           <span>04</span>
-          <h3>Random</h3>
-          <p>Used for synthetic constructs and some matched-variant tasks where homology grouping conflicts with the dataset design.</p>
+          <h3>Homology</h3>
+          <p>Keeps genes from the same precomputed paralog group in one split.</p>
         </article>
       </div>
     </div>
   </section>
 
   <section
-    class="section findings overview-panel"
+    class="section section-rule findings overview-panel"
     id="findings"
-    role="tabpanel"
-    aria-labelledby="tab-findings"
-    tabindex="0"
     data-overview-panel
   >
     <div class="shell">
       <div class="section-heading">
-        <p class="eyebrow">Current development analysis</p>
-        <h2>Qualified findings from the current manuscript</h2>
+        <p class="eyebrow">Findings</p>
+        <h2>Results across models and evaluation settings</h2>
       </div>
       <div class="findings__grid">
         {
@@ -428,54 +430,59 @@ const paperAffiliations = [
   <section
     class="section section-rule overview-panel"
     id="limits"
-    role="tabpanel"
-    aria-labelledby="tab-limits"
-    tabindex="0"
     data-overview-panel
   >
     <div class="shell two-column">
       <div>
         <p class="eyebrow">Limits</p>
-        <h2>What the benchmark does not establish</h2>
+        <h2>Limits of the benchmark</h2>
       </div>
       <div class="limits-list">
         <p>
-          <strong>Interpretation of linear probes.</strong> A strong probe score
-          does not show that a representation contains a causal account of
-          regulation or predict its fine-tuning performance.
+          <strong>Linear probes.</strong> A high score means that a linear model
+          can recover the label from the frozen embedding. It does not identify
+          a regulatory mechanism or show how the full model will behave after
+          fine-tuning.
         </p>
         <p>
-          <strong>Pooling and long-sequence context.</strong> Mean pooling loses
-          positional information. Chunking does not restore attention or other
-          interactions across chunk boundaries.
+          <strong>Long sequences.</strong> Mean pooling removes positional
+          information. When a transcript is longer than a model's context
+          window, chunking covers the full sequence, but tokens in different
+          chunks do not interact.
         </p>
         <p>
-          <strong>Label transformations.</strong> Binding sites become
-          transcript-level interaction labels, continuous localization
-          proportions become multilabel endpoints, and lifecycle measurements
-          become compartment-specific depletion labels.
+          <strong>What the labels represent.</strong> Some source assays are
+          more detailed than the benchmark target. For eCLIP and miRNA data, we
+          ask whether a transcript has at least one recorded interaction.
+          Localization proportions and lifecycle measurements are converted
+          into compartment-level labels. These tasks test transcript-level
+          prediction, not binding-site location or interaction strength.
         </p>
         <p>
-          <strong>Representative-transcript selection.</strong> Several
-          datasets select one representative or principal transcript per gene,
-          so the benchmark does not cover the full range of isoform-specific
-          effects.
+          <strong>One transcript per gene.</strong> Some source studies provide
+          a principal transcript or a gene-level measurement without
+          isoform-resolved labels. We use one defined transcript so that each
+          label maps to one sequence instead of copying the same measurement
+          onto every isoform. Those tasks do not test isoform-specific
+          regulation.
         </p>
         <p>
-          <strong>Scope of uncertainty intervals.</strong> Intervals across
-          split seeds reflect changes in split membership. They do not include
-          model-training randomness, assay noise, or preprocessing uncertainty.
+          <strong>Confidence intervals.</strong> The intervals come from
+          rerunning the probe with different train, validation, and test
+          assignments. They show sensitivity to the data split, not
+          experimental noise or uncertainty introduced while processing the
+          source data.
         </p>
         <p>
-          <strong>Experimental context.</strong> Performance does not establish
-          transfer across species, cell lines, tissues, assay platforms, or RNA
-          chemistry. Synthetic constructs and endogenous transcripts also
-          represent different input distributions.
+          <strong>Experimental setting.</strong> A score in one species, cell
+          line, tissue, or assay does not guarantee the same performance in
+          another. Synthetic reporter constructs and endogenous transcripts
+          should also be treated as different settings.
         </p>
         <p>
-          <strong>Mature-mRNA variant scope.</strong> UTR SNV classification in
-          mature-transcript context cannot capture pathogenic mechanisms that
-          act before splicing or outside the assayed transcript context.
+          <strong>Variant scope.</strong> The UTR variant tasks score variants
+          in mature-transcript sequence. They do not cover effects that occur
+          before splicing or depend on genomic context outside that transcript.
         </p>
       </div>
     </div>
@@ -516,22 +523,43 @@ const paperAffiliations = [
     const panels = Array.from(
       switcher.querySelectorAll<HTMLElement>("[data-overview-panel]"),
     );
+    const tabList = switcher.querySelector<HTMLElement>(
+      "[data-overview-tablist]",
+    );
+    tabList?.setAttribute("role", "tablist");
+    tabList?.setAttribute("aria-label", "Paper overview sections");
+    tabs.forEach((tab) => {
+      const panelId = tab.hash.slice(1);
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", panelId);
+      tab.setAttribute("aria-selected", "false");
+    });
+    panels.forEach((panel) => {
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", `tab-${panel.id}`);
+      panel.tabIndex = 0;
+    });
+
     const panelIds = new Set(panels.map((panel) => panel.id));
-    const firstPanelId = tabs[0]?.getAttribute("aria-controls");
+    const firstPanelId = tabs[0]?.hash.slice(1);
     if (!firstPanelId) return;
 
     const activate = (panelId: string, updateUrl = false) => {
       if (!panelIds.has(panelId)) return;
 
+      let selectedTab: HTMLAnchorElement | undefined;
+      let selectedPanel: HTMLElement | undefined;
       tabs.forEach((tab) => {
         const selected = tab.getAttribute("aria-controls") === panelId;
         tab.setAttribute("aria-selected", String(selected));
         tab.tabIndex = selected ? 0 : -1;
+        if (selected) selectedTab = tab;
       });
       panels.forEach((panel) => {
         const selected = panel.id === panelId;
         panel.classList.toggle("is-active", selected);
         panel.hidden = !selected;
+        if (selected) selectedPanel = panel;
       });
 
       if (updateUrl) {
@@ -539,6 +567,18 @@ const paperAffiliations = [
         url.hash = panelId;
         window.history.replaceState(window.history.state, "", url);
       }
+
+      requestAnimationFrame(() => {
+        selectedTab?.scrollIntoView({
+          block: "nearest",
+          inline: "center",
+        });
+        if (updateUrl) {
+          selectedPanel?.scrollIntoView({
+            block: "start",
+          });
+        }
+      });
     };
 
     const requestedPanel = window.location.hash.slice(1);
@@ -565,7 +605,6 @@ const paperAffiliations = [
       });
     });
 
-    const tabList = switcher.querySelector<HTMLElement>('[role="tablist"]');
     tabList?.addEventListener("keydown", (event) => {
       if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) {
         return;
@@ -862,10 +901,6 @@ const paperAffiliations = [
     font-size: var(--text-sm);
   }
 
-  .design-section {
-    background: var(--paper-soft);
-  }
-
   .design-section .prose > p {
     color: var(--ink-soft);
   }
@@ -906,15 +941,7 @@ const paperAffiliations = [
     grid-template-columns: 1fr 0.55fr 1fr;
     gap: 2rem;
     align-items: center;
-    margin-top: clamp(5rem, 10vw, 10rem);
-  }
-
-  .task-scale__note {
-    grid-column: 1 / -1;
-    max-width: 42rem;
-    margin: 0 0 0.5rem;
-    color: var(--ink-muted);
-    font-size: var(--text-sm);
+    margin-top: 3rem;
   }
 
   .task-scale article {
@@ -1005,10 +1032,6 @@ const paperAffiliations = [
     margin: 3rem 0 0.8rem;
     font-size: var(--text-lg);
     font-weight: 560;
-  }
-
-  .findings {
-    background: var(--paper-soft);
   }
 
   .findings__grid {
@@ -1103,11 +1126,13 @@ const paperAffiliations = [
     .overview-nav__tabs {
       justify-content: flex-start;
       overflow-x: auto;
+      scroll-snap-type: x proximity;
     }
 
     .overview-nav a {
       flex: 0 0 auto;
       min-height: 2.9rem;
+      scroll-snap-align: center;
     }
 
     .publication {

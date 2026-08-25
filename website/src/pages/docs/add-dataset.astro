@@ -105,14 +105,6 @@ embedder = DatasetEmbedder.from_dataframe(model, dataframe)`;
 
   <CodeBlock code={template} language="python" label="Dataset adapter" />
 
-  <Callout tone="important" label="Method name">
-    <p>
-      Override <code>_get_data_from_raw()</code>. The older README instruction
-      to override <code>process_raw_data()</code> does not match the current
-      abstract interface.
-    </p>
-  </Callout>
-
   <h2>Required and conditional columns</h2>
   <table tabindex="0" aria-label="Dataset columns">
     <thead>
@@ -130,7 +122,7 @@ embedder = DatasetEmbedder.from_dataframe(model, dataframe)`;
 
   <h2>Dataset metadata requirements</h2>
   <ul>
-    <li>Dataset identifiers cannot contain underscores because persisted embedding filenames use underscores as separators. Metadata validation does not yet enforce this rule.</li>
+    <li>Dataset identifiers cannot contain underscores because persisted embedding filenames use underscores as separators.</li>
     <li>Use <code>core</code> only for datasets intended for the central comparison.</li>
     <li>List every supported route in <code>evaluations</code>.</li>
     <li>Implement <code>get_vep_pairs()</code> for paired variant datasets.</li>

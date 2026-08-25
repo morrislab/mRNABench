@@ -11,16 +11,31 @@ const splitLabel = {
   homology: "Homology",
   chromosome: "Chromosome",
 };
+const taskLabel = {
+  classification: "Classification",
+  multilabel: "Multilabel",
+  regression: "Regression",
+};
+const sourceLabel = {
+  human: "Human",
+  mouse: "Mouse",
+  mixed: "Multiple species",
+  synthetic: "Synthetic constructs",
+};
+const setLabel = {
+  core: "Core",
+  extended: "Extended",
+};
 ---
 
 <BaseLayout
   title="Dataset catalog | mRNABench"
-  description="Browse registered mRNABench datasets, including task, species, default split, evaluation routes, and citation."
+  description="Browse registered mRNABench datasets, including task, sequence source, default split, evaluation routes, and citation."
 >
   <PageIntro
-    eyebrow="Dataset catalog"
-    title="Datasets by sequence region and prediction task"
-    lead="The catalog spans short regulatory signals, single variants, and transcript-wide outcomes. Each entry lists its default split, source, and supported evaluation routes, including variant-effect prediction (VEP)."
+    eyebrow="Catalog"
+    title="Datasets"
+    lead="Browse each registered dataset's task, sequence source, default split, targets, evaluation routes, and citation."
   />
 
   <section class="catalog-summary shell">
@@ -58,7 +73,7 @@ const splitLabel = {
           <option value="regression">Regression</option>
         </select>
       </label>
-      <p role="status" aria-live="polite"><strong data-visible-count>{datasets.length}</strong> datasets shown</p>
+      <p role="status" aria-live="polite" data-dataset-status>{datasets.length} datasets shown</p>
     </div>
 
     <div class="dataset-list">
@@ -78,24 +93,24 @@ const splitLabel = {
             <div class="dataset-list__description">
               <p>{dataset.description}</p>
               {dataset.accessNote && <p><strong>Access:</strong> {dataset.accessNote}</p>}
+              {dataset.evaluationNote && <p><strong>Evaluation:</strong> {dataset.evaluationNote}</p>}
             </div>
             <dl>
-              <div><dt>Task</dt><dd>{dataset.task}</dd></div>
-              <div><dt>Species</dt><dd>{dataset.species}</dd></div>
+              <div><dt>Task</dt><dd>{taskLabel[dataset.task]}</dd></div>
+              <div><dt>Sequence source</dt><dd>{sourceLabel[dataset.species]}</dd></div>
               <div><dt>Default split</dt><dd>{splitLabel[dataset.split]}</dd></div>
-              <div><dt>Set</dt><dd>{dataset.benchmarkSet}</dd></div>
-              <div><dt>Targets</dt><dd>{dataset.targetSummary ?? "target"}</dd></div>
+              <div><dt>Set</dt><dd>{setLabel[dataset.benchmarkSet]}</dd></div>
+              <div><dt>Targets</dt><dd>{dataset.targetSummary}</dd></div>
               <div><dt>Routes</dt><dd>{dataset.evaluations.join(", ")}</dd></div>
             </dl>
             <div class="dataset-list__links">
-              <a href={dataset.citationUrl} aria-label={`${dataset.name} publication`}>{dataset.citationLabel}</a>
+              <a href={dataset.citationUrl} aria-label={`${dataset.name}: ${dataset.citationLabel}`}>{dataset.citationLabel}</a>
               {dataset.dataUrl && <a href={dataset.dataUrl} aria-label={`${dataset.name} source data`}>Source data</a>}
             </div>
           </article>
         ))
       }
     </div>
-    <p class="dataset-empty" data-dataset-empty role="status" aria-live="polite" hidden>No datasets match those filters.</p>
   </section>
 </BaseLayout>
 
@@ -107,9 +122,8 @@ const splitLabel = {
     const category = catalog.querySelector<HTMLSelectElement>("[data-category-filter]");
     const task = catalog.querySelector<HTMLSelectElement>("[data-task-filter]");
     const rows = [...catalog.querySelectorAll<HTMLElement>("[data-dataset-row]")];
-    const count = catalog.querySelector<HTMLElement>("[data-visible-count]");
-    const empty = catalog.querySelector<HTMLElement>("[data-dataset-empty]");
-    if (!search || !category || !task || !count || !empty) return;
+    const status = catalog.querySelector<HTMLElement>("[data-dataset-status]");
+    if (!search || !category || !task || !status) return;
 
     const filter = () => {
       const query = search.value.trim().toLowerCase();
@@ -122,8 +136,11 @@ const splitLabel = {
         row.hidden = !matches;
         if (matches) visible += 1;
       });
-      count.textContent = String(visible);
-      empty.hidden = visible !== 0;
+      status.textContent = (
+        visible === 0
+          ? "No datasets match those filters."
+          : `${visible} ${visible === 1 ? "dataset" : "datasets"} shown`
+      );
     };
 
     search.addEventListener("input", filter);
@@ -304,7 +321,6 @@ const splitLabel = {
   .dataset-list dd {
     margin: 0.18rem 0 0;
     font-size: 0.78rem;
-    text-transform: capitalize;
   }
 
   .dataset-list__links {
@@ -318,12 +334,6 @@ const splitLabel = {
     font-weight: 620;
   }
 
-  .dataset-empty {
-    padding: 4rem 1rem;
-    color: var(--ink-muted);
-    text-align: center;
-  }
-
   @media (max-width: 1100px) {
     .catalog-summary,
     .dataset-list article {
@@ -331,7 +341,7 @@ const splitLabel = {
     }
 
     .dataset-list dl {
-      grid-template-columns: repeat(5, 1fr);
+      grid-template-columns: repeat(3, 1fr);
     }
 
     .dataset-list dl div:last-child {

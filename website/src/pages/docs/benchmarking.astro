@@ -268,8 +268,8 @@ print(trainer.evaluate(test))`;
   <h3>Reuse saved embeddings</h3>
   <CodeBlock code={persistedProbe} language="python" />
   <p>
-    Use <code>fetch_embedding_by_model_instance()</code> when the embedding NPZ
-    already exists. You do not need to regenerate or manually load the array.
+    <code>fetch_embedding_by_model_instance()</code> reads the existing NPZ
+    using the loaded model's short name.
   </p>
 
   <h2>Variant-effect prediction</h2>
@@ -284,32 +284,30 @@ print(trainer.evaluate(test))`;
   <h3>Signed regression effects</h3>
   <CodeBlock code={signedEmbeddingVep} language="python" />
   <p>
-    A pooled embedding has no built-in positive biological direction. For a
-    labeled regression dataset, the builder pairs each alternate with its
-    reference, forms the alternate-minus-reference embedding, and fits the
-    selected regressor on the training split. The held-out predictions retain
-    both direction and magnitude. Because the direction is learned from
-    measured effects, this is a supervised VEP result rather than a zero-shot
-    score.
+    A pooled embedding has no universal positive direction. For a labeled
+    regression dataset, the builder pairs each alternate with its reference
+    and computes the alternate-minus-reference embedding. Ridge then learns
+    from the training split which directions correspond to higher or lower
+    measured effects. This route is supervised.
   </p>
   <p>
-    A genuinely zero-shot regression still needs a custom
-    <code>scoring_fn</code> whose direction comes from the model or a
-    predeclared biological rule, never from the held-out effect label.
+    For a zero-shot regression score, the sign must come from the model output
+    or from a biological rule fixed before evaluation. It cannot be taken from
+    the held-out effect label.
   </p>
 
   <h3>Likelihood scoring</h3>
   <CodeBlock code={likelihoodVep} language="python" />
   <p>
-    Available score methods are <code>causal_likelihood</code>,
-    <code>pseudo_likelihood</code>, and <code>masked_marginal</code>. Masked
-    marginal scoring excludes indels.
+    Causal and pseudo-likelihood support depends on the model.
+    <code>masked_marginal</code> requires pseudo-likelihood support and scores
+    substitutions only.
   </p>
   <Callout tone="important" label="Method detail">
     <p>
-      Attention backend, dtype, pooling, normalization, and score direction are
-      part of a variant-effect method. Generate reference and alternate scores
-      with identical settings.
+      Pooling and dtype are part of embedding VEP. Attention backend,
+      normalization, and score direction are part of likelihood VEP. Use the
+      same settings for each reference and alternate pair.
     </p>
   </Callout>
 
@@ -317,9 +315,14 @@ print(trainer.evaluate(test))`;
   <CodeBlock code={fineTuneInstall} language="shell" label="Install" />
   <CodeBlock code={fineTune} language="python" />
   <p>
-    The wrapper applies LoRA to the model adapter, while
+    The wrapper applies LoRA adapters to selected backbone modules, while
     <code>TaskHead</code> and <code>FineTuneTrainer</code> provide the
     task-specific loss, early stopping, and metrics.
+  </p>
+  <p>
+    This in-memory example prints metrics. Use
+    <code>FineTunePersister</code> to write a JSON result under
+    <code>ft_results/</code>.
   </p>
   <Callout tone="important" label="Training reproducibility">
     <p>

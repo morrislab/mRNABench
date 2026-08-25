@@ -11,7 +11,7 @@ const storage = `<data_path>/
       <dataset>_<model-short-name>.npz
     results.db
     results.db.lock
-    ft_results/
+    ft_results/  # created when FineTunePersister is used
       result_ft_....json`;
 
 const query = `import json
@@ -43,10 +43,13 @@ results = [
     for row in rows
 ]`;
 
-const loadAll = `from mrna_bench.linear_probe.persister import (
+const loadAll = `import mrna_bench as mb
+
+from mrna_bench.linear_probe.persister import (
     LinearProbePersister,
 )
 
+dataset = mb.load_dataset("go-mf")
 results = LinearProbePersister.load_all_results(
     dataset.dataset_path
 )
@@ -59,7 +62,8 @@ expected_seeds = {2541, 413, 411, 412, 2547}
 seeds_by_run = defaultdict(set)
 
 for result in results:
-    if result["seed"] == "all":
+    seed = str(result["seed"])
+    if not seed.isdecimal():
         continue
     key = (
         result["model"],
@@ -67,13 +71,14 @@ for result in results:
         result["target_col"],
         result["split_type"],
     )
-    seeds_by_run[key].add(int(result["seed"]))
+    seeds_by_run[key].add(int(seed))
 
 incomplete_runs = {
     key: sorted(expected_seeds - observed)
     for key, observed in seeds_by_run.items()
-    if observed != expected_seeds
-}`;
+    if expected_seeds - observed
+}
+print(incomplete_runs)`;
 
 const summarize = `# probe is the LinearProbe built in the benchmarking guide.
 seed_metrics = probe.linear_probe_multirun(
@@ -107,8 +112,8 @@ for embedding in sorted(root.glob("*/embeddings*/*")):
   <p>
     Pooled embeddings use compressed NPZ files with an
     <code>embedding</code> key. Ragged token embeddings use an HDF5
-    <code>embeddings</code> group. Half-precision tensors are converted to
-    float32 before they are saved.
+    <code>embeddings</code> group. Floating tensors with another dtype are
+    converted to float32 before they are saved.
   </p>
 
   <h2>Query linear-probe results</h2>
@@ -127,9 +132,10 @@ for embedding in sorted(root.glob("*/embeddings*/*")):
   <Callout tone="important" label="Result identity">
     <p>
       The database key does not include split ratios or
-      <code>eval_all_splits</code>. Runs that differ only in those settings can
-      replace one another. Keep those settings fixed for one result database or
-      use separate dataset output paths.
+      <code>eval_all_splits</code>. It also omits splitter options such as
+      k-mer size, cluster count, species, homology threshold, and Ensembl
+      release. Keep those settings fixed for one result database or use
+      separate dataset output paths.
     </p>
   </Callout>
 
@@ -140,7 +146,8 @@ for embedding in sorted(root.glob("*/embeddings*/*")):
   <CodeBlock code={summarize} language="python" />
   <p>
     The summary writes an <code>all</code> seed row containing the mean and a
-    95% interval computed as 1.96 times the standard error.
+    normal-approximation interval:
+    <code>mean ± 1.96 * np.std(values, ddof=0) / sqrt(n)</code>.
   </p>
 
   <Callout tone="important" label="Evaluation split">
@@ -148,14 +155,15 @@ for embedding in sorted(root.glob("*/embeddings*/*")):
       <code>LinearProbeBuilder</code> evaluates validation data by default.
       Set <code>eval_all_splits=True</code> in
       <code>build_splitter()</code> to write train, validation, and test
-      metrics. Check the stored split before comparing values.
+      metrics with <code>train_</code>, <code>val_</code>, and
+      <code>test_</code> prefixes.
     </p>
   </Callout>
 
   <h2>Metric reference</h2>
-  <table tabindex="0" aria-label="Metric reference">
+  <table aria-label="Metric reference">
     <thead>
-      <tr><th>Task</th><th>Metrics written by the package</th></tr>
+      <tr><th scope="col">Task</th><th scope="col">Metrics written by the package</th></tr>
     </thead>
     <tbody>
       <tr><td>Regression</td><td>MSE, Pearson r, Spearman rho (stored under the legacy key <code>p</code>)</td></tr>
@@ -171,14 +179,5 @@ for embedding in sorted(root.glob("*/embeddings*/*")):
   <p>
     Use this before scheduling probes to check which model and dataset
     combinations are already present and how much storage they use.
-  </p>
-
-  <h2>Paper-specific aggregation</h2>
-  <p>
-    Paper figure scripts include publication-specific exclusions, renames, seed
-    expectations, and baseline choices. Treat them as paper reproduction code,
-    not as the general result API. The website leaderboard has its own
-    documented normalization step so a new parquet snapshot can be validated
-    before it is shown.
   </p>
 </DocsLayout>

@@ -3,4 +3,5 @@ dist/
 .astro/
 public/brand/
 public/data/
+src/data/generated/
 loading-mark-demo.html

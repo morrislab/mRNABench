@@ -9,32 +9,32 @@ const routes = [
   {
     number: "01",
     title: "Evaluate a model",
-    text: "Load a registered model and dataset through Python, or use the repository scripts for persisted runs.",
+    text: "Load a model and dataset, generate embeddings, and run an evaluation.",
     href: "/docs/quickstart",
   },
   {
     number: "02",
     title: "Add a dataset",
-    text: "Define dataset metadata and the shared dataframe schema, then register the dataset.",
+    text: "Define the dataframe columns and metadata, then register the dataset.",
     href: "/docs/add-dataset",
   },
   {
     number: "03",
     title: "Add a model",
-    text: "Implement an EmbeddingModel adapter and declare its supported behaviors and versions.",
+    text: "Implement an EmbeddingModel adapter for one or more checkpoints.",
     href: "/docs/add-model",
   },
 ];
 ---
 
 <DocsLayout
-  title="Use mRNABench"
-  description="Practical guides for running, extending, and reading the benchmark."
+  title="Documentation"
+  description="Install mRNABench, run evaluations, inspect results, or add a dataset or model."
   section="Documentation"
 >
   <p>
-    The package separates datasets, model adapters, evaluators, and analyses.
-    Registered datasets and model adapters can be extended independently.
+    Start with a complete run, or go directly to the dataset, model, result,
+    and API reference pages.
   </p>
 
   <CodeBlock code={install} language="shell" label="Install from PyPI" />
@@ -56,8 +56,8 @@ const routes = [
   <h2>Guide sections</h2>
   <p>
     Use the quickstart for an end-to-end example and the concepts guide for
-    evaluation defaults. The extension guides document the package's
-    registration APIs and validation checks.
+    evaluation defaults. The Python API page lists current signatures and
+    parameter names directly from the package source.
   </p>
 
   <table tabindex="0" aria-label="Documentation sections">
@@ -78,7 +78,11 @@ const routes = [
       </tr>
       <tr>
         <td>Extend</td>
-        <td>New datasets, model adapters, and a map of the public API.</td>
+        <td>New datasets and model adapters.</td>
+      </tr>
+      <tr>
+        <td>Reference</td>
+        <td>Current Python signatures and parameter notes.</td>
       </tr>
     </tbody>
   </table>
@@ -143,12 +147,17 @@ const routes = [
     }
 
     .doc-routes a {
-      min-height: 13rem;
+      min-height: 0;
+      padding-bottom: 3.5rem;
     }
 
     .doc-routes a + a {
       border-top: 1px solid var(--line-strong);
       border-left: 0;
+    }
+
+    .doc-routes span {
+      margin-bottom: 1.5rem;
     }
   }
 </style>

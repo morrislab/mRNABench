@@ -135,7 +135,7 @@ class DatasetEmbedder:
         """Persist embeddings at global data storage location.
 
         Args:
-            embedding: Embedding to persist.
+            embeddings: Embeddings to persist.
         """
         out_path = get_embedding_filepath(
             self.dataset.embedding_dir,

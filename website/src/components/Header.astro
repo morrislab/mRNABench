@@ -11,15 +11,22 @@ const navigation = [
   { href: "/docs", label: "Docs" },
 ];
 
-const currentPath = Astro.url.pathname;
+function normalizePath(path: string): string {
+  return path.replace(/\/+$/, "") || "/";
+}
+
+const currentPath = normalizePath(Astro.url.pathname);
 
 function isCurrentPath(href: string): boolean {
-  const target = withBase(href).replace(/\/$/, "") || "/";
+  const target = normalizePath(withBase(href));
+  if (target === normalizePath(withBase("/"))) {
+    return currentPath === target;
+  }
   return currentPath === target || currentPath.startsWith(`${target}/`);
 }
 
 function isExactPath(href: string): boolean {
-  const target = withBase(href).replace(/\/$/, "") || "/";
+  const target = normalizePath(withBase(href));
   return currentPath === target;
 }
 ---
@@ -217,6 +224,8 @@ function isExactPath(href: string): boolean {
       gap: 0;
       align-items: stretch;
       padding: 0.75rem var(--gutter) 1.25rem;
+      max-height: calc(100dvh - 4.5rem);
+      overflow-y: auto;
       background: var(--paper);
       border-bottom: 1px solid var(--line-strong);
     }

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "sync-assets": "node scripts/sync-assets.mjs",
-    "prepare-data": "python scripts/build_leaderboard.py",
+    "prepare-data": "python scripts/build_leaderboard.py && python scripts/build_api_reference.py",
     "dev": "npm run sync-assets && npm run prepare-data && astro dev",
     "check": "npm run sync-assets && npm run prepare-data && astro check",
     "build": "npm run sync-assets && npm run prepare-data && astro check && astro build",

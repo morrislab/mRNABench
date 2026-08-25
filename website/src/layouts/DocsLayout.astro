@@ -32,15 +32,24 @@ const groups = [
     links: [
       { href: "/docs/add-dataset", label: "Add a dataset" },
       { href: "/docs/add-model", label: "Add a model" },
-      { href: "/docs/api", label: "API map" },
+    ],
+  },
+  {
+    title: "Reference",
+    links: [
+      { href: "/docs/api", label: "Python API" },
     ],
   },
 ];
 
-const currentPath = Astro.url.pathname;
+function normalizePath(path: string): string {
+  return path.replace(/\/+$/, "") || "/";
+}
+
+const currentPath = normalizePath(Astro.url.pathname);
 
 function isCurrentPath(href: string): boolean {
-  return currentPath === withBase(href).replace(/\/$/, "");
+  return currentPath === normalizePath(withBase(href));
 }
 ---
 
@@ -154,7 +163,7 @@ function isCurrentPath(href: string): boolean {
 
   .docs-content {
     min-width: 0;
-    padding: clamp(4rem, 8vw, 7rem) 0 8rem;
+    padding: clamp(3rem, 6vw, 5rem) 0 8rem;
   }
 
   .docs-mobile-nav {
@@ -163,8 +172,8 @@ function isCurrentPath(href: string): boolean {
 
   .docs-content__header {
     max-width: 48rem;
-    margin-bottom: 4rem;
-    padding-bottom: 2.5rem;
+    margin-bottom: 3rem;
+    padding-bottom: 2rem;
     border-bottom: 1px solid var(--line-strong);
   }
 
@@ -179,19 +188,19 @@ function isCurrentPath(href: string): boolean {
 
   .docs-content__header h1 {
     margin: 0;
-    font-size: clamp(2.4rem, 5vw, 4rem);
-    font-weight: 520;
-    letter-spacing: -0.045em;
-    line-height: 0.98;
+    font-size: clamp(2rem, 3.5vw, 3.15rem);
+    font-weight: 560;
+    letter-spacing: -0.04em;
+    line-height: 1.04;
   }
 
   .docs-content__header span {
     display: block;
     max-width: 42rem;
-    margin-top: 1.5rem;
+    margin-top: 1rem;
     color: var(--ink-muted);
-    font-size: var(--text-lg);
-    line-height: 1.45;
+    font-size: var(--text-base);
+    line-height: 1.55;
   }
 
   .docs-prose {
@@ -199,9 +208,9 @@ function isCurrentPath(href: string): boolean {
   }
 
   .docs-prose :global(h2) {
-    margin: 4.5rem 0 1rem;
+    margin: 3.8rem 0 1rem;
     padding-top: 1rem;
-    font-size: clamp(1.7rem, 3vw, 2.45rem);
+    font-size: clamp(1.5rem, 2.4vw, 2.1rem);
     font-weight: 560;
     letter-spacing: -0.045em;
     line-height: 1.1;
