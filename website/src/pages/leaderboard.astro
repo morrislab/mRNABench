@@ -16,11 +16,12 @@ import { withBase } from "../lib/site";
 
   <section class="leaderboard-intro shell">
     <dl class="leaderboard-facts">
-      <div><dt>Overall-ranked</dt><dd data-model-count>--</dd></div>
-      <div><dt>Models with results</dt><dd data-total-model-count>--</dd></div>
-      <div><dt>Included datasets</dt><dd data-dataset-count>--</dd></div>
-      <div><dt>Result units</dt><dd data-result-count>--</dd></div>
+      <div><dt>Complete overall rankings</dt><dd data-model-count>--</dd></div>
+      <div><dt>Models evaluated</dt><dd data-total-model-count>--</dd></div>
+      <div><dt>Datasets</dt><dd data-dataset-count>--</dd></div>
+      <div><dt>Model-target summaries</dt><dd data-result-count>--</dd></div>
     </dl>
+    <p class="leaderboard-facts__note" data-coverage-note>Loading coverage summary.</p>
   </section>
 
   <section
@@ -321,6 +322,9 @@ import { withBase } from "../lib/site";
     const download = app.querySelector<HTMLButtonElement>(
       "[data-download-view]",
     );
+    const coverageNote = document.querySelector<HTMLElement>(
+      "[data-coverage-note]",
+    );
     const loader = app.querySelector<HTMLElement>("[data-loading-container]");
     const output = app.querySelector<HTMLElement>("[data-leaderboard-output]");
     const error = app.querySelector<HTMLElement>("[data-leaderboard-error]");
@@ -345,6 +349,7 @@ import { withBase } from "../lib/site";
       !datasetControl ||
       !search ||
       !download ||
+      !coverageNote ||
       !loader ||
       !output ||
       !error ||
@@ -693,6 +698,27 @@ import { withBase } from "../lib/site";
           element.textContent = payload.results.length.toLocaleString();
         });
 
+        const overallModels = new Set(
+          payload.rankings.overall.map((row) => row.model_id),
+        );
+        const partialModels = [
+          ...new Set(
+            payload.models
+              .filter((model) => !overallModels.has(model.id))
+              .map((model) => model.family),
+          ),
+        ].sort();
+        const cdsOnlyPartial = (
+          partialModels.length === 2
+          && partialModels.includes("CodonBERT")
+          && partialModels.includes("mRNA-FM")
+        );
+        coverageNote.textContent = (
+          partialModels.length === 0
+            ? `All ${payload.models.length} evaluated models have complete results across all ${payload.datasets.length} datasets.`
+            : `${payload.rankings.overall.length} models have complete results across all ${payload.datasets.length} datasets. ${partialModels.join(" and ")} have partial results and remain available in task and dataset views.${cdsOnlyPartial ? " Both models embed only coding sequence, while the missing MRL MPRA tasks vary the 5' UTR with a fixed reporter CDS; identical model inputs make Pearson correlation undefined." : ""}`
+        );
+
 
         levelSelect.disabled = false;
         taskSelect.disabled = false;
@@ -779,6 +805,12 @@ import { withBase } from "../lib/site";
     font-size: var(--text-lg);
     font-weight: 560;
     letter-spacing: -0.035em;
+  }
+
+  .leaderboard-facts__note {
+    margin: 0.9rem 0 0;
+    color: var(--ink-muted);
+    font-size: var(--text-sm);
   }
 
   .leaderboard-app {

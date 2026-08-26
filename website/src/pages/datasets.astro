@@ -96,12 +96,12 @@ const setLabel = {
               {dataset.evaluationNote && <p><strong>Evaluation:</strong> {dataset.evaluationNote}</p>}
             </div>
             <dl>
-              <div><dt>Task</dt><dd>{taskLabel[dataset.task]}</dd></div>
-              <div><dt>Source</dt><dd>{sourceLabel[dataset.species]}</dd></div>
-              <div><dt>Split</dt><dd>{splitLabel[dataset.split]}</dd></div>
-              <div><dt>Group</dt><dd>{setLabel[dataset.benchmarkSet]}</dd></div>
-              <div><dt>Targets</dt><dd>{dataset.targetSummary}</dd></div>
-              <div><dt>Evaluations</dt><dd>{dataset.evaluations.join(", ")}</dd></div>
+              <div class="dataset-meta__task"><dt>Task</dt><dd>{taskLabel[dataset.task]}</dd></div>
+              <div class="dataset-meta__source"><dt>Source</dt><dd>{sourceLabel[dataset.species]}</dd></div>
+              <div class="dataset-meta__split"><dt>Split</dt><dd>{splitLabel[dataset.split]}</dd></div>
+              <div class="dataset-meta__group"><dt>Group</dt><dd>{setLabel[dataset.benchmarkSet]}</dd></div>
+              <div class="dataset-meta__targets"><dt>Targets</dt><dd>{dataset.targetSummary}</dd></div>
+              <div class="dataset-meta__evaluations"><dt>Evaluations</dt><dd>{dataset.evaluations.join(", ")}</dd></div>
             </dl>
             <div class="dataset-list__links">
               <a href={dataset.citationUrl} aria-label={`${dataset.name}: ${dataset.citationLabel}`}>{dataset.citationLabel}</a>
@@ -251,6 +251,7 @@ const setLabel = {
 
   .dataset-list article {
     display: grid;
+    grid-template-areas: "identity description metadata links";
     grid-template-columns:
       minmax(13rem, 0.8fr)
       minmax(14rem, 0.9fr)
@@ -260,6 +261,14 @@ const setLabel = {
     align-items: start;
     padding: 1.5rem 1rem;
     border-bottom: 1px solid var(--line);
+  }
+
+  .dataset-list__identity {
+    grid-area: identity;
+  }
+
+  .dataset-list__description {
+    grid-area: description;
   }
 
   .dataset-list article:hover {
@@ -304,14 +313,38 @@ const setLabel = {
   }
 
   .dataset-list dl {
+    grid-area: metadata;
     display: grid;
+    grid-template-areas:
+      "task source split group"
+      "targets targets targets evaluations";
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 0.65rem 0.85rem;
     margin: 0;
   }
 
-  .dataset-list dl div:nth-child(n + 5) {
-    grid-column: 1 / -1;
+  .dataset-meta__task {
+    grid-area: task;
+  }
+
+  .dataset-meta__source {
+    grid-area: source;
+  }
+
+  .dataset-meta__split {
+    grid-area: split;
+  }
+
+  .dataset-meta__group {
+    grid-area: group;
+  }
+
+  .dataset-meta__targets {
+    grid-area: targets;
+  }
+
+  .dataset-meta__evaluations {
+    grid-area: evaluations;
   }
 
   .dataset-list dt {
@@ -328,6 +361,7 @@ const setLabel = {
   }
 
   .dataset-list__links {
+    grid-area: links;
     display: grid;
     gap: 0.4rem;
   }
@@ -339,17 +373,22 @@ const setLabel = {
   }
 
   @media (max-width: 1100px) {
-    .catalog-summary,
-    .dataset-list article {
+    .catalog-summary {
       grid-template-columns: 1fr;
     }
 
-    .dataset-list dl {
-      grid-template-columns: repeat(3, 1fr);
+    .dataset-list article {
+      grid-template-areas:
+        "identity description"
+        "metadata metadata"
+        "links links";
+      grid-template-columns: minmax(12rem, 0.7fr) minmax(0, 1.3fr);
     }
 
-    .dataset-list dl div:nth-child(n + 5) {
-      grid-column: 1 / -1;
+    .dataset-list__links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem 1.2rem;
     }
   }
 
@@ -368,12 +407,22 @@ const setLabel = {
       border-top: 1px solid var(--line);
     }
 
-    .dataset-list dl {
-      grid-template-columns: repeat(2, 1fr);
+    .dataset-list article {
+      grid-template-areas:
+        "identity"
+        "description"
+        "metadata"
+        "links";
+      grid-template-columns: 1fr;
     }
 
-    .dataset-list dl div:nth-child(n + 5) {
-      grid-column: 1 / -1;
+    .dataset-list dl {
+      grid-template-areas:
+        "task source"
+        "split group"
+        "targets targets"
+        "evaluations evaluations";
+      grid-template-columns: repeat(2, 1fr);
     }
   }
 
