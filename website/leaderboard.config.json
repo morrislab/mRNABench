@@ -1,7 +1,7 @@
 {
-  "release_id": "legacy-may-2026",
-  "release_label": "May 2026 linear-probe archive",
-  "data_status": "legacy",
+  "release_id": "neurips2026-submission",
+  "release_label": "NeurIPS 2026 submission linear-probe results",
+  "data_status": "submitted",
   "expected_runs": 10,
   "regression_result_task": "regression_ridge",
   "legacy_regression_source_priority": [
@@ -9,16 +9,8 @@
     "regression"
   ],
   "legacy_regression_max_abs_difference": 0.003,
-  "excluded_datasets": {
-    "eclip-binding-k562": "No compatible rows in the uploaded results.",
-    "eclip-binding-hepg2": "No compatible rows in the uploaded results.",
-    "mrl-hl-lbkwk": "No compatible rows in the uploaded results.",
-    "rna-lifecycle-ietswaart": "No compatible rows in the uploaded results.",
-    "utr-variants-bohn-utr3": "No compatible rows in the uploaded results.",
-    "utr-variants-bohn-utr5": "No compatible rows in the uploaded results."
-  },
+  "excluded_datasets": {},
   "excluded_models": {
-    "dilated_resnet": "Supervised task-specific reference, not a catalog model.",
-    "orthrus-large-6-splice-only-10cl-randseed0": "Removed experimental checkpoint."
+    "dilated_resnet": "Supervised task-specific reference, not a catalog model."
   }
 }

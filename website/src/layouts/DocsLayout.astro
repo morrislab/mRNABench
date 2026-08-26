@@ -14,7 +14,6 @@ const groups = [
   {
     title: "Start",
     links: [
-      { href: "/docs", label: "Documentation home" },
       { href: "/docs/quickstart", label: "Quickstart" },
       { href: "/docs/concepts", label: "Core concepts" },
     ],
@@ -47,6 +46,7 @@ function normalizePath(path: string): string {
 }
 
 const currentPath = normalizePath(Astro.url.pathname);
+const docsHomePath = normalizePath(withBase("/docs"));
 
 function isCurrentPath(href: string): boolean {
   return currentPath === normalizePath(withBase(href));
@@ -56,7 +56,14 @@ function isCurrentPath(href: string): boolean {
 <BaseLayout title={`${title} | mRNABench docs`} {description}>
   <div class="docs-shell shell">
     <nav class="docs-sidebar" aria-label="Documentation">
-      <a class="docs-sidebar__home" href={withBase("/docs")}>mRNABench docs</a>
+      <a
+        class:list={[
+          "docs-sidebar__home",
+          { "docs-sidebar__home--active": currentPath === docsHomePath },
+        ]}
+        href={withBase("/docs")}
+        aria-current={currentPath === docsHomePath ? "page" : undefined}
+      >mRNABench docs</a>
       {
         groups.map((group) => (
           <div class="docs-sidebar__group">
@@ -130,6 +137,10 @@ function isCurrentPath(href: string): boolean {
     font-size: var(--text-sm);
     font-weight: 650;
     text-decoration: none;
+  }
+
+  .docs-sidebar__home--active {
+    color: var(--red-deep);
   }
 
   .docs-sidebar__group {

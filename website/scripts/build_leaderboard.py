@@ -64,6 +64,10 @@ TASK_LABELS = {
 
 TASK_ORDER = ("classification", "multilabel", "regression")
 
+MODEL_ALIASES = {
+    "orthrus-large-6-splice-only-10cl-randseed0": "orthrus+mlm",
+}
+
 T_CRITICAL_95 = {
     1: 12.706,
     2: 4.303,
@@ -135,6 +139,8 @@ def normalize_rows(
         )
 
     frame = source.copy()
+    frame["model"] = frame["model"].replace(MODEL_ALIASES)
+    frame.loc[frame["model"] == "orthrus+mlm", "model_group"] = "Orthrus"
     initial_rows = len(frame)
     default_splits = {
         dataset_id: dataset_class.METADATA.default_split_type

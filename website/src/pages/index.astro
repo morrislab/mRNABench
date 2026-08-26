@@ -37,20 +37,20 @@ const gaps = [
 
 const findings = [
   {
-    title: "Model size",
-    text: "Across the models tested, parameter count was only weakly related to mean standardized performance. This comparison cannot separate model size from differences in training data, objective, architecture, or model family.",
+    title: "Scale is only part of the picture",
+    text: "Model size was only weakly correlated with overall performance. Evo2 led the aggregate comparison, but much smaller models such as Orthrus remained competitive on several tasks, showing that architecture, training data, and pretraining objective matter alongside parameter count.",
   },
   {
-    title: "Pretraining objective",
-    text: "For one backbone trained on one dataset, the combined masked-token and contrastive objective performed well on more validation tasks than either objective alone. Most of the difference came from transcript-level tasks.",
+    title: "Joint MLM and contrastive pretraining",
+    text: "Orthrus was strongest on global tasks and weaker on tasks driven by local sequence features. Holding its architecture and pretraining data fixed, we varied the balance between masked language modeling and contrastive learning. The joint objective covered the benchmark more evenly than either objective alone, and the selected Orthrus+MLM model matched or exceeded the strongest foundation model on seven of 11 datasets.",
   },
   {
-    title: "Full-length mRNA training",
-    text: "Models trained on full mature mRNAs scored higher on average than genome-only models in this set. The groups also differ in architecture, objective, and training corpus, so this is an association rather than a controlled comparison.",
+    title: "Training data should match the sequence domain",
+    text: "Models pretrained on mature mRNA generally outperformed models trained on genomic DNA or non-coding RNA. The compression analysis shows that coding regions, UTRs, introns, and intergenic DNA have measurably different sequence structure. Together, these results are consistent with a benefit from domain-matched pretraining, although the model groups also differ in architecture and objective.",
   },
   {
-    title: "Split strategy",
-    text: "On applicable non-synthetic datasets, k-mer splits gave lower scores than random splits. The grouping uses raw k-mer counts, so sequence length also affects the split. Homology splits changed scores less consistently.",
+    title: "Split choice changes the result",
+    text: "Random splits produced the most optimistic estimates of generalization. Grouping transcripts by k-mer composition caused the largest performance drops, while homology-based splits produced smaller but systematic gaps. The effect was especially clear for eCLIP and miRNA tasks, where short binding motifs can otherwise appear on both sides of a random split.",
   },
 ];
 
@@ -218,18 +218,27 @@ const paperAffiliations = [
             </div>
             <div class="prose">
               <p>
-                Splicing joins selected exons into a transcript isoform, while
-                regulatory information is distributed across the 5' UTR, coding
-                sequence, splice architecture, and 3' UTR. These features affect
-                transcript localization, persistence, and translation.
+                Mature mRNA is produced when selected exons are spliced from a
+                pre-mRNA into a complete transcript. Alternative splicing can
+                generate multiple isoforms from one gene, each with a different
+                combination of untranslated regions, coding sequence, and exon
+                junctions, and therefore different regulatory properties.
               </p>
               <p>
-                Useful signals also appear at very different scales. An
-                RNA-binding protein may recognize a short motif. The benchmark's
-                SNV tasks alter one nucleotide at a time. Stability and
-                translation can reflect effects accumulated across a complete
-                transcript. The suite includes tasks spanning each of these
-                scales.
+                Those properties determine how long a transcript persists,
+                where it localizes, and how efficiently it is translated. They
+                are central to normal gene regulation, disease, and the design
+                of mRNA therapeutics. A useful representation must therefore
+                capture both short regulatory elements and information
+                distributed across transcripts that often span several
+                kilobases.
+              </p>
+              <p>
+                DNA and non-coding RNA benchmarks ask different biological
+                questions and often use much shorter sequence windows.
+                mRNABench brings mature-mRNA tasks into one evaluation so that
+                models can be compared on the sequence scales and functions
+                they are meant to represent.
               </p>
               <div
                 class="transcript"
@@ -288,18 +297,15 @@ const paperAffiliations = [
           mean-pooled over the reconstructed sequence.
         </p>
         <p>
-          Regression probes can use ordinary least squares or RidgeCV, with the
-          Ridge penalty selected on the training partition. Binary tasks use
-          logistic regression, and multilabel tasks fit one logistic model per
-          label. The leaderboard uses Ridge; the Python API defaults to
-          ordinary least squares.
+          The model weights remain frozen throughout evaluation. Lightweight
+          linear probes are trained on the same dataset splits, making the
+          comparison a test of what biological information is accessible in
+          each pretrained representation.
         </p>
         <p>
           UTR SNV tasks compare alternate and reference transcripts. The
-          mRNABench supports linear probes on sequences and paired
-          embedding differences, unsigned L2 distances between pooled
-          embeddings, and normalized log-likelihood differences for compatible
-          models.
+          benchmark can evaluate paired embedding differences or normalized
+          log-likelihood differences for models that support them.
         </p>
         <dl class="method-list">
           <div>
@@ -336,29 +342,31 @@ const paperAffiliations = [
     <div class="shell two-column task-section__heading">
       <div>
         <p class="eyebrow">Task scale</p>
-        <h2>From short motifs to whole-transcript outcomes</h2>
+        <h2>Local and global mRNA tasks</h2>
       </div>
       <div class="prose">
         <p>
-          The suite spans sequence-local inputs and whole-transcript
-          measurements. Interaction datasets use transcript-level labels even
-          when the underlying assay detects local binding sites.
+          The paper groups tasks by how the sequence signal giving rise to each
+          label is distributed. Local tasks are dominated by short motifs or
+          targeted perturbations, while global tasks reflect the combined
+          effects of regulatory elements across the transcript. Some assays
+          draw on both scales.
         </p>
       </div>
     </div>
     <div class="shell task-scale">
       <article>
-        <span>Sequence-local inputs</span>
-        <h3>Reporter regions and single-nucleotide changes</h3>
-        <p>These tasks include reporter 5' UTRs and UTR variant classification.</p>
+        <span>Local tasks</span>
+        <h3>Motifs, UTR perturbations, and binding events</h3>
+        <p>Reporter MRL varies the 5' UTR while keeping the CDS fixed; eCLIP and miRNA tasks reflect short binding motifs; variant tasks alter a single UTR nucleotide.</p>
       </article>
       <div class="task-scale__axis" aria-hidden="true">
         <i></i><i></i><i></i><i></i><i></i><i></i><i></i>
       </div>
       <article>
-        <span>Transcript-wide measurements</span>
-        <h3>Effects distributed across the mature transcript</h3>
-        <p>RNA half-life, translation efficiency, localization, and transcript lifecycle.</p>
+        <span>Global tasks</span>
+        <h3>Properties shaped across the full transcript</h3>
+        <p>RNA half-life, translation efficiency, localization, and transcript lifecycle integrate regulatory effects distributed across UTRs and coding sequence.</p>
       </article>
     </div>
   </section>
@@ -410,9 +418,18 @@ const paperAffiliations = [
     data-overview-panel
   >
     <div class="shell">
-      <div class="section-heading">
-        <p class="eyebrow">Findings</p>
-        <h2>Results across models and evaluation settings</h2>
+      <div class="two-column findings__heading">
+        <div>
+          <p class="eyebrow">Findings</p>
+          <h2>What the benchmark reveals</h2>
+        </div>
+        <div class="prose">
+          <p>
+            Taken together, the results show that model scale alone does not
+            explain performance. Pretraining objective, sequence domain, and
+            evaluation split each change what a model appears to learn.
+          </p>
+        </div>
       </div>
       <div class="findings__grid">
         {
@@ -440,49 +457,26 @@ const paperAffiliations = [
       <div class="limits-list">
         <p>
           <strong>Linear probes.</strong> A high score means that a linear model
-          can recover the label from the frozen embedding. It does not identify
-          a regulatory mechanism or show how the full model will behave after
-          fine-tuning.
+          can recover a label from the frozen representation. This is a useful
+          measure of representation quality, but it does not identify the
+          regulatory mechanism behind a prediction or measure how a model will
+          respond to end-to-end fine-tuning.
         </p>
         <p>
-          <strong>Long sequences.</strong> Mean pooling removes positional
-          information. When a transcript is longer than a model's context
-          window, chunking covers the full sequence, but tokens in different
-          chunks do not interact.
+          <strong>Dataset resolution.</strong> mRNABench follows the resolution
+          available in each source study. Gene-level measurements are paired
+          with one principal transcript, while binding events and compartment
+          measurements are summarized as transcript-level targets. This gives
+          every label a defined sequence and a consistent prediction unit, but
+          these tasks assess transcript-level outcomes rather than
+          isoform-specific regulation or individual binding sites.
         </p>
         <p>
-          <strong>What the labels represent.</strong> Some source assays are
-          more detailed than the benchmark target. For eCLIP and miRNA data, we
-          ask whether a transcript has at least one recorded interaction.
-          Localization proportions and lifecycle measurements are converted
-          into compartment-level labels. These tasks test transcript-level
-          prediction, not binding-site location or interaction strength.
-        </p>
-        <p>
-          <strong>One transcript per gene.</strong> Some source studies provide
-          a principal transcript or a gene-level measurement without
-          isoform-resolved labels. We use one defined transcript so that each
-          label maps to one sequence instead of copying the same measurement
-          onto every isoform. Those tasks do not test isoform-specific
-          regulation.
-        </p>
-        <p>
-          <strong>Confidence intervals.</strong> The intervals come from
-          rerunning the probe with different train, validation, and test
-          assignments. They show sensitivity to the data split, not
-          experimental noise or uncertainty introduced while processing the
-          source data.
-        </p>
-        <p>
-          <strong>Experimental setting.</strong> A score in one species, cell
-          line, tissue, or assay does not guarantee the same performance in
-          another. Synthetic reporter constructs and endogenous transcripts
-          should also be treated as different settings.
-        </p>
-        <p>
-          <strong>Variant scope.</strong> The UTR variant tasks score variants
-          in mature-transcript sequence. They do not cover effects that occur
-          before splicing or depend on genomic context outside that transcript.
+          <strong>Experimental coverage.</strong> The benchmark brings together
+          a broad set of assays, but every score still belongs to a particular
+          species, cell type, and experimental system. Results from synthetic
+          reporter constructs and endogenous transcripts should therefore be
+          interpreted in their own biological settings.
         </p>
       </div>
     </div>
@@ -895,7 +889,7 @@ const paperAffiliations = [
 
   .gap-grid p,
   .split-table p,
-  .findings p {
+  .findings__grid p {
     margin: 0;
     color: var(--ink-muted);
     font-size: var(--text-sm);
@@ -1038,6 +1032,11 @@ const paperAffiliations = [
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     border-top: 1px solid var(--line-strong);
+  }
+
+  .findings__heading {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    margin-bottom: 3.5rem;
   }
 
   .findings article {
