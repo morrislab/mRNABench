@@ -32,7 +32,7 @@ function checkpointUrl(modelName: string, version: string): string | null {
 
 <BaseLayout
   title="Model catalog | mRNABench"
-  description="Browse registered mRNABench model adapters and versions, including checkpoint-specific behaviors."
+  description="Browse mRNABench model families and versions, including checkpoint-specific outputs."
 >
   <PageIntro
     eyebrow="Catalog"
@@ -43,7 +43,7 @@ function checkpointUrl(modelName: string, version: string): string | null {
   <section class="model-summary shell">
     <dl>
       <div><dt>Model families</dt><dd>{models.length}</dd></div>
-      <div><dt>Registered versions</dt><dd>{versionCount}</dd></div>
+      <div><dt>Model versions</dt><dd>{versionCount}</dd></div>
       <div><dt>RNA models</dt><dd>{groupCounts["RNA model"]}</dd></div>
       <div><dt>DNA models</dt><dd>{groupCounts["DNA model"]}</dd></div>
       <div><dt>Sequence-to-function</dt><dd>{groupCounts["Sequence-to-function model"]}</dd></div>
@@ -73,7 +73,7 @@ function checkpointUrl(modelName: string, version: string): string | null {
     <div class="model-filters">
       <label>
         <span>Find a model</span>
-        <input type="search" placeholder="Name, version, or behavior" data-model-search />
+        <input type="search" placeholder="Name, version, or output" data-model-search />
       </label>
       <label>
         <span>Model group</span>
@@ -86,9 +86,9 @@ function checkpointUrl(modelName: string, version: string): string | null {
         </select>
       </label>
       <label>
-        <span>Behavior</span>
+        <span>Output</span>
         <select data-model-behavior>
-          <option value="">All behaviors</option>
+          <option value="">All outputs</option>
           <option value="embedding">Embedding</option>
           <option value="causal likelihood">Causal likelihood</option>
           <option value="pseudo likelihood">Pseudo-likelihood</option>
@@ -113,7 +113,7 @@ function checkpointUrl(modelName: string, version: string): string | null {
             </div>
             <p>{model.description}</p>
             <div class="model-list__behaviors">
-              <small>Available in family</small>
+              <small>Available outputs</small>
               {model.behaviors.map((behavior) => <span>{behaviorLabels[behavior] ?? behavior}</span>)}
             </div>
             <details>
