@@ -339,20 +339,16 @@ const paperAffiliations = [
     id="tasks"
     data-overview-panel
   >
-    <div class="shell two-column task-section__heading">
-      <div>
-        <p class="eyebrow">Task scale</p>
-        <h2>Local and global mRNA tasks</h2>
-      </div>
-      <div class="prose">
-        <p>
-          The paper groups tasks by how the sequence signal giving rise to each
-          label is distributed. Local tasks are dominated by short motifs or
-          targeted perturbations, while global tasks reflect the combined
-          effects of regulatory elements across the transcript. Some assays
-          draw on both scales.
-        </p>
-      </div>
+    <div class="shell section-intro">
+      <p class="eyebrow">Task scale</p>
+      <h2>Local and global mRNA tasks</h2>
+      <p>
+        The paper groups tasks by how the sequence signal giving rise to each
+        label is distributed. Local tasks are dominated by short motifs or
+        targeted perturbations, while global tasks reflect the combined
+        effects of regulatory elements across the transcript. Some assays draw
+        on both scales.
+      </p>
     </div>
     <div class="shell task-scale">
       <article>
@@ -377,11 +373,9 @@ const paperAffiliations = [
     data-overview-panel
   >
     <div class="shell">
-      <div class="section-heading section-heading--split">
-        <div>
-          <p class="eyebrow">Split design</p>
-          <h2>Four ways to separate train and test data</h2>
-        </div>
+      <div class="section-intro">
+        <p class="eyebrow">Split design</p>
+        <h2>Four ways to separate train and test data</h2>
         <p>
           Each dataset uses a default split suited to its rows and labels. The
           dataset catalog lists that choice.
@@ -418,18 +412,14 @@ const paperAffiliations = [
     data-overview-panel
   >
     <div class="shell">
-      <div class="two-column findings__heading">
-        <div>
-          <p class="eyebrow">Findings</p>
-          <h2>What the benchmark reveals</h2>
-        </div>
-        <div class="prose">
-          <p>
-            Taken together, the results show that model scale alone does not
-            explain performance. Pretraining objective, sequence domain, and
-            evaluation split each change what a model appears to learn.
-          </p>
-        </div>
+      <div class="section-intro">
+        <p class="eyebrow">Findings</p>
+        <h2>What the benchmark reveals</h2>
+        <p>
+          Taken together, the results show that model scale alone does not
+          explain performance. Pretraining objective, sequence domain, and
+          evaluation split each change what a model appears to learn.
+        </p>
       </div>
       <div class="findings__grid">
         {
@@ -669,7 +659,6 @@ const paperAffiliations = [
   }
 
   .publication__content h2 {
-    max-width: 48rem;
     margin: 0;
     font-size: clamp(1.35rem, 2.5vw, 2.1rem);
     font-weight: 580;
@@ -678,7 +667,6 @@ const paperAffiliations = [
   }
 
   .publication__authors {
-    max-width: 62rem;
     margin: 1.2rem 0 0;
     color: var(--ink-soft);
     font-size: var(--text-sm);
@@ -705,7 +693,6 @@ const paperAffiliations = [
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.35rem 1.5rem;
-    max-width: 62rem;
     margin: 1.2rem 0 0;
     padding: 1rem 0 0;
     border-top: 1px solid var(--line);
@@ -806,7 +793,6 @@ const paperAffiliations = [
   }
 
   h2 {
-    max-width: 15ch;
     margin: 0;
     font-size: var(--text-xl);
     font-weight: 530;
@@ -815,7 +801,6 @@ const paperAffiliations = [
   }
 
   .prose > p {
-    max-width: 44rem;
     margin: 0 0 1.35rem;
     color: var(--ink-soft);
   }
@@ -850,8 +835,13 @@ const paperAffiliations = [
     margin-bottom: 3.5rem;
   }
 
-  .section-heading h2 {
-    max-width: 20ch;
+  .section-intro {
+    margin-bottom: 3.5rem;
+  }
+
+  .section-intro > p:last-child {
+    margin: 1.2rem 0 0;
+    color: var(--ink-soft);
   }
 
   .gap-grid {
@@ -931,7 +921,7 @@ const paperAffiliations = [
     grid-template-columns: 1fr 0.55fr 1fr;
     gap: 2rem;
     align-items: center;
-    margin-top: 3rem;
+    margin-top: 0;
   }
 
   .task-scale article {
@@ -949,7 +939,6 @@ const paperAffiliations = [
   }
 
   .task-scale h3 {
-    max-width: 18rem;
     margin: 3.2rem 0 0.8rem;
     font-size: var(--text-lg);
     font-weight: 540;
@@ -992,19 +981,6 @@ const paperAffiliations = [
     --height: 6rem;
   }
 
-  .section-heading--split {
-    display: grid;
-    grid-template-columns: 1fr 0.7fr;
-    gap: 2rem;
-    align-items: start;
-  }
-
-  .section-heading--split > p {
-    max-width: 35rem;
-    margin: 0;
-    color: var(--ink-muted);
-  }
-
   .split-table {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -1031,11 +1007,6 @@ const paperAffiliations = [
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     border-top: 1px solid var(--line-strong);
-  }
-
-  .findings__heading {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    margin-bottom: 3.5rem;
   }
 
   .findings article {
@@ -1084,7 +1055,6 @@ const paperAffiliations = [
   }
 
   .citation__authors {
-    max-width: 38rem;
     color: var(--ink-muted);
   }
 
@@ -1150,7 +1120,6 @@ const paperAffiliations = [
 
     .two-column,
     .section-heading,
-    .section-heading--split,
     .task-scale,
     .citation__grid {
       grid-template-columns: 1fr;
