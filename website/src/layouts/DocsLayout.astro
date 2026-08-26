@@ -5,10 +5,10 @@ import { withBase } from "../lib/site";
 interface Props {
   title: string;
   description: string;
-  section: string;
+  section?: string;
 }
 
-const { title, description, section } = Astro.props;
+const { title, description, section = "" } = Astro.props;
 
 const groups = [
   {
@@ -84,7 +84,7 @@ function isCurrentPath(href: string): boolean {
       }
     </nav>
     <details class="docs-mobile-nav">
-      <summary>{section}: {title}</summary>
+      <summary>{section ? `${section}: ` : ""}{title}</summary>
       <nav aria-label="Documentation">
         {
           groups.map((group) => (
@@ -102,7 +102,7 @@ function isCurrentPath(href: string): boolean {
     </details>
     <article class="docs-content" id="docs-article">
       <header class="docs-content__header">
-        <p>{section}</p>
+        {section && <p>{section}</p>}
         <h1>{title}</h1>
         <span>{description}</span>
       </header>

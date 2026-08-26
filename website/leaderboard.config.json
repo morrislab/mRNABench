@@ -3,6 +3,7 @@
   "release_label": "NeurIPS 2026 submission linear-probe results",
   "data_status": "submitted",
   "expected_runs": 10,
+  "expected_seeds": [2541, 2547, 413, 412, 411, 321, 311, 421, 2515, 2516],
   "regression_result_task": "regression_ridge",
   "legacy_regression_source_priority": [
     "reg_ridge",

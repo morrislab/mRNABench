@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pandas as pd
 
 from mrna_bench.datasets import DATASET_CATALOG
@@ -32,28 +33,32 @@ REQUIRED_COLUMNS = {
     "seed",
     "test_auprc",
     "test_r",
+    "pre_z",
+    "mean",
+    "std",
+    "z_score",
 }
 
 DATASET_LABELS = {
-    "eclip-binding-hepg2": "eCLIP RBP binding (HepG2)",
-    "eclip-binding-k562": "eCLIP RBP binding (K562)",
-    "mirna-target": "miRNA target binding",
-    "mrl-hl-lbkwk": "Paired MRL and RNA half-life",
-    "mrl-sample-designed": "MRL MPRA (designed)",
+    "eclip-binding-hepg2": "eCLIP Binding (HepG2)",
+    "eclip-binding-k562": "eCLIP Binding (K562)",
+    "mirna-target": "miRNA Binding",
+    "mrl-hl-lbkwk": "Paired MRL and RNA Half-Life",
+    "mrl-sample-designed": "MRL MPRA (Designed)",
     "mrl-sample-egfp": "MRL MPRA (eGFP)",
     "mrl-sample-mcherry": "MRL MPRA (mCherry)",
-    "mrl-sample-varying": "MRL MPRA (varying conditions)",
-    "mrl-sugimoto": "Mean ribosome load",
-    "rna-lifecycle-ietswaart": "RNA lifecycle",
-    "rna-loc-fazal": "RNA subcellular localization",
-    "rnahl-human": "RNA half-life (human)",
-    "rnahl-mouse": "RNA half-life (mouse)",
-    "translation-efficiency-human": "Translation efficiency (human)",
-    "translation-efficiency-mouse": "Translation efficiency (mouse)",
-    "utr-variants-bohn-utr3": "Curated 3' UTR variants",
-    "utr-variants-bohn-utr5": "Curated 5' UTR variants",
-    "vep-traitgym-complex": "TraitGym complex-trait variants",
-    "vep-traitgym-mendelian": "TraitGym Mendelian variants",
+    "mrl-sample-varying": "MRL MPRA (Varying Length)",
+    "mrl-sugimoto": "Mean Ribosome Load (Sugimoto)",
+    "rna-lifecycle-ietswaart": "RNA Lifecycle",
+    "rna-loc-fazal": "RNA Subcellular Localization",
+    "rnahl-human": "RNA Half-Life (Human)",
+    "rnahl-mouse": "RNA Half-Life (Mouse)",
+    "translation-efficiency-human": "Translation Efficiency (Human)",
+    "translation-efficiency-mouse": "Translation Efficiency (Mouse)",
+    "utr-variants-bohn-utr3": "Curated 3' UTR Variants",
+    "utr-variants-bohn-utr5": "Curated 5' UTR Variants",
+    "vep-traitgym-complex": "TraitGym VEP (Complex Traits)",
+    "vep-traitgym-mendelian": "TraitGym VEP (Mendelian)",
 }
 
 TASK_LABELS = {
@@ -127,6 +132,101 @@ def t_critical_95(n_runs: int) -> float:
     return 1.96
 
 
+def validate_source_z_scores(frame: pd.DataFrame) -> float:
+    """Validate the submitted Fisher transform and z-score columns."""
+    regression_rows = ~frame["task"].isin({
+        "classification",
+        "multilabel",
+    })
+    raw_value = frame["test_auprc"].where(
+        ~regression_rows,
+        frame["test_r"],
+    )
+    scored_rows = raw_value.notna()
+    standardized = frame.loc[
+        scored_rows,
+        ["pre_z", "mean", "std", "z_score"],
+    ]
+    if (
+        standardized.isna().any().any()
+        or not np.isfinite(standardized.to_numpy()).all()
+    ):
+        raise ValueError(
+            "Submitted standardization columns contain null or "
+            "non-finite values."
+        )
+
+    invalid_correlations = (
+        regression_rows
+        & scored_rows
+        & raw_value.abs().ge(1)
+    )
+    if invalid_correlations.any():
+        raise ValueError(
+            "Regression metrics must be strictly between -1 and 1 "
+            "before the Fisher transform."
+        )
+    expected_pre_z = raw_value.loc[scored_rows].copy()
+    regression_scored = regression_rows.loc[scored_rows]
+    expected_pre_z.loc[regression_scored] = np.arctanh(
+        raw_value.loc[scored_rows & regression_rows]
+    )
+    observed_pre_z = frame.loc[scored_rows, "pre_z"]
+    if not np.allclose(
+        expected_pre_z,
+        observed_pre_z,
+        rtol=1e-7,
+        atol=1e-9,
+    ):
+        raise ValueError(
+            "Submitted pre_z values do not match raw metrics and the "
+            "required Fisher transform."
+        )
+
+    standardization_group = ["seed", "dataset", "target", "split"]
+    groupers = [
+        frame.loc[scored_rows, column]
+        for column in standardization_group
+    ]
+    expected_mean = expected_pre_z.groupby(groupers).transform("mean")
+    expected_std = expected_pre_z.groupby(groupers).transform("std")
+    if expected_std.isna().any() or expected_std.le(0).any():
+        raise ValueError(
+            "Every z-score group must contain multiple distinct model "
+            "performances."
+        )
+    if not np.allclose(
+        expected_mean,
+        frame.loc[scored_rows, "mean"],
+        rtol=1e-7,
+        atol=1e-9,
+    ):
+        raise ValueError(
+            "Submitted standardization means do not match the source rows."
+        )
+    if not np.allclose(
+        expected_std,
+        frame.loc[scored_rows, "std"],
+        rtol=1e-7,
+        atol=1e-9,
+    ):
+        raise ValueError(
+            "Submitted standard deviations do not match the source rows."
+        )
+
+    expected_z_score = (expected_pre_z - expected_mean) / expected_std
+    z_score_difference = (
+        expected_z_score - frame.loc[scored_rows, "z_score"]
+    ).abs()
+    max_difference = float(z_score_difference.max())
+    if max_difference > 1e-7:
+        raise ValueError(
+            "Submitted z_score does not match per-seed, dataset, target, "
+            f"and split standardization: {max_difference:.8f}."
+        )
+    return max_difference
+
+
 def normalize_rows(
     source: pd.DataFrame,
     config: dict[str, Any],
@@ -159,13 +259,12 @@ def normalize_rows(
     )
     frame = frame[frame["split"] == frame["default_split_type"]].copy()
     default_split_rows = len(frame)
+    max_z_score_difference = validate_source_z_scores(frame)
 
     excluded_datasets = set(config["excluded_datasets"])
     excluded_models = set(config["excluded_models"])
     frame = frame[~frame["dataset"].isin(excluded_datasets)]
     after_dataset_filter = len(frame)
-    frame = frame[~frame["model"].isin(excluded_models)]
-    after_model_filter = len(frame)
 
     supported_tasks = {
         "classification",
@@ -254,8 +353,15 @@ def normalize_rows(
         frame["test_r"],
     )
     before_null_filter = len(frame)
-    frame = frame[frame["value"].notna()].copy()
+    frame = frame[
+        frame["value"].notna()
+        & frame["z_score"].notna()
+    ].copy()
     null_metric_rows = before_null_filter - len(frame)
+
+    before_model_filter = len(frame)
+    frame = frame[~frame["model"].isin(excluded_models)].copy()
+    after_model_filter = len(frame)
 
     configured_priority = config["legacy_regression_source_priority"]
     priority = {
@@ -299,12 +405,13 @@ def normalize_rows(
             "Missing source-task priority for: "
             + ", ".join(missing_priority)
         )
+    before_collision_filter = len(frame)
     frame = (
         frame.sort_values(collision_key + ["task_priority"])
         .drop_duplicates(collision_key, keep="first")
         .drop(columns=["task_priority"])
     )
-    duplicate_rows = before_null_filter - null_metric_rows - len(frame)
+    duplicate_rows = before_collision_filter - len(frame)
 
     expected_dataset_ids = set(DATASET_LABELS).difference(
         excluded_datasets
@@ -359,14 +466,15 @@ def normalize_rows(
         "source_rows": initial_rows,
         "default_split_rows": default_split_rows,
         "legacy_default_mismatch_rows": default_mismatch_rows,
-        "excluded_rebuilt_dataset_rows": default_split_rows - after_dataset_filter,
-        "excluded_model_rows": after_dataset_filter - after_model_filter,
+        "excluded_dataset_rows": default_split_rows - after_dataset_filter,
+        "excluded_model_rows": before_model_filter - after_model_filter,
         "excluded_unsupported_task_rows": unsupported_task_rows,
         "excluded_regression_protocol_rows": excluded_regression_protocol_rows,
         "excluded_null_metric_rows": null_metric_rows,
         "resolved_legacy_collision_rows": duplicate_rows,
         "material_legacy_collision_keys": material_collision_count,
         "max_legacy_collision_difference": max_collision_difference,
+        "max_z_score_difference": max_z_score_difference,
         "retained_seed_rows": len(frame),
     }
     return frame, stats
@@ -374,9 +482,11 @@ def normalize_rows(
 
 def aggregate_units(
     frame: pd.DataFrame,
-    expected_runs: int,
+    expected_seeds: list[int],
     data_status: str,
 ) -> pd.DataFrame:
+    expected_seed_set = set(expected_seeds)
+    expected_runs = len(expected_seeds)
     unit_columns = [
         "model",
         "model_group",
@@ -392,10 +502,15 @@ def aggregate_units(
         "metric_id",
     ]
     units = (
-        frame.groupby(unit_columns, dropna=False)["value"]
-        .agg(["mean", "std", "count"])
+        frame.groupby(unit_columns, dropna=False)
+        .agg(
+            mean=("value", "mean"),
+            std_sample=("value", "std"),
+            n_runs=("z_score", "count"),
+            mean_z_score=("z_score", "mean"),
+            std_z_score=("z_score", "std"),
+        )
         .reset_index()
-        .rename(columns={"count": "n_runs", "std": "std_sample"})
     )
     seeds = (
         frame.groupby(unit_columns, dropna=False)["seed"]
@@ -422,37 +537,25 @@ def aggregate_units(
     )
     units["ci95_low"] = units["mean"] - margin
     units["ci95_high"] = units["mean"] + margin
-    units["coverage_status"] = units["n_runs"].map(
-        lambda count: "complete" if count == expected_runs else "incomplete"
+    units["coverage_status"] = units["seeds"].map(
+        lambda seeds: (
+            "complete"
+            if set(seeds) == expected_seed_set
+            else "incomplete"
+        )
     )
     units["expected_runs"] = expected_runs
     units["split_role"] = "test"
     units["higher_is_better"] = True
     units["data_status"] = data_status
 
-    rank_group = [
-        "dataset",
-        "target",
-        "biological_task",
-        "result_task",
-        "evaluation_method",
-        "estimator",
-        "split",
-        "metric_id",
-    ]
-    units["unit_rank"] = units.groupby(rank_group)["mean"].rank(
-        method="average",
-        ascending=False,
-    )
-    peer_count = units.groupby(rank_group)["model"].transform("count")
-    units["unit_percentile"] = (
-        1 - (units["unit_rank"] - 1) / (peer_count - 1).clip(lower=1)
-    )
-    units["peer_count"] = peer_count
     return units
 
 
-def build_dataset_scores(units: pd.DataFrame) -> pd.DataFrame:
+def build_dataset_scores(
+    frame: pd.DataFrame,
+    units: pd.DataFrame,
+) -> pd.DataFrame:
     keys = [
         "model",
         "model_group",
@@ -461,15 +564,30 @@ def build_dataset_scores(units: pd.DataFrame) -> pd.DataFrame:
         "biological_task",
         "metric_id",
     ]
+    dataset_seed_scores = (
+        frame.groupby([*keys, "seed"])
+        .agg(score=("z_score", "mean"))
+        .reset_index()
+    )
     scores = (
+        dataset_seed_scores.groupby(keys)
+        .agg(score=("score", "mean"))
+        .reset_index()
+    )
+    unit_summary = (
         units.groupby(keys)
         .agg(
-            score=("unit_percentile", "mean"),
             raw_mean=("mean", "mean"),
             completed_units=("coverage_status", lambda values: (values == "complete").sum()),
             unit_count=("target", "count"),
         )
         .reset_index()
+    )
+    scores = scores.merge(
+        unit_summary,
+        on=keys,
+        how="left",
+        validate="one_to_one",
     )
     expected = (
         units.groupby(["dataset", "biological_task"])["target"]
@@ -498,9 +616,53 @@ def build_dataset_scores(units: pd.DataFrame) -> pd.DataFrame:
     return scores
 
 
+def build_source_scores(
+    frame: pd.DataFrame,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Average targets and sub-datasets within each seed."""
+    dataset_seed_scores = (
+        frame.groupby([
+            "model",
+            "model_group",
+            "biological_task",
+            "source_group",
+            "dataset",
+            "seed",
+        ])
+        .agg(score=("z_score", "mean"))
+        .reset_index()
+    )
+    source_seed_scores = (
+        dataset_seed_scores.groupby([
+            "model",
+            "model_group",
+            "biological_task",
+            "source_group",
+            "seed",
+        ])
+        .agg(
+            score=("score", "mean"),
+            dataset_count=("dataset", "count"),
+        )
+        .reset_index()
+    )
+    source_scores = (
+        source_seed_scores.groupby(
+            ["model", "model_group", "biological_task", "source_group"]
+        )
+        .agg(
+            score=("score", "mean"),
+            dataset_count=("dataset_count", "max"),
+        )
+        .reset_index()
+    )
+    return source_scores, source_seed_scores
+
+
 def build_task_scores(
     units: pd.DataFrame,
-    dataset_scores: pd.DataFrame,
+    source_scores: pd.DataFrame,
+    source_seed_scores: pd.DataFrame,
 ) -> pd.DataFrame:
     expected = (
         units.groupby("biological_task")
@@ -528,24 +690,38 @@ def build_task_scores(
         )
         .reset_index()
     )
-    source_scores = (
-        dataset_scores.groupby(
-            ["model", "model_group", "biological_task", "source_group"]
-        )
-        .agg(
-            score=("score", "mean"),
-            dataset_count=("dataset", "count"),
-        )
+    task_seed_scores = (
+        source_seed_scores.groupby([
+            "model",
+            "model_group",
+            "biological_task",
+            "seed",
+        ])
+        .agg(score=("score", "mean"))
         .reset_index()
     )
-    task_scores = (
+    task_score_values = (
+        task_seed_scores.groupby(
+            ["model", "model_group", "biological_task"]
+        )
+        .agg(score=("score", "mean"))
+        .reset_index()
+    )
+    task_coverage = (
         source_scores.groupby(["model", "model_group", "biological_task"])
         .agg(
-            score=("score", "mean"),
             source_group_count=("source_group", "count"),
             dataset_count=("dataset_count", "sum"),
         )
         .reset_index()
+    )
+    task_scores = (
+        task_score_values.merge(
+            task_coverage,
+            on=["model", "model_group", "biological_task"],
+            how="left",
+            validate="one_to_one",
+        )
         .merge(
             observed_units,
             on=["model", "biological_task"],
@@ -582,58 +758,87 @@ def build_task_scores(
     return task_scores
 
 
-def build_consensus(task_scores: pd.DataFrame) -> list[dict[str, Any]]:
-    eligible = task_scores[
+def build_overall_ranking(
+    task_scores: pd.DataFrame,
+    source_seed_scores: pd.DataFrame,
+    expected_seeds: list[int],
+) -> list[dict[str, Any]]:
+    """Rank complete models by mean z-score across source datasets."""
+    eligible_tasks = task_scores[
         task_scores["rank_eligible"]
         & task_scores["biological_task"].isin(TASK_ORDER)
     ]
-    rank_matrix = eligible.pivot(index="model", columns="biological_task", values="rank")
-    score_matrix = eligible.pivot(index="model", columns="biological_task", values="score")
-    rank_matrix = rank_matrix.dropna(subset=list(TASK_ORDER))
-    score_matrix = score_matrix.loc[rank_matrix.index]
-
-    families = (
-        task_scores[["model", "model_group"]]
-        .drop_duplicates("model")
-        .set_index("model")["model_group"]
+    rank_matrix = eligible_tasks.pivot(
+        index="model",
+        columns="biological_task",
+        values="rank",
+    ).dropna(subset=list(TASK_ORDER))
+    task_score_matrix = eligible_tasks.pivot(
+        index="model",
+        columns="biological_task",
+        values="score",
     )
-    rows = []
-    for model_id in rank_matrix.index:
+    complete_sources = source_seed_scores[
+        source_seed_scores["model"].isin(rank_matrix.index)
+    ]
+    overall_seed_scores = (
+        complete_sources.groupby(["model", "model_group", "seed"])
+        .agg(
+            mean_z_score=("score", "mean"),
+            source_group_count=("source_group", "count"),
+        )
+        .reset_index()
+    )
+    expected_source_groups = source_seed_scores["source_group"].nunique()
+    overall_seed_scores = overall_seed_scores[
+        overall_seed_scores["source_group_count"] == expected_source_groups
+    ]
+    complete_seed_models = (
+        overall_seed_scores.groupby("model")["seed"]
+        .agg(lambda seeds: set(seeds) == set(expected_seeds))
+    )
+    complete_seed_models = set(
+        complete_seed_models[complete_seed_models].index
+    )
+    overall_seed_scores = overall_seed_scores[
+        overall_seed_scores["model"].isin(complete_seed_models)
+    ]
+    overall_scores = (
+        overall_seed_scores.groupby(["model", "model_group"])
+        .agg(mean_z_score=("mean_z_score", "mean"))
+        .reset_index()
+    ).copy()
+    overall_scores["rank"] = overall_scores["mean_z_score"].rank(
+        method="min",
+        ascending=False,
+    )
+    overall_scores = overall_scores.sort_values(
+        ["rank", "mean_z_score", "model"],
+        ascending=[True, False, True],
+    )
+
+    rows: list[dict[str, Any]] = []
+    for _, overall in overall_scores.iterrows():
+        model_id = overall["model"]
         task_ranks = {
             task: int(rank_matrix.loc[model_id, task])
             for task in TASK_ORDER
         }
         task_scores_for_model = {
-            task: finite(score_matrix.loc[model_id, task])
+            task: finite(task_score_matrix.loc[model_id, task])
             for task in TASK_ORDER
         }
         rows.append(
             {
                 "model_id": model_id,
-                "model_family": families.loc[model_id],
-                "rank_sum": sum(task_ranks.values()),
-                "worst_task_rank": max(task_ranks.values()),
+                "model_family": overall["model_group"],
+                "rank": int(overall["rank"]),
+                "mean_z_score": finite(overall["mean_z_score"]),
                 "task_ranks": task_ranks,
                 "task_scores": task_scores_for_model,
+                "coverage_ratio": 1.0,
             }
         )
-
-    rows.sort(
-        key=lambda row: (
-            row["rank_sum"],
-            row["worst_task_rank"],
-            row["model_id"],
-        )
-    )
-    previous_key = None
-    current_rank = 0
-    for index, row in enumerate(rows, start=1):
-        rank_key = (row["rank_sum"], row["worst_task_rank"])
-        if rank_key != previous_key:
-            current_rank = index
-            previous_key = rank_key
-        row["rank"] = current_rank
-        row["coverage_ratio"] = 1.0
     return rows
 
 
@@ -642,14 +847,34 @@ def build_payload(
     config: dict[str, Any],
 ) -> tuple[dict[str, Any], pd.DataFrame]:
     normalized, row_stats = normalize_rows(source, config)
+    expected_seeds = [
+        int(seed)
+        for seed in config["expected_seeds"]
+    ]
+    if (
+        len(expected_seeds) != int(config["expected_runs"])
+        or len(set(expected_seeds)) != len(expected_seeds)
+    ):
+        raise ValueError(
+            "expected_seeds must contain expected_runs unique values."
+        )
     units = aggregate_units(
         normalized,
-        expected_runs=int(config["expected_runs"]),
+        expected_seeds=expected_seeds,
         data_status=str(config["data_status"]),
     )
-    dataset_scores = build_dataset_scores(units)
-    task_scores = build_task_scores(units, dataset_scores)
-    consensus = build_consensus(task_scores)
+    dataset_scores = build_dataset_scores(normalized, units)
+    source_scores, source_seed_scores = build_source_scores(normalized)
+    task_scores = build_task_scores(
+        units,
+        source_scores,
+        source_seed_scores,
+    )
+    overall_ranking = build_overall_ranking(
+        task_scores,
+        source_seed_scores,
+        expected_seeds=expected_seeds,
+    )
 
     task_rankings: dict[str, list[dict[str, Any]]] = {}
     for task in TASK_ORDER:
@@ -722,10 +947,10 @@ def build_payload(
                 "expected_runs": int(config["expected_runs"]),
                 "mean": finite(row["mean"]),
                 "std_sample": finite(row["std_sample"]),
+                "mean_z_score": finite(row["mean_z_score"]),
+                "std_z_score": finite(row["std_z_score"]),
                 "ci95_low": finite(row["ci95_low"]),
                 "ci95_high": finite(row["ci95_high"]),
-                "unit_percentile": finite(row["unit_percentile"]),
-                "peer_count": int(row["peer_count"]),
                 "coverage_status": row["coverage_status"],
                 "data_status": row["data_status"],
                 "seeds": row["seeds"],
@@ -760,7 +985,7 @@ def build_payload(
     ]
 
     payload = {
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "source": {
             "artifact": SOURCE_PATH.name,
             "artifact_sha256": file_sha256(SOURCE_PATH),
@@ -779,13 +1004,14 @@ def build_payload(
         },
         "methodology": {
             "split_policy": "Each dataset's declared default split is used for every model.",
-            "seed_aggregation": "Mean across seeded test results with sample SD and Student-t 95% CI.",
+            "standardization": "Metrics are z-scored across models for each seed, dataset, and target; Pearson correlations are Fisher-transformed first.",
+            "seed_aggregation": "Z-scores are averaged across seeds after target and sub-dataset aggregation.",
+            "expected_seeds": expected_seeds,
             "regression_result_task": config["regression_result_task"],
-            "unit_ranking": "Models are ranked within each dataset-target-metric unit, then converted to a 0-1 percentile.",
             "dataset_weighting": "Targets are averaged within each dataset so multi-target datasets do not dominate.",
             "source_weighting": "Registered dataset IDs are averaged within source dataset groups.",
-            "task_weighting": "Source-group percentiles are averaged within each biological task.",
-            "consensus": "Sum of classification, multilabel, and regression task ranks for models with complete coverage.",
+            "task_weighting": "Source-dataset z-scores are averaged within each prediction task.",
+            "overall": "Complete models are ranked by mean z-score across source datasets.",
         },
         "row_stats": row_stats,
         "exclusions": {
@@ -801,7 +1027,7 @@ def build_payload(
         "datasets": datasets,
         "models": models,
         "rankings": {
-            "consensus": consensus,
+            "overall": overall_ranking,
             **task_rankings,
         },
         "dataset_rankings": dataset_rankings,
@@ -845,6 +1071,8 @@ def main() -> None:
         "expected_runs",
         "mean",
         "std_sample",
+        "mean_z_score",
+        "std_z_score",
         "ci95_low",
         "ci95_high",
         "coverage_status",
@@ -868,7 +1096,7 @@ def main() -> None:
 
     print(
         "Built leaderboard: "
-        f"{len(payload['rankings']['consensus'])} consensus-ranked models, "
+        f"{len(payload['rankings']['overall'])} overall-ranked models, "
         f"{len(payload['datasets'])} datasets, "
         f"{len(payload['results'])} result units."
     )
