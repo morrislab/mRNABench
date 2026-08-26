@@ -30,24 +30,24 @@ const setLabel = {
 
 <BaseLayout
   title="Dataset catalog | mRNABench"
-  description="Browse registered mRNABench datasets, including task, sequence source, default split, evaluation routes, and citation."
+  description="Browse mRNABench datasets, including task, sequence source, default split, evaluation methods, and citation."
 >
   <PageIntro
     eyebrow="Catalog"
     title="Datasets"
-    lead="Browse each registered dataset's task, sequence source, default split, targets, evaluation routes, and citation."
+    lead="Browse each dataset's task, sequence source, default split, targets, evaluation methods, and citation."
   />
 
   <section class="catalog-summary shell">
     <dl>
-      <div><dt>Registered identifiers</dt><dd>{datasets.length}</dd></div>
-      <div><dt>Core benchmark</dt><dd>{coreCount}</dd></div>
-      <div><dt>Extended set</dt><dd>{extendedCount}</dd></div>
-      <div><dt>Biological areas</dt><dd>{categories.length}</dd></div>
+      <div><dt>Datasets</dt><dd>{datasets.length}</dd></div>
+      <div><dt>Core datasets</dt><dd>{coreCount}</dd></div>
+      <div><dt>Extended datasets</dt><dd>{extendedCount}</dd></div>
+      <div><dt>Research areas</dt><dd>{categories.length}</dd></div>
     </dl>
     <p>
-      One source study can produce several registered datasets when species,
-      cell type, reporter, or sequence region changes the prediction problem.
+      One study may contribute several datasets when the species, cell type,
+      reporter, or sequence region changes the prediction problem.
     </p>
   </section>
 
@@ -55,7 +55,7 @@ const setLabel = {
     <div class="dataset-filters">
       <label>
         <span>Find a dataset</span>
-        <input type="search" placeholder="Name or identifier" data-dataset-search />
+        <input type="search" placeholder="Name or dataset ID" data-dataset-search />
       </label>
       <label>
         <span>Biological area</span>
@@ -97,11 +97,11 @@ const setLabel = {
             </div>
             <dl>
               <div><dt>Task</dt><dd>{taskLabel[dataset.task]}</dd></div>
-              <div><dt>Sequence source</dt><dd>{sourceLabel[dataset.species]}</dd></div>
-              <div><dt>Default split</dt><dd>{splitLabel[dataset.split]}</dd></div>
-              <div><dt>Set</dt><dd>{setLabel[dataset.benchmarkSet]}</dd></div>
+              <div><dt>Source</dt><dd>{sourceLabel[dataset.species]}</dd></div>
+              <div><dt>Split</dt><dd>{splitLabel[dataset.split]}</dd></div>
+              <div><dt>Group</dt><dd>{setLabel[dataset.benchmarkSet]}</dd></div>
               <div><dt>Targets</dt><dd>{dataset.targetSummary}</dd></div>
-              <div><dt>Routes</dt><dd>{dataset.evaluations.join(", ")}</dd></div>
+              <div><dt>Evaluations</dt><dd>{dataset.evaluations.join(", ")}</dd></div>
             </dl>
             <div class="dataset-list__links">
               <a href={dataset.citationUrl} aria-label={`${dataset.name}: ${dataset.citationLabel}`}>{dataset.citationLabel}</a>
@@ -251,7 +251,11 @@ const setLabel = {
 
   .dataset-list article {
     display: grid;
-    grid-template-columns: minmax(13rem, 0.8fr) minmax(17rem, 1.25fr) minmax(18rem, 1fr) 7rem;
+    grid-template-columns:
+      minmax(13rem, 0.8fr)
+      minmax(14rem, 0.9fr)
+      minmax(24rem, 1.45fr)
+      minmax(7rem, 0.45fr);
     gap: 1.4rem;
     align-items: start;
     padding: 1.5rem 1rem;
@@ -301,12 +305,12 @@ const setLabel = {
 
   .dataset-list dl {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.65rem 1rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.65rem 0.85rem;
     margin: 0;
   }
 
-  .dataset-list dl div:last-child {
+  .dataset-list dl div:nth-child(n + 5) {
     grid-column: 1 / -1;
   }
 
@@ -344,8 +348,8 @@ const setLabel = {
       grid-template-columns: repeat(3, 1fr);
     }
 
-    .dataset-list dl div:last-child {
-      grid-column: auto;
+    .dataset-list dl div:nth-child(n + 5) {
+      grid-column: 1 / -1;
     }
   }
 
@@ -368,7 +372,7 @@ const setLabel = {
       grid-template-columns: repeat(2, 1fr);
     }
 
-    .dataset-list dl div:last-child {
+    .dataset-list dl div:nth-child(n + 5) {
       grid-column: 1 / -1;
     }
   }
