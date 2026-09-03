@@ -1,4 +1,0 @@
-User-agent: *
-Allow: /
-
-Sitemap: https://morrislab.github.io/mRNABench/sitemap-index.xml

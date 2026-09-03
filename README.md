@@ -2,7 +2,7 @@
 
 <div align="center">
 
-<img width="620" alt="mRNABench logo" src="assets/lockup/mrnabench-lockup-5bar-black-outlined.svg" />
+<img width="620" alt="mRNABench logo" src="https://raw.githubusercontent.com/morrislab/mRNABench/main/assets/lockup/mrnabench-lockup-5bar-black-outlined.svg" />
 
 [![PyPI version](https://badge.fury.io/py/mrna-bench.svg)](https://pypi.org/project/mrna-bench/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
@@ -110,9 +110,6 @@ fine-tuning, result analysis, and extension guides.
 | Add a model | [Model extension guide](https://morrislab.github.io/mRNABench/docs/add-model/) |
 | Look up Python signatures | [Python API](https://morrislab.github.io/mRNABench/docs/api/) |
 | Browse supported datasets and models | [Dataset catalog](https://morrislab.github.io/mRNABench/datasets/) and [model catalog](https://morrislab.github.io/mRNABench/models/) |
-
-The Astro source for the site is in [`website/`](website/). Local setup and
-build commands are documented in [`website/DEVELOPMENT.md`](website/DEVELOPMENT.md).
 
 ## Development
 
