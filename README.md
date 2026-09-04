@@ -2,11 +2,11 @@
 
 <div align="center">
 
-<img width="620" alt="mRNABench logo" src="https://raw.githubusercontent.com/morrislab/mRNABench/main/assets/lockup/mrnabench-lockup-5bar-black-outlined.svg" />
+<img width="620" alt="mRNABench logo" src="https://raw.githubusercontent.com/morrislab/mRNABench/main/assets/mrnabench-lockup-5bar-black-outlined.svg" />
 
 [![PyPI version](https://badge.fury.io/py/mrna-bench.svg)](https://pypi.org/project/mrna-bench/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![bioRxiv](https://img.shields.io/badge/bioRxiv-2025.07.05.662870-b31b1b.svg)](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)
 
 </div>

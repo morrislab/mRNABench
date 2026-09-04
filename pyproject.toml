@@ -14,7 +14,7 @@ license = { file = "LICENSE" }  # Include a LICENSE file in your repo
 keywords = ["mrna", "genomic foundation model", "benchmark"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU Affero General Public License v3 or later (AGPLv3+)",
+    "License :: OSI Approved :: Apache Software License",
     "Operating System :: Unix"
 ]
 dependencies = [
