@@ -151,6 +151,33 @@ class FineTuneTrainer:
 
         self.wrapper.task_head.load_state_dict(state["head"])
 
+    def _forward_batch(
+        self, batch: dict, is_vep: bool
+    ) -> torch.Tensor:
+        """Dispatch a batch through the wrapper's standard or VEP forward.
+
+        Args:
+            batch: Collated batch dict from the dataloader.
+            is_vep: Whether this is a VEP paired batch.
+
+        Returns:
+            Model output tensor.
+        """
+        if is_vep:
+            return self.wrapper.forward_vep(
+                ref_sequences=batch["ref_sequence"],
+                alt_sequences=batch["alt_sequence"],
+                ref_cds=batch.get("ref_cds"),
+                alt_cds=batch.get("alt_cds"),
+                ref_splice=batch.get("ref_splice"),
+                alt_splice=batch.get("alt_splice"),
+            )
+        return self.wrapper.forward(
+            sequences=batch["sequence"],
+            cds=batch.get("cds"),
+            splice=batch.get("splice"),
+        )
+
     def _get_amp_dtype(self) -> torch.dtype | None:
         """Return the autocast dtype if AMP is enabled, else None."""
         if not self.config.use_amp:
@@ -187,18 +214,16 @@ class FineTuneTrainer:
             )  # type: ignore[operator]
             target = target.to(self.device)
 
-            sequences = batch["sequence"]
-            cds = batch.get("cds")
-            splice = batch.get("splice")
+            is_vep = "ref_sequence" in batch
 
             if amp_dtype is not None:
                 with torch.amp.autocast(
                     self.device.type, dtype=amp_dtype
                 ):
-                    output = self.wrapper.forward(sequences, cds, splice)
+                    output = self._forward_batch(batch, is_vep)
                     loss = self.loss_fn(output.float(), target)
             else:
-                output = self.wrapper.forward(sequences, cds, splice)
+                output = self._forward_batch(batch, is_vep)
                 loss = self.loss_fn(output, target)
 
             batch_loss = loss.item()
@@ -255,20 +280,21 @@ class FineTuneTrainer:
             )  # type: ignore[operator]
             target = target.to(self.device)
 
-            sequences = batch["sequence"]
-            cds = batch.get("cds")
-            splice = batch.get("splice")
+            is_vep = "ref_sequence" in batch
+            batch_size = len(
+                batch["ref_sequence"] if is_vep else batch["sequence"]
+            )
 
             if amp_dtype is not None:
                 with torch.amp.autocast(
                     self.device.type, dtype=amp_dtype
                 ):
-                    output = self.wrapper.forward(sequences, cds, splice)
+                    output = self._forward_batch(batch, is_vep)
                     loss = self.loss_fn(output.float(), target)
             else:
-                output = self.wrapper.forward(sequences, cds, splice)
+                output = self._forward_batch(batch, is_vep)
                 loss = self.loss_fn(output, target)
-            total_loss += loss.item() * len(sequences)
+            total_loss += loss.item() * batch_size
 
             all_preds.append(output.float().cpu())
             all_targets.append(target.cpu())

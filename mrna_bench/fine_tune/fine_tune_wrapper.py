@@ -31,6 +31,9 @@ class FineTuneWrapper(nn.Module):
     def __init__(self, model: EmbeddingModel, task_head: nn.Module):
         """Initialize FineTuneWrapper.
 
+        Freezes all backbone parameters by default. Call apply_lora() to
+        add trainable LoRA adapters, or leave as-is for head-only training.
+
         Args:
             model: EmbeddingModel instance to use as backbone.
             task_head: Task head module. Must have task_type and
@@ -40,6 +43,9 @@ class FineTuneWrapper(nn.Module):
         self.backbone = model
         self.task_head = task_head.to(model.device)
         self.device = model.device
+
+        for param in self.backbone.get_peft_target().parameters():
+            param.requires_grad = False
 
     def apply_lora(
         self,
@@ -135,6 +141,34 @@ class FineTuneWrapper(nn.Module):
         except AttributeError:
             pass
 
+    def _embed_and_stack(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = mean_pool,
+    ) -> torch.Tensor:
+        """Embed sequences and stack into a batch tensor.
+
+        Args:
+            sequences: List of input sequences.
+            cds: CDS tracks for models that use them.
+            splice: Splice tracks for models that use them.
+            agg_fn: Aggregation function for pooling.
+
+        Returns:
+            Stacked embeddings of shape (batch, hidden_dim).
+        """
+        embeddings = self.backbone.embed(sequences, cds, splice, agg_fn)
+
+        if embeddings[0].dim() != 1:
+            raise ValueError(
+                f"agg_fn must produce a 1-D pooled vector of shape (H,). "
+                f"Got shape {embeddings[0].shape}."
+            )
+
+        return torch.stack(embeddings, dim=0).to(self.device)
+
     def forward(
         self,
         sequences: list[str],
@@ -153,17 +187,42 @@ class FineTuneWrapper(nn.Module):
         Returns:
             Task head output tensor.
         """
-        embeddings = self.backbone.embed(sequences, cds, splice, agg_fn)
-
-        # agg_fns which don't result in a 1-D pooled vector are not supported
-        if embeddings[0].dim() != 1:
-            raise ValueError(
-                f"agg_fn must produce a 1-D pooled vector of shape (H,). "
-                f"Got shape {embeddings[0].shape}."
-            )
-
-        stacked = torch.stack(embeddings, dim=0).to(self.device)
+        stacked = self._embed_and_stack(sequences, cds, splice, agg_fn)
         return self.task_head(stacked)
+
+    def forward_vep(
+        self,
+        ref_sequences: list[str],
+        alt_sequences: list[str],
+        ref_cds: list[np.ndarray] | None = None,
+        alt_cds: list[np.ndarray] | None = None,
+        ref_splice: list[np.ndarray] | None = None,
+        alt_splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = mean_pool,
+    ) -> torch.Tensor:
+        """VEP forward: embed ref and alt separately, return score difference.
+
+        Args:
+            ref_sequences: Reference (wild-type) sequences.
+            alt_sequences: Alternate (variant) sequences.
+            ref_cds: Reference CDS tracks.
+            alt_cds: Alternate CDS tracks.
+            ref_splice: Reference splice tracks.
+            alt_splice: Alternate splice tracks.
+            agg_fn: Aggregation function for pooling.
+
+        Returns:
+            Difference of task head predictions (alt - ref).
+        """
+        ref_stacked = self._embed_and_stack(
+            ref_sequences, ref_cds, ref_splice, agg_fn,
+        )
+        alt_stacked = self._embed_and_stack(
+            alt_sequences, alt_cds, alt_splice, agg_fn,
+        )
+        preds_ref = self.task_head(ref_stacked)
+        preds_alt = self.task_head(alt_stacked)
+        return preds_alt - preds_ref
 
     def get_trainable_parameters(self) -> list[torch.nn.Parameter]:
         """Get all trainable parameters for optimizer.

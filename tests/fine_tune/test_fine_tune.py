@@ -29,20 +29,27 @@ class TinyBackbone(EmbeddingModel):
         return list(self.model(values))
 
 
-def test_trainable_state_without_peft_round_trips():
+def test_head_only_state_round_trips():
+    """Without PEFT, backbone is frozen and only head state is saved."""
     backbone = TinyBackbone()
     head = TaskHead(2, 1, "regression")
-    trainer = FineTuneTrainer(FineTuneWrapper(backbone, head))
+    wrapper = FineTuneWrapper(backbone, head)
+    trainer = FineTuneTrainer(wrapper)
+
+    assert not any(
+        p.requires_grad for p in backbone.model.parameters()
+    )
 
     state = trainer._save_trainable_state()
-    assert state["lora"]
+    assert not state["lora"]
+    assert state["head"]
 
-    original = backbone.model.weight.detach().clone()
+    original = head.mlp[0].weight.detach().clone()
     with torch.no_grad():
-        backbone.model.weight.add_(1)
+        head.mlp[0].weight.add_(1)
     trainer._restore_trainable_state(state)
 
-    assert torch.equal(backbone.model.weight, original)
+    assert torch.equal(head.mlp[0].weight, original)
 
 
 def test_multiclass_head_metrics():

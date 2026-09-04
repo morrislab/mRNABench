@@ -15,6 +15,7 @@ from mrna_bench.fine_tune import (
     TaskHead,
     TrainerConfig,
     create_dataloaders,
+    create_vep_dataloaders,
 )
 from mrna_bench.models import MODEL_CATALOG
 
@@ -148,7 +149,9 @@ def run_finetune(
         100 * param_info["backbone_trainable"] / param_info["backbone_total"],
     ))
 
-    train_loader, val_loader, test_loader = create_dataloaders(
+    is_vep = any("vep" in e for e in dataset.metadata.evaluations)
+    create_fn = create_vep_dataloaders if is_vep else create_dataloaders
+    train_loader, val_loader, test_loader = create_fn(
         dataset=dataset,
         target_col=target_col,
         split_type=split_type,

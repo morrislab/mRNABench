@@ -10,6 +10,8 @@ from mrna_bench.datasets.benchmark_dataset import BenchmarkDataset
 class SequenceDataset(Dataset):
     """PyTorch Dataset for sequence fine-tuning."""
 
+    is_vep = False
+
     def __init__(
         self,
         sequences: list[str],
@@ -56,27 +58,91 @@ class SequenceDataset(Dataset):
         return item
 
 
+class VEPDataset(Dataset):
+    """PyTorch Dataset for VEP fine-tuning with paired ref/alt sequences."""
+
+    is_vep = True
+
+    def __init__(
+        self,
+        ref_sequences: list[str],
+        alt_sequences: list[str],
+        targets: np.ndarray,
+        ref_cds: list[np.ndarray] | None = None,
+        alt_cds: list[np.ndarray] | None = None,
+        ref_splice: list[np.ndarray] | None = None,
+        alt_splice: list[np.ndarray] | None = None,
+    ):
+        """Initialize VEPDataset.
+
+        Args:
+            ref_sequences: List of reference (wild-type) sequences.
+            alt_sequences: List of alternate (variant) sequences.
+            targets: Target values array.
+            ref_cds: List of reference CDS tracks (optional).
+            alt_cds: List of alternate CDS tracks (optional).
+            ref_splice: List of reference splice tracks (optional).
+            alt_splice: List of alternate splice tracks (optional).
+        """
+        self.ref_sequences = ref_sequences
+        self.alt_sequences = alt_sequences
+        self.targets = targets
+        self.ref_cds = ref_cds
+        self.alt_cds = alt_cds
+        self.ref_splice = ref_splice
+        self.alt_splice = alt_splice
+
+    def __len__(self) -> int:
+        """Return dataset length."""
+        return len(self.ref_sequences)
+
+    def __getitem__(self, idx: int) -> dict:
+        """Get item by index.
+
+        Returns:
+            Dictionary with ref/alt sequences, target, and optional tracks.
+        """
+        item: dict = {
+            "ref_sequence": self.ref_sequences[idx],
+            "alt_sequence": self.alt_sequences[idx],
+            "target": self.targets[idx],
+        }
+
+        if self.ref_cds is not None:
+            item["ref_cds"] = self.ref_cds[idx]
+        if self.alt_cds is not None:
+            item["alt_cds"] = self.alt_cds[idx]
+        if self.ref_splice is not None:
+            item["ref_splice"] = self.ref_splice[idx]
+        if self.alt_splice is not None:
+            item["alt_splice"] = self.alt_splice[idx]
+
+        return item
+
+
 def collate_fn(batch: list[dict]) -> dict:
     """Collate batch keeping variable-length arrays as lists.
 
     Args:
-        batch: List of sample dicts from SequenceDataset.
+        batch: List of sample dicts from SequenceDataset or VEPDataset.
 
     Returns:
         Collated dict with sequences as list, targets as array.
     """
-    sequences = [item["sequence"] for item in batch]
     targets = np.array([item["target"] for item in batch])
 
-    result: dict = {
-        "sequence": sequences,
-        "target": targets,
-    }
+    result: dict = {"target": targets}
 
-    if "cds" in batch[0]:
-        result["cds"] = [item["cds"] for item in batch]
-    if "splice" in batch[0]:
-        result["splice"] = [item["splice"] for item in batch]
+    if "sequence" in batch[0]:
+        result["sequence"] = [item["sequence"] for item in batch]
+    if "ref_sequence" in batch[0]:
+        result["ref_sequence"] = [item["ref_sequence"] for item in batch]
+        result["alt_sequence"] = [item["alt_sequence"] for item in batch]
+
+    for key in ("cds", "splice", "ref_cds", "alt_cds",
+                "ref_splice", "alt_splice"):
+        if key in batch[0]:
+            result[key] = [item[key] for item in batch]
 
     return result
 
@@ -137,5 +203,88 @@ def create_dataloaders(
     train_loader = df_to_loader(splits["train_df"], shuffle=True)
     val_loader = df_to_loader(splits["val_df"], shuffle=False)
     test_loader = df_to_loader(splits["test_df"], shuffle=False)
+
+    return train_loader, val_loader, test_loader
+
+
+def create_vep_dataloaders(
+    dataset: BenchmarkDataset,
+    target_col: str,
+    split_type: str,
+    random_seed: int,
+    batch_size: int,
+    split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
+    num_workers: int = 4,
+    pin_memory: bool = True,
+) -> tuple[DataLoader, DataLoader, DataLoader]:
+    """Create train/val/test DataLoaders for VEP fine-tuning.
+
+    Splits on variant rows only (excluding wild-type), then pairs each
+    variant with its transcript's wild-type via get_vep_pairs().
+
+    Args:
+        dataset: VEP BenchmarkDataset instance (must have get_vep_pairs).
+        target_col: Target column name.
+        split_type: Type of data split.
+        random_seed: Random seed for reproducible splits.
+        batch_size: Batch size for DataLoaders.
+        split_ratios: Train/val/test split ratios.
+        num_workers: Number of DataLoader workers.
+        pin_memory: Pin memory for faster GPU transfer.
+
+    Returns:
+        Tuple of (train_loader, val_loader, test_loader).
+    """
+    data_df = dataset.data_df
+    is_wt = data_df["description"].eq("wild-type")
+    variant_df = data_df[~is_wt].reset_index(drop=True)
+
+    from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
+    splitter = SPLIT_CATALOG[split_type]()
+    train_df, val_df, test_df = splitter.get_all_splits_df(
+        df=variant_df,
+        split_ratios=split_ratios,
+        random_seed=random_seed,
+    )
+
+    def df_to_vep_loader(split_df, shuffle: bool) -> DataLoader:
+        full_split = split_df.merge(
+            data_df[is_wt][["transcript_id", "sequence", "cds", "splice"]],
+            on="transcript_id",
+            how="left",
+            suffixes=("", "_ref"),
+            validate="many_to_one",
+        )
+
+        ref_sequences = full_split["sequence_ref"].tolist()
+        alt_sequences = full_split["sequence"].tolist()
+
+        raw_targets = full_split[target_col].values
+        if hasattr(raw_targets[0], "__len__"):
+            targets = np.stack(raw_targets).astype(np.float32)
+        else:
+            targets = raw_targets.astype(np.float32)
+
+        ref_cds = full_split["cds_ref"].tolist() if "cds" in split_df.columns else None
+        alt_cds = full_split["cds"].tolist() if "cds" in split_df.columns else None
+        ref_splice = full_split["splice_ref"].tolist() if "splice" in split_df.columns else None
+        alt_splice = full_split["splice"].tolist() if "splice" in split_df.columns else None
+
+        ds = VEPDataset(
+            ref_sequences, alt_sequences, targets,
+            ref_cds, alt_cds, ref_splice, alt_splice,
+        )
+        return DataLoader(
+            ds,
+            batch_size=batch_size,
+            shuffle=shuffle,
+            collate_fn=collate_fn,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
+        )
+
+    train_loader = df_to_vep_loader(train_df, shuffle=True)
+    val_loader = df_to_vep_loader(val_df, shuffle=False)
+    test_loader = df_to_vep_loader(test_df, shuffle=False)
 
     return train_loader, val_loader, test_loader
