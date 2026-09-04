@@ -1,5 +1,6 @@
 """Trainer for fine-tuning genomic foundation models."""
 
+import gc
 from dataclasses import dataclass
 
 from typing import Any, Callable
@@ -28,6 +29,8 @@ class TrainerConfig:
     # Total optimizer steps for decay schedules. If None, computed from the
     # dataloader length at the start of fit().
     total_steps: int | None = None
+    use_amp: bool = True
+    random_seed: int | None = None
 
 
 class FineTuneTrainer:
@@ -51,10 +54,7 @@ class FineTuneTrainer:
         self.loss_fn: Callable[..., torch.Tensor] = _head.get_loss_fn()
         self.optimizer: torch.optim.Optimizer | None = None
         self.scheduler: torch.optim.lr_scheduler.LRScheduler | None = None
-        self.history: dict[str, list[float]] = {
-            "train_loss": [],
-            "val_loss": [],
-        }
+        self.best_val_metrics: dict[str, float] = {}
 
     def _create_optimizer(self) -> torch.optim.Optimizer:
         """Create AdamW optimizer for trainable parameters."""
@@ -151,6 +151,14 @@ class FineTuneTrainer:
 
         self.wrapper.task_head.load_state_dict(state["head"])
 
+    def _get_amp_dtype(self) -> torch.dtype | None:
+        """Return the autocast dtype if AMP is enabled, else None."""
+        if not self.config.use_amp:
+            return None
+        if self.device.type == "cuda":
+            return torch.bfloat16
+        return None
+
     def train_epoch(self, dataloader: DataLoader) -> float:
         """Train for one epoch.
 
@@ -164,6 +172,8 @@ class FineTuneTrainer:
         self.wrapper.set_train_mode()
         total_loss = 0.0
         num_batches = 0
+        accum = self.config.gradient_accumulation_steps
+        amp_dtype = self._get_amp_dtype()
 
         progress = tqdm(dataloader, desc="Training")
         self.optimizer.zero_grad()
@@ -181,14 +191,28 @@ class FineTuneTrainer:
             cds = batch.get("cds")
             splice = batch.get("splice")
 
-            output = self.wrapper.forward(sequences, cds, splice)
-            loss = self.loss_fn(output, target)
+            if amp_dtype is not None:
+                with torch.amp.autocast(
+                    self.device.type, dtype=amp_dtype
+                ):
+                    output = self.wrapper.forward(sequences, cds, splice)
+                    loss = self.loss_fn(output.float(), target)
+            else:
+                output = self.wrapper.forward(sequences, cds, splice)
+                loss = self.loss_fn(output, target)
 
             batch_loss = loss.item()
-            loss = loss / self.config.gradient_accumulation_steps
+
+            # Scale by the actual number of batches in this accumulation
+            # group — the final group may be smaller than `accum`.
+            remaining = len(dataloader) - (batch_idx // accum) * accum
+            group_size = min(accum, remaining)
+            loss = loss / group_size
             loss.backward()
 
-            if (batch_idx + 1) % self.config.gradient_accumulation_steps == 0:
+            if (batch_idx + 1) % accum == 0 or (
+                batch_idx + 1
+            ) == len(dataloader):
                 torch.nn.utils.clip_grad_norm_(
                     self.wrapper.get_trainable_parameters(),
                     self.config.max_grad_norm,
@@ -203,20 +227,6 @@ class FineTuneTrainer:
             total_loss += batch_loss
             num_batches += 1
             progress.set_postfix({"loss": batch_loss})
-
-        # Flush any remaining gradients from a partial final accumulation
-        # Note: the loss was divided by gradient_accumulation_steps rather than
-        # the actual remainder size, so the final step's gradient scale is
-        # slightly off. Good enough for now but may need revisiting.
-        if num_batches % self.config.gradient_accumulation_steps != 0:
-            torch.nn.utils.clip_grad_norm_(
-                self.wrapper.get_trainable_parameters(),
-                self.config.max_grad_norm,
-            )
-            self.optimizer.step()
-            if self.scheduler is not None:
-                self.scheduler.step()
-            self.optimizer.zero_grad()
 
         return total_loss / num_batches
 
@@ -234,6 +244,7 @@ class FineTuneTrainer:
         total_loss = 0.0
         all_preds = []
         all_targets = []
+        amp_dtype = self._get_amp_dtype()
 
         for batch in tqdm(dataloader, desc="Evaluating"):
             target = batch["target"]
@@ -248,11 +259,18 @@ class FineTuneTrainer:
             cds = batch.get("cds")
             splice = batch.get("splice")
 
-            output = self.wrapper.forward(sequences, cds, splice)
-            loss = self.loss_fn(output, target)
+            if amp_dtype is not None:
+                with torch.amp.autocast(
+                    self.device.type, dtype=amp_dtype
+                ):
+                    output = self.wrapper.forward(sequences, cds, splice)
+                    loss = self.loss_fn(output.float(), target)
+            else:
+                output = self.wrapper.forward(sequences, cds, splice)
+                loss = self.loss_fn(output, target)
             total_loss += loss.item() * len(sequences)
 
-            all_preds.append(output.cpu())
+            all_preds.append(output.float().cpu())
             all_targets.append(target.cpu())
 
         n = len(dataloader.dataset)  # type: ignore[arg-type]
@@ -283,6 +301,17 @@ class FineTuneTrainer:
         Returns:
             Training history dictionary.
         """
+        if self.config.random_seed is not None:
+            torch.manual_seed(self.config.random_seed)
+            np.random.seed(self.config.random_seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self.config.random_seed)
+
+        self.history: dict[str, list[float]] = {
+            "train_loss": [],
+            "val_loss": [],
+        }
+
         self.optimizer = self._create_optimizer()
         steps_per_epoch = max(
             len(train_dataloader) // self.config.gradient_accumulation_steps, 1
@@ -325,7 +354,13 @@ class FineTuneTrainer:
         if best_state is not None:
             self._restore_trainable_state(best_state)
 
-        # best_val_metrics holds the full metrics from the best epoch
         self.best_val_metrics = best_val_metrics
 
         return self.history
+
+    @staticmethod
+    def cleanup():
+        """Free GPU memory between runs."""
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()

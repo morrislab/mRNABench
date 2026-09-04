@@ -1,6 +1,7 @@
 """Run fine-tuning for a model on a benchmark dataset."""
 
 import argparse
+import gc
 import json
 
 import numpy as np
@@ -160,6 +161,7 @@ def run_finetune(
         epochs=epochs,
         gradient_accumulation_steps=accumulation_steps,
         lr_schedule=lr_schedule,
+        random_seed=random_seed,
     )
     trainer = FineTuneTrainer(wrapper, config)
     trainer.fit(train_loader, val_loader)
@@ -274,3 +276,6 @@ if __name__ == "__main__":
                     random_seed=seed,
                     history=history,
                 )
+
+                del val_metrics, test_metrics, history
+                FineTuneTrainer.cleanup()

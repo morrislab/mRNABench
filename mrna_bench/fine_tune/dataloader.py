@@ -88,6 +88,8 @@ def create_dataloaders(
     random_seed: int,
     batch_size: int,
     split_ratios: tuple[float, float, float] = (0.7, 0.15, 0.15),
+    num_workers: int = 4,
+    pin_memory: bool = True,
 ) -> tuple[DataLoader, DataLoader, DataLoader]:
     """Create train/val/test DataLoaders from a BenchmarkDataset.
 
@@ -98,6 +100,8 @@ def create_dataloaders(
         random_seed: Random seed for reproducible splits.
         batch_size: Batch size for DataLoaders.
         split_ratios: Train/val/test split ratios.
+        num_workers: Number of DataLoader workers.
+        pin_memory: Pin memory for faster GPU transfer.
 
     Returns:
         Tuple of (train_loader, val_loader, test_loader).
@@ -126,6 +130,8 @@ def create_dataloaders(
             batch_size=batch_size,
             shuffle=shuffle,
             collate_fn=collate_fn,
+            num_workers=num_workers,
+            pin_memory=pin_memory,
         )
 
     train_loader = df_to_loader(splits["train_df"], shuffle=True)

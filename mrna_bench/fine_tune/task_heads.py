@@ -88,8 +88,9 @@ class TaskHead(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Forward pass through head.
 
-        For regression, squeezes the last dimension so the output shape
-        matches the target shape (batch,) rather than (batch, 1).
+        For regression with a single target, squeezes the last dimension
+        so the output shape matches the target shape (batch,) rather
+        than (batch, 1).
 
         Args:
             x: Input embedding tensor of shape (batch, input_dim).
@@ -98,7 +99,7 @@ class TaskHead(nn.Module):
             Output tensor.
         """
         out = self.mlp(x)
-        if self.task_type == "regression":
+        if self.task_type == "regression" and self.output_dim == 1:
             out = out.squeeze(-1)
         return out
 
@@ -172,11 +173,36 @@ class TaskHead(nn.Module):
             Dictionary of metric name to value.
         """
         if self.task_type == "regression":
-            preds_np = logits.numpy().flatten()
-            targets_np = targets.numpy().flatten()
+            preds_np = logits.numpy()
+            targets_np = targets.numpy()
+            if preds_np.ndim == 1:
+                preds_np = preds_np.reshape(-1, 1)
+                targets_np = targets_np.reshape(-1, 1)
+
+            n_targets = preds_np.shape[1]
+            pearson_vals = []
+            spearman_vals = []
+            for col in range(n_targets):
+                p = preds_np[:, col]
+                t = targets_np[:, col]
+                mask = np.isfinite(p) & np.isfinite(t)
+                if mask.sum() < 2:
+                    pearson_vals.append(float("nan"))
+                    spearman_vals.append(float("nan"))
+                    continue
+                pearson_vals.append(float(pearsonr(p[mask], t[mask])[0]))
+                spearman_vals.append(float(spearmanr(p[mask], t[mask])[0]))
+
+            if n_targets == 1:
+                return {
+                    "pearson_r": pearson_vals[0],
+                    "spearman_r": spearman_vals[0],
+                }
             return {
-                "pearson_r": float(pearsonr(preds_np, targets_np)[0]),
-                "spearman_r": float(spearmanr(preds_np, targets_np)[0]),
+                "pearson_r_mean": float(np.nanmean(pearson_vals)),
+                "spearman_r_mean": float(np.nanmean(spearman_vals)),
+                "pearson_r_per_target": pearson_vals,
+                "spearman_r_per_target": spearman_vals,
             }
 
         scores_np = self.score(logits).numpy()
