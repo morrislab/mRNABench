@@ -71,7 +71,7 @@ def test_rinalmo_giga_output(rinalmo_giga):
     assert torch.allclose(
         torch.Tensor([-0.00032]),
         torch.mean(output),
-        atol=1e-4
+        atol=1e-5
     )
 
 

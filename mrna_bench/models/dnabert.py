@@ -108,6 +108,10 @@ class DNABERT(EmbeddingModel):
 
     def _seq_to_kmers(self, seq: str) -> str:
         """Convert a DNA sequence to overlapping space-delimited k-mers."""
+        if len(seq) < self.k:
+            raise ValueError(
+                f"DNABERT-{self.k}mer requires at least {self.k} nucleotides."
+            )
         return " ".join(
             seq[i:i + self.k]
             for i in range(len(seq) - self.k + 1)
@@ -131,7 +135,9 @@ class DNABERT(EmbeddingModel):
     def _chunk_sequence_for_kmers(self, sequence: str) -> list[str]:
         """Split sequence into chunks with at most 510 k-mer tokens each."""
         if len(sequence) < self.k:
-            return [sequence]
+            raise ValueError(
+                f"DNABERT-{self.k}mer requires at least {self.k} nucleotides."
+            )
 
         total_kmers = len(sequence) - self.k + 1
         chunks = []
@@ -148,14 +154,10 @@ class DNABERT(EmbeddingModel):
     ) -> list[tuple[str, np.ndarray | None, np.ndarray | None]]:
         """Chunk without dropping k-mers that cross chunk boundaries."""
         chunks = self._chunk_sequence_for_kmers(sequence)
-        starts = (
-            [0]
-            if len(sequence) < self.k
-            else range(
-                0,
-                len(sequence) - self.k + 1,
-                self.max_kmer_tokens,
-            )
+        starts = range(
+            0,
+            len(sequence) - self.k + 1,
+            self.max_kmer_tokens,
         )
         return [
             (

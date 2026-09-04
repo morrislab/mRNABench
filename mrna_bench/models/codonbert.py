@@ -104,6 +104,10 @@ class CodonBERT(EmbeddingModel):
             Space-separated codon string, e.g. "AUG UAA GCA".
         """
         n = len(sequence) - len(sequence) % 3
+        if n == 0:
+            raise ValueError(
+                "CodonBERT requires at least one complete codon."
+            )
         return " ".join(sequence[i:i + 3] for i in range(0, n, 3))
 
     def _tokenize_for_logits(
@@ -178,9 +182,19 @@ class CodonBERT(EmbeddingModel):
         Returns:
             CDS subsequence. Returns truncated full sequence if no CDS found.
         """
+        if len(cds) != len(sequence):
+            raise ValueError(
+                "CodonBERT CDS track length must match sequence length."
+            )
+
         if sum(cds) == 0:
             warnings.warn("No CDS found. Returning truncated sequence.")
-            return sequence[:len(sequence) - (len(sequence) % 3)]
+            result = sequence[:len(sequence) - (len(sequence) % 3)]
+            if not result:
+                raise ValueError(
+                    "CodonBERT requires at least one complete codon."
+                )
+            return result
 
         first_one_index = np.argmax(cds == 1)
         last_one_index = (len(cds) - 1 - np.argmax(np.flip(cds) == 1)) + 2
@@ -189,7 +203,11 @@ class CodonBERT(EmbeddingModel):
 
         if len(proposed_cds) % 3 != 0:
             warnings.warn("Irregular CDS. Returning truncated sequence.")
-            return proposed_cds[:-(len(proposed_cds) % 3)]
+            proposed_cds = proposed_cds[:-(len(proposed_cds) % 3)]
+        if not proposed_cds:
+            raise ValueError(
+                "CodonBERT CDS does not contain a complete codon."
+            )
 
         return proposed_cds
 
@@ -223,6 +241,7 @@ class CodonBERT(EmbeddingModel):
             raise ValueError(
                 "CodonBERT requires cds to extract coding region."
             )
+        self._validate_score_tracks(sequences, cds, None)
 
         processed_sequences = []
         for i, seq in enumerate(sequences):
@@ -271,6 +290,7 @@ class CodonBERT(EmbeddingModel):
             raise ValueError(
                 "CodonBERT requires cds to extract coding region."
             )
+        self._validate_score_tracks(sequences, cds, None)
 
         processed_sequences = []
         for i, seq in enumerate(sequences):

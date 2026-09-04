@@ -57,7 +57,7 @@ def test_rnamsm_forward_dna_input(model):
     output_rna = torch.stack(model.embed([text_rna])).cpu()
     output_dna = torch.stack(model.embed([text_dna])).cpu()
 
-    assert torch.allclose(output_rna, output_dna, atol=1e-5)
+    assert torch.equal(output_rna, output_dna)
 
 
 def test_rnamsm_embed_batch(model):

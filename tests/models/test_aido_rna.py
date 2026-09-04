@@ -37,15 +37,11 @@ def test_aido_forward(aidomodel):
 
 
 def test_aido_dna_rna_equivalent(aidomodel):
-    """AIDO.RNA is RNA-trained; DNA (T) and RNA (U) inputs must match.
-
-    The wrapper converts T->U so genomic DNA isn't fed the distinct, untrained
-    'T' token.
-    """
+    """AIDO.RNA normalizes RNA notation to the upstream T-token convention."""
     import torch
     dna = embed_one(aidomodel, "ATGCATGCATGC").cpu()
     rna = embed_one(aidomodel, "AUGCAUGCAUGC").cpu()
-    assert torch.allclose(dna, rna, atol=1e-5)
+    assert torch.equal(dna, rna)
 
 
 def test_aido_forward_long(aidomodel):

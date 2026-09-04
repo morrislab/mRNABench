@@ -115,6 +115,15 @@ class Evo1(EmbeddingModel):
         self._set_logits_model(loaded_model.to(self.device))
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = self.max_length
+        self.causal_score_context_length = 1
+
+    def _prepare_sequence_for_scoring(
+        self,
+        sequence: str,
+        cds: np.ndarray | None,
+        splice: np.ndarray | None,
+    ) -> tuple[str, np.ndarray | None, np.ndarray | None]:
+        return "\x00" + sequence, cds, splice
 
     @property
     def hookable_layers(self) -> list[str]:

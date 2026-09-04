@@ -105,7 +105,7 @@ def test_dnabert_kmer_excludes_special_tokens(dnabert):
 
     output = embed_one(dnabert, text).cpu()
 
-    assert torch.allclose(output, mean_no_special, atol=1e-5), \
+    assert torch.equal(output, mean_no_special), \
         "Output should exclude CLS/SEP tokens"
     assert not torch.allclose(output, mean_all, atol=1e-5), \
         "Output should differ from mean including special tokens"

@@ -34,7 +34,7 @@ class AIDORNA(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
-    uses_rna_alphabet = True
+    uses_rna_alphabet = False
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,
@@ -140,6 +140,20 @@ class AIDORNA(EmbeddingModel):
 
         return hidden_states, pooling_mask
 
+    def _tokenize_for_logits(
+        self,
+        sequence: str,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        _ = cds, splice
+        return self.tokenizer(  # type: ignore[no-any-return]
+            sequence.replace("U", "T"),
+            return_tensors="pt",
+            add_special_tokens=add_special_tokens,
+        )
+
     def embed(
         self,
         sequences: list[str],
@@ -161,7 +175,7 @@ class AIDORNA(EmbeddingModel):
             - default (mean): (2048,) for 1.6B model
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
+        sequences = [s.replace("U", "T") for s in sequences]
 
         return self._embed_with_chunking(
             sequences=sequences,
@@ -196,7 +210,7 @@ class AIDORNA(EmbeddingModel):
             (hidden_states, scores); see EmbeddingModel.extract().
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
+        sequences = [s.replace("U", "T") for s in sequences]
 
         def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
             return self.tokenizer(  # type: ignore[return-value]

@@ -95,7 +95,8 @@ class SpliceBERT(EmbeddingModel):
         ).to(device)
         self._set_logits_model(language_model)
 
-        self.max_length = self.tokenizer.model_max_length
+        self.model_max_length = self.tokenizer.model_max_length
+        self.max_length = self.model_max_length - 2
         self.sequence_score_chunk_length = self.max_length
 
     def _tokenize_for_logits(
@@ -169,7 +170,7 @@ class SpliceBERT(EmbeddingModel):
         sequences: list[str],
         agg_fn: Callable = EmbeddingModel.mean_pool
     ) -> list[torch.Tensor]:
-        """Embed sequences using 510nt model with overlap handling.
+        """Embed sequences using the 510-token model.
 
         Args:
             sequences: List of sequences to embed.
@@ -183,15 +184,12 @@ class SpliceBERT(EmbeddingModel):
         chunk_counts = []
 
         for seq in sequences:
-            chunks = self.chunk_sequence(seq, 510)
-            if len(chunks) == 1 and len(chunks[0]) != 510:
+            chunks = self.chunk_sequence(seq, self.max_length)
+            if len(chunks) == 1 and len(chunks[0]) != self.max_length:
                 print(
-                    "Warning: SpliceBERT-510nt input must be at least 510nts. "
-                    "Embedding may not work correctly."
+                    "Warning: SpliceBERT input is shorter than the model's "
+                    "effective nucleotide window."
                 )
-            elif len(chunks) > 1 and len(chunks[-1]) != 510:
-                overlap = 510 - len(chunks[-1])
-                chunks[-1] = chunks[-2][-overlap:] + chunks[-1]
             all_chunks.extend(chunks)
             chunk_counts.append(len(chunks))
 

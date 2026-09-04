@@ -93,8 +93,8 @@ def test_splicebert_510_overlap_handling(model_510):
     assert output.shape == (1, 512)
 
 
-def test_splicebert_510_overlap_chunks(model_510):
-    """Test 510nt overlap creates correctly padded chunks."""
+def test_splicebert_510_nonoverlapping_chunks(model_510):
+    """Test 510-nt content chunks do not duplicate nucleotides."""
     model_510.set_inference_mode()
 
     spillover = 10
@@ -113,10 +113,11 @@ def test_splicebert_510_overlap_chunks(model_510):
 
     assert len(captured_chunks) == 2
     assert len(captured_chunks[0]) == 510
-    assert len(captured_chunks[1]) == 510
+    assert len(captured_chunks[1]) == 10
+    assert "".join(captured_chunks) == input_seq
 
     assert captured_chunks[0] == "A" * 10 + "G" * 500
-    assert captured_chunks[1] == "G" * 510
+    assert captured_chunks[1] == "G" * 10
 
 
 def test_splicebert_1024_chunking(model_1024):

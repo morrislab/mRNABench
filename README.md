@@ -16,7 +16,7 @@ property and function tasks. It provides a shared catalog of datasets, model
 adapters, biologically informed splits, linear probes, variant-effect scoring,
 and result persistence.
 
-- **Website:** [morrislab.github.io/mRNABench](https://morrislab.github.io/mRNABench/)
+- **Website:** [taykhoomdalal.github.io/mRNABench](https://taykhoomdalal.github.io/mRNABench/)
 - **Paper:** [bioRxiv v1](https://www.biorxiv.org/content/10.1101/2025.07.05.662870v1)
 - **Datasets:** [Hugging Face collection](https://huggingface.co/collections/morrislab/mrnabench-6825747c0b9253c3226078d9)
 - **Notebook:** [Colab example](https://colab.research.google.com/drive/1VZF5NPwJYowAR3e6wuaiAuQyw2v7TSwx?usp=sharing)
@@ -101,15 +101,15 @@ fine-tuning, result analysis, and extension guides.
 
 | Need | Guide |
 |---|---|
-| Install and run the first probe | [Quickstart](https://morrislab.github.io/mRNABench/docs/quickstart/) |
-| Understand tasks, routes, and defaults | [Core concepts](https://morrislab.github.io/mRNABench/docs/concepts/) |
-| Generate embeddings and run seeded probes | [Benchmarking](https://morrislab.github.io/mRNABench/docs/benchmarking/) |
-| Configure splits and estimators | [Configuration](https://morrislab.github.io/mRNABench/docs/configuration/) |
-| Query and interpret outputs | [Results and analysis](https://morrislab.github.io/mRNABench/docs/results/) |
-| Add a dataset | [Dataset extension guide](https://morrislab.github.io/mRNABench/docs/add-dataset/) |
-| Add a model | [Model extension guide](https://morrislab.github.io/mRNABench/docs/add-model/) |
-| Look up Python signatures | [Python API](https://morrislab.github.io/mRNABench/docs/api/) |
-| Browse supported datasets and models | [Dataset catalog](https://morrislab.github.io/mRNABench/datasets/) and [model catalog](https://morrislab.github.io/mRNABench/models/) |
+| Install and run the first probe | [Quickstart](https://taykhoomdalal.github.io/mRNABench/docs/quickstart/) |
+| Understand tasks, routes, and defaults | [Core concepts](https://taykhoomdalal.github.io/mRNABench/docs/concepts/) |
+| Generate embeddings and run seeded probes | [Benchmarking](https://taykhoomdalal.github.io/mRNABench/docs/benchmarking/) |
+| Configure splits and estimators | [Configuration](https://taykhoomdalal.github.io/mRNABench/docs/configuration/) |
+| Query and interpret outputs | [Results and analysis](https://taykhoomdalal.github.io/mRNABench/docs/results/) |
+| Add a dataset | [Dataset extension guide](https://taykhoomdalal.github.io/mRNABench/docs/add-dataset/) |
+| Add a model | [Model extension guide](https://taykhoomdalal.github.io/mRNABench/docs/add-model/) |
+| Look up Python signatures | [Python API](https://taykhoomdalal.github.io/mRNABench/docs/api/) |
+| Browse supported datasets and models | [Dataset catalog](https://taykhoomdalal.github.io/mRNABench/datasets/) and [model catalog](https://taykhoomdalal.github.io/mRNABench/models/) |
 
 ## Development
 

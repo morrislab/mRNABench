@@ -145,7 +145,7 @@ def test_evo2_extract_transformer_attention(model):
     assert upper.abs().max() == 0.0
     # Rows are a softmax distribution (sum to 1 within bf16 tolerance).
     rowsum = w.float().sum(-1)
-    assert torch.allclose(rowsum, torch.ones_like(rowsum), atol=5e-3)
+    assert torch.allclose(rowsum, torch.ones_like(rowsum), atol=1e-6)
 
 
 def test_evo2_extract_hyena_scores_none(model):

@@ -42,7 +42,7 @@ def test_rnabert_converts_t_to_u(model):
     dna_output = embed_one(model, dna_seq).cpu()
     rna_output = embed_one(model, rna_seq).cpu()
 
-    assert torch.allclose(dna_output, rna_output, atol=1e-5), \
+    assert torch.equal(dna_output, rna_output), \
         "DNA (T) and RNA (U) sequences should produce identical embeddings"
 
 
@@ -80,7 +80,7 @@ def test_rnabert_excludes_special_tokens(model):
     mean_all = hidden_states.mean(dim=1).cpu()
     output = embed_one(model, text).cpu()
 
-    assert torch.allclose(output, mean_all, atol=1e-5), \
+    assert torch.equal(output, mean_all), \
         "Output should pool over all real tokens (RNABERT has no CLS/EOS)"
 
 

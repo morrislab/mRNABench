@@ -61,7 +61,7 @@ class Evo2(EmbeddingModel):
         "Evo2-7B-8K": 32,
         "Evo2-7B-262K": 32,
         "Evo2-7B-1M": 32,
-        "Evo2-20B-1M": 25,
+        "Evo2-20B-1M": 24,
         "Evo2-40B-8K": 50,
         "Evo2-40B-1M": 50,
     }

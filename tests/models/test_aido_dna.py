@@ -45,7 +45,7 @@ def test_aido_dna_rna_equivalent(aidomodel):
     import torch
     dna = embed_one(aidomodel, "ATGCATGCATGC").cpu()
     rna = embed_one(aidomodel, "AUGCAUGCAUGC").cpu()
-    assert torch.allclose(dna, rna, atol=1e-5)
+    assert torch.equal(dna, rna)
 
 
 def test_aido_forward_long(aidomodel):

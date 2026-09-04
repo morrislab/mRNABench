@@ -93,8 +93,44 @@ class UTRBERT(EmbeddingModel):
             dtype=dtype,
         ).to(device)
         self._set_logits_model(language_model)
+        self.k = self.tokenizer.kmer
         self.max_length = self.tokenizer.model_max_length
-        self.sequence_score_chunk_length = self.max_length - 2
+        self.max_kmer_tokens = self.max_length - 2
+        self.max_chunk_length = self.max_kmer_tokens + self.k - 1
+        self.sequence_score_chunk_length = self.max_chunk_length
+
+    def _chunk_sequence_for_kmers(self, sequence: str) -> list[str]:
+        if len(sequence) < self.k:
+            raise ValueError(
+                f"UTRBERT-{self.k}mer requires at least {self.k} nucleotides."
+            )
+        total_kmers = len(sequence) - self.k + 1
+        return [
+            sequence[start:start + self.max_chunk_length]
+            for start in range(0, total_kmers, self.max_kmer_tokens)
+        ]
+
+    def _score_chunks(
+        self,
+        sequence: str,
+        cds: np.ndarray | None,
+        splice: np.ndarray | None,
+    ) -> list[tuple[str, np.ndarray | None, np.ndarray | None]]:
+        sequence = sequence.replace("T", "U")
+        chunks = self._chunk_sequence_for_kmers(sequence)
+        starts = range(
+            0,
+            len(sequence) - self.k + 1,
+            self.max_kmer_tokens,
+        )
+        return [
+            (
+                chunk,
+                None if cds is None else cds[start:start + len(chunk)],
+                None if splice is None else splice[start:start + len(chunk)],
+            )
+            for start, chunk in zip(starts, chunks)
+        ]
 
     def _forward_chunks(
         self,
@@ -146,12 +182,26 @@ class UTRBERT(EmbeddingModel):
         _, _ = cds, splice
         sequences = [s.replace("T", "U") for s in sequences]
 
-        return self._embed_with_chunking(
-            sequences=sequences,
-            max_chunk_length=self.max_length - 2,
-            embed_fn=self._forward_chunks,
-            agg_fn=agg_fn,
-        )
+        all_chunks = []
+        chunk_counts = []
+        for sequence in sequences:
+            chunks = self._chunk_sequence_for_kmers(sequence)
+            all_chunks.extend(chunks)
+            chunk_counts.append(len(chunks))
+
+        hidden_states, pooling_mask = self._forward_chunks(all_chunks)
+        embeddings = []
+        chunk_start = 0
+        for chunk_count in chunk_counts:
+            chunk_end = chunk_start + chunk_count
+            hidden = hidden_states[chunk_start:chunk_end].reshape(
+                -1,
+                hidden_states.shape[-1],
+            )
+            mask = pooling_mask[chunk_start:chunk_end].reshape(-1).bool()
+            embeddings.append(agg_fn(hidden[mask]))
+            chunk_start = chunk_end
+        return embeddings
 
     def extract(
         self,
@@ -189,8 +239,8 @@ class UTRBERT(EmbeddingModel):
         return self._standard_hf_extract(
             sequences=sequences,
             tokenize_fn=tokenize,
-            max_chunk_length=self.max_length - 2,
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,
+            chunk_fn=self._chunk_sequence_for_kmers,
         )

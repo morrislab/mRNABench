@@ -90,12 +90,14 @@ class mRNABERT(EmbeddingModel):
             cache_dir=get_model_weights_path(),
         )
 
+        dtype = self._get_inference_dtype()
         language_model = AutoModelForMaskedLM.from_pretrained(
             hub_id,
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             config=self.config,
             attn_implementation=self.attn_implementation,
+            dtype=dtype,
         ).to(self.device)
         self._set_logits_model(language_model)
         # ALiBi allows arbitrary lengths; model_max_length (from config) caps
@@ -175,6 +177,7 @@ class mRNABERT(EmbeddingModel):
             raise ValueError(
                 "CDS tracks must be provided for mRNABERT embedding."
             )
+        self._validate_score_tracks(sequences, cds, None)
 
         self._warn_batch_size_reproducibility(len(sequences))
 
@@ -355,6 +358,7 @@ class mRNABERT(EmbeddingModel):
             raise ValueError(
                 "CDS tracks must be provided for mRNABERT extract()."
             )
+        self._validate_score_tracks(sequences, cds, None)
         _ = splice
 
         def _chunk(seq_cds: tuple) -> list[tuple]:
