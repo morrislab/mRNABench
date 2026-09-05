@@ -11,12 +11,15 @@ from .dnabert import DNABERT
 from .dnabert_s import DNABERTS
 from .enformer import Enformer
 from .ernierna import ERNIERNA
+from .genalm import GenaLM
+from .glm2 import GLM2
 from .evo1 import Evo1
 from .evo2 import Evo2
 from .generanno import GENERanno
 from .generator import GENERator
 from .helix_mrna import HelixmRNA
 from .hyenadna import HyenaDNA
+from .moderngena import ModernGENA
 from .mrnabert import mRNABERT
 from .naive_baseline import NaiveBaseline, NaiveBaselineSixTrack
 from .naive_mamba import NaiveMamba
@@ -51,11 +54,14 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "Enformer": Enformer,
     "ERNIE-RNA": ERNIERNA,
     "Evo1": Evo1,
+    "GENA-LM": GenaLM,
+    "gLM2": GLM2,
     "Evo2": Evo2,
     "GENERanno": GENERanno,
     "GENERator": GENERator,
     "Helix-mRNA": HelixmRNA,
     "HyenaDNA": HyenaDNA,
+    "ModernGENA": ModernGENA,
     "mRNABERT": mRNABERT,
     "mRNA-FM": MRNAFM,
     "NaiveBaseline": NaiveBaseline,
