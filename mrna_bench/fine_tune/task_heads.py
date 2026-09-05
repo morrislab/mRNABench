@@ -1,4 +1,4 @@
-from typing import Protocol, runtime_checkable
+from typing import Any, Protocol, runtime_checkable
 
 import numpy as np
 import torch
@@ -28,7 +28,7 @@ class TaskHeadProtocol(Protocol):
 
     def compute_metrics(
         self, logits: torch.Tensor, targets: torch.Tensor,
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         """Compute task-appropriate metrics from logits and targets."""
         ...
 
@@ -162,7 +162,7 @@ class TaskHead(nn.Module):
 
     def compute_metrics(
         self, logits: torch.Tensor, targets: torch.Tensor,
-    ) -> dict[str, float]:
+    ) -> dict[str, Any]:
         """Compute task-appropriate evaluation metrics.
 
         Args:

@@ -1,6 +1,7 @@
 """Trainer for fine-tuning genomic foundation models."""
 
 import gc
+import math
 from dataclasses import dataclass
 
 from typing import Any, Callable
@@ -121,33 +122,34 @@ class FineTuneTrainer:
         """Save only trainable (LoRA + head) state dicts.
 
         Returns:
-            Dictionary with LoRA and head state dicts.
+            Dictionary with per-target LoRA states and head state dict.
         """
-        model = self.wrapper.backbone.get_peft_target()
-        trainable = {
-            name for name, parameter in model.named_parameters()
-            if parameter.requires_grad
-        }
-        lora_state = {
-            name: value.detach().clone()
-            for name, value in model.state_dict().items()
-            if name in trainable
-        }
+        lora_states = []
+        for target in self.wrapper.backbone.get_peft_targets():
+            trainable = {
+                name for name, parameter in target.named_parameters()
+                if parameter.requires_grad
+            }
+            lora_states.append({
+                name: value.detach().clone()
+                for name, value in target.state_dict().items()
+                if name in trainable
+            })
         head_state = {
             name: value.detach().clone()
             for name, value in self.wrapper.task_head.state_dict().items()
         }
-        return {"lora": lora_state, "head": head_state}
+        return {"lora": lora_states, "head": head_state}
 
     def _restore_trainable_state(self, state: dict):
         """Restore trainable state dicts.
 
         Args:
-            state: Dictionary with LoRA and head state dicts.
+            state: Dictionary with per-target LoRA states and head state.
         """
-        self.wrapper.backbone.get_peft_target().load_state_dict(
-            state["lora"], strict=False
-        )
+        targets = self.wrapper.backbone.get_peft_targets()
+        for target, lora_state in zip(targets, state["lora"]):
+            target.load_state_dict(lora_state, strict=False)
 
         self.wrapper.task_head.load_state_dict(state["head"])
 
@@ -339,8 +341,9 @@ class FineTuneTrainer:
         }
 
         self.optimizer = self._create_optimizer()
+        accum = self.config.gradient_accumulation_steps
         steps_per_epoch = max(
-            len(train_dataloader) // self.config.gradient_accumulation_steps, 1
+            math.ceil(len(train_dataloader) / accum), 1
         )
         total_steps = self.config.total_steps or (
             steps_per_epoch * self.config.epochs

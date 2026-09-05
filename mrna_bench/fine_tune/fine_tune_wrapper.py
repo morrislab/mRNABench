@@ -1,5 +1,6 @@
 """Composition-based fine-tuning wrapper for EmbeddingModel."""
 
+import warnings
 from collections.abc import Callable
 from typing import cast
 
@@ -44,8 +45,9 @@ class FineTuneWrapper(nn.Module):
         self.task_head = task_head.to(model.device)
         self.device = model.device
 
-        for param in self.backbone.get_peft_target().parameters():
-            param.requires_grad = False
+        for target in self.backbone.get_peft_targets():
+            for param in target.parameters():
+                param.requires_grad = False
 
     def apply_lora(
         self,
@@ -62,6 +64,9 @@ class FineTuneWrapper(nn.Module):
            non-transformer architectures (e.g. Mamba-based Orthrus)
            declare their own target modules this way
         3. Default transformer projection layer names
+
+        For models with multiple sub-models (e.g. Borzoi ensemble),
+        LoRA is applied to each one independently.
 
         Args:
             rank: Rank of LoRA decomposition.
@@ -91,22 +96,35 @@ class FineTuneWrapper(nn.Module):
             use_rslora=True,
         )
 
-        if isinstance(self.backbone.model, nn.Identity):
+        targets = self.backbone.get_peft_targets()
+
+        if any(isinstance(t, nn.Identity) for t in targets):
             raise NotImplementedError(
                 f"{type(self.backbone).__name__} does not support LoRA "
                 f"fine-tuning (backbone is nn.Identity)."
             )
 
+        if len(targets) > 1:
+            warnings.warn(
+                "{} has {} sub-models — LoRA will be applied to each "
+                "one. Expect ~{}x the GPU memory of a single model.".format(
+                    type(self.backbone).__name__, len(targets), len(targets),
+                )
+            )
+
         from transformers import PreTrainedModel
-        peft_target = self.backbone.get_peft_target()
-        peft_model = get_peft_model(
-            cast(PreTrainedModel, peft_target), config
+        peft_models = [
+            get_peft_model(cast(PreTrainedModel, t), config)
+            for t in targets
+        ]
+        self.backbone.set_peft_targets(
+            cast(list[torch.nn.Module], peft_models)
         )
-        self.backbone.set_peft_target(peft_model)
 
         trainable = sum(
             p.requires_grad
-            for p in self.backbone.get_peft_target().parameters()
+            for t in self.backbone.get_peft_targets()
+            for p in t.parameters()
         )
         if trainable == 0:
             raise ValueError(
@@ -130,16 +148,17 @@ class FineTuneWrapper(nn.Module):
         the standard forward() path where LoRA is active. Only affects
         models whose attention layers have this attribute.
         """
-        try:
-            base = self.backbone.get_peft_target().base_model.model
-            if hasattr(base, "layers"):
-                for layer in base.layers:
-                    if hasattr(layer, "self_attn"):
-                        attn = layer.self_attn
-                        if hasattr(attn, "enable_torch_version"):
-                            attn.enable_torch_version = False
-        except AttributeError:
-            pass
+        for target in self.backbone.get_peft_targets():
+            try:
+                base = target.base_model.model
+                if hasattr(base, "layers"):
+                    for layer in base.layers:
+                        if hasattr(layer, "self_attn"):
+                            attn = layer.self_attn
+                            if hasattr(attn, "enable_torch_version"):
+                                attn.enable_torch_version = False
+            except AttributeError:
+                pass
 
     def _embed_and_stack(
         self,
@@ -231,7 +250,9 @@ class FineTuneWrapper(nn.Module):
             List of trainable parameters (backbone LoRA + head).
         """
         params = [
-            p for p in self.backbone.get_peft_target().parameters()
+            p
+            for target in self.backbone.get_peft_targets()
+            for p in target.parameters()
             if p.requires_grad
         ]
         params.extend(self.task_head.parameters())
@@ -243,11 +264,14 @@ class FineTuneWrapper(nn.Module):
         Returns:
             Dictionary with parameter count breakdown.
         """
-        peft_target = self.backbone.get_peft_target()
-        total = sum(p.numel() for p in peft_target.parameters())
+        targets = self.backbone.get_peft_targets()
+        total = sum(
+            p.numel() for t in targets for p in t.parameters()
+        )
         backbone_trainable = sum(
             p.numel()
-            for p in peft_target.parameters()
+            for t in targets
+            for p in t.parameters()
             if p.requires_grad
         )
         head_params = sum(

@@ -154,15 +154,16 @@ def test_evo2_extract_hyena_scores_none(model):
     assert s["blocks.0"] is None
 
 
-def test_evo2_peft_target(model):
-    """get_peft_target returns the HF model; set_peft_target writes it back."""
-    target = model.get_peft_target()
-    assert target is model.model
+def test_evo2_peft_targets(model):
+    """get_peft_targets returns the HF model; set_peft_targets writes back."""
+    targets = model.get_peft_targets()
+    assert len(targets) == 1
+    assert targets[0] is model.model
 
     original = model.model
     sentinel = torch.nn.Linear(1, 1)
-    model.set_peft_target(sentinel)
+    model.set_peft_targets([sentinel])
     assert model.model is sentinel
 
-    model.set_peft_target(original)  # restore for any subsequent use
+    model.set_peft_targets([original])  # restore for any subsequent use
     assert model.model is original

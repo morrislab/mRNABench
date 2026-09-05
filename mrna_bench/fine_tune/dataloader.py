@@ -220,10 +220,10 @@ def create_vep_dataloaders(
     """Create train/val/test DataLoaders for VEP fine-tuning.
 
     Splits on variant rows only (excluding wild-type), then pairs each
-    variant with its transcript's wild-type via get_vep_pairs().
+    variant with its reference via the dataset's get_vep_pairs() method.
 
     Args:
-        dataset: VEP BenchmarkDataset instance (must have get_vep_pairs).
+        dataset: VEP BenchmarkDataset instance (must implement get_vep_pairs).
         target_col: Target column name.
         split_type: Type of data split.
         random_seed: Random seed for reproducible splits.
@@ -235,8 +235,11 @@ def create_vep_dataloaders(
     Returns:
         Tuple of (train_loader, val_loader, test_loader).
     """
+    import pandas as pd
+
     data_df = dataset.data_df
     is_wt = data_df["description"].eq("wild-type")
+    wt_df = data_df[is_wt]
     variant_df = data_df[~is_wt].reset_index(drop=True)
 
     from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
@@ -247,28 +250,30 @@ def create_vep_dataloaders(
         random_seed=random_seed,
     )
 
+    value_columns = tuple(
+        col for col in ("sequence", "cds", "splice")
+        if col in data_df.columns
+    )
+
     def df_to_vep_loader(split_df, shuffle: bool) -> DataLoader:
-        full_split = split_df.merge(
-            data_df[is_wt][["transcript_id", "sequence", "cds", "splice"]],
-            on="transcript_id",
-            how="left",
-            suffixes=("", "_ref"),
-            validate="many_to_one",
-        )
+        combined = pd.concat([split_df, wt_df], ignore_index=True)
+        paired = dataset.get_vep_pairs(combined, value_columns=value_columns)
 
-        ref_sequences = full_split["sequence_ref"].tolist()
-        alt_sequences = full_split["sequence"].tolist()
+        ref_sequences = paired["ref_sequence"].tolist()
+        alt_sequences = paired["alt_sequence"].tolist()
 
-        raw_targets = full_split[target_col].values
+        raw_targets = paired[target_col].values
         if hasattr(raw_targets[0], "__len__"):
             targets = np.stack(raw_targets).astype(np.float32)
         else:
             targets = raw_targets.astype(np.float32)
 
-        ref_cds = full_split["cds_ref"].tolist() if "cds" in split_df.columns else None
-        alt_cds = full_split["cds"].tolist() if "cds" in split_df.columns else None
-        ref_splice = full_split["splice_ref"].tolist() if "splice" in split_df.columns else None
-        alt_splice = full_split["splice"].tolist() if "splice" in split_df.columns else None
+        has_cds = "cds" in value_columns
+        has_splice = "splice" in value_columns
+        ref_cds = paired["ref_cds"].tolist() if has_cds else None
+        alt_cds = paired["alt_cds"].tolist() if has_cds else None
+        ref_splice = paired["ref_splice"].tolist() if has_splice else None
+        alt_splice = paired["alt_splice"].tolist() if has_splice else None
 
         ds = VEPDataset(
             ref_sequences, alt_sequences, targets,

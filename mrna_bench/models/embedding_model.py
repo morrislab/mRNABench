@@ -1170,25 +1170,25 @@ class EmbeddingModel(SupportsEmbedding, ABC):
             "Add a model-specific extract() override."
         )
 
-    def get_peft_target(self) -> "torch.nn.Module":
-        """Return the nn.Module that LoRA adapters should be applied to.
+    def get_peft_targets(self) -> list["torch.nn.Module"]:
+        """Return modules that LoRA adapters should be applied to.
 
-        Override in subclasses whose backbone is a non-nn.Module wrapper
-        where the trainable nn.Module lives at a different attribute
-        (e.g. self.model.model).
+        Override in subclasses that have multiple independent sub-models
+        (e.g. Borzoi's replicate ensemble) or whose backbone lives at a
+        non-standard attribute.
         """
-        return self.model
+        return [self.model]
 
-    def set_peft_target(self, peft_model: "torch.nn.Module") -> None:
-        """Replace the LoRA target module after adapter injection.
-
-        Override alongside get_peft_target() in subclasses that need to
-        write the PeftModel back to a non-standard location.
+    def set_peft_targets(
+        self, peft_models: list["torch.nn.Module"]
+    ) -> None:
+        """Replace LoRA target modules after adapter injection.
 
         Args:
-            peft_model: PeftModel returned by get_peft_model().
+            peft_models: PeftModels returned by get_peft_model(), one per
+                target from get_peft_targets().
         """
-        self.model = peft_model
+        self.model = peft_models[0]
 
     def set_inference_mode(self):
         """Set model to inference mode."""

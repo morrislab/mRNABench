@@ -192,23 +192,24 @@ class Borzoi(EmbeddingModel):
         from mrna_bench.models.embedding_model import discover_layers
         return discover_layers(self.models[0], self.hookable_layer_patterns)
 
-    def get_peft_target(self) -> torch.nn.Module:
-        """Return the first Borzoi replicate for LoRA injection.
+    def get_peft_targets(self) -> list[torch.nn.Module]:
+        """Return all Borzoi replicates for LoRA injection.
 
-        Ensemble versions ("borzoi", "flashzoi") load 4 replicates into
-        self.models; single-replicate versions load exactly one. Fine-tuning
-        always targets self.models[0] — the remaining replicates are unchanged
-        and unused during the LoRA training forward pass.
+        Ensemble versions ("borzoi", "flashzoi") load 4 replicates;
+        single-replicate versions load one. LoRA is applied to every
+        replicate so the full ensemble is fine-tuned.
         """
-        return self.models[0]
+        return list(self.models)
 
-    def set_peft_target(self, peft_model: torch.nn.Module) -> None:
-        """Write the PeftModel back into the first replicate slot.
+    def set_peft_targets(
+        self, peft_models: list[torch.nn.Module]
+    ) -> None:
+        """Write PeftModels back into the replicate slots.
 
         Args:
-            peft_model: PeftModel returned by get_peft_model().
+            peft_models: PeftModels, one per replicate.
         """
-        self.models[0] = peft_model
+        self.models = list(peft_models)
 
     def set_inference_mode(self) -> None:
         """Set all Borzoi replicate models to inference mode."""

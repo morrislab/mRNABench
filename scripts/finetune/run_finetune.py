@@ -232,8 +232,7 @@ if __name__ == "__main__":
             )
 
             for seed in seeds:
-                result_path = persister._get_path(seed, ".json")
-                if result_path.exists() and not args.force_recompute:
+                if persister.result_exists(seed) and not args.force_recompute:
                     print("Results exist: lr={}, rank={}, seed={}".format(
                         lr, lora_rank, seed
                     ))

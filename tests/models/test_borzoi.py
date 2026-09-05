@@ -232,17 +232,20 @@ def test_borzoi_gradient_flow(borzoi):
     borzoi.set_inference_mode()
 
 
-def test_borzoi_peft_target(borzoi):
-    """get_peft_target returns models[0]; set_peft_target writes back to it."""
-    target = borzoi.get_peft_target()
-    assert target is borzoi.models[0]
+def test_borzoi_peft_targets(borzoi):
+    """get_peft_targets returns all replicates; set_peft_targets writes back."""
+    targets = borzoi.get_peft_targets()
+    assert len(targets) == len(borzoi.models)
+    for target, model in zip(targets, borzoi.models):
+        assert target is model
 
-    sentinel = torch.nn.Linear(1, 1)
-    original = borzoi.models[0]
-    borzoi.set_peft_target(sentinel)
-    assert borzoi.models[0] is sentinel
+    originals = list(borzoi.models)
+    sentinels = [torch.nn.Linear(1, 1) for _ in originals]
+    borzoi.set_peft_targets(sentinels)
+    for sentinel, model in zip(sentinels, borzoi.models):
+        assert model is sentinel
 
-    borzoi.models[0] = original  # restore for subsequent tests
+    borzoi.models = originals  # restore for subsequent tests
 
 
 def test_borzoi_extract_cnn_downsampling(borzoi):

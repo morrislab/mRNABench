@@ -41,7 +41,7 @@ def test_head_only_state_round_trips():
     )
 
     state = trainer._save_trainable_state()
-    assert not state["lora"]
+    assert all(not s for s in state["lora"])
     assert state["head"]
 
     original = head.mlp[0].weight.detach().clone()
@@ -93,7 +93,7 @@ def test_trainable_peft_state_round_trips():
     trainer = FineTuneTrainer(wrapper)
 
     state = trainer._save_trainable_state()
-    assert any("lora_" in name for name in state["lora"])
+    assert any("lora_" in name for s in state["lora"] for name in s)
 
     parameter = next(
         parameter
@@ -109,7 +109,7 @@ def test_trainable_peft_state_round_trips():
 
 
 def test_persister_distinguishes_lora_alpha(tmp_path):
-    """Include LoRA alpha in result identity."""
+    """Different LoRA alphas store separate rows in the database."""
     dataset = SimpleNamespace(
         dataset_name="test",
         dataset_path=str(tmp_path),
@@ -127,4 +127,13 @@ def test_persister_distinguishes_lora_alpha(tmp_path):
     low = FineTunePersister(**common, lora_alpha=8)
     high = FineTunePersister(**common, lora_alpha=32)
 
-    assert low._get_path(0) != high._get_path(0)
+    low.persist_run_results({"val": {"loss": 0.5}}, random_seed=0)
+    high.persist_run_results({"val": {"loss": 0.3}}, random_seed=0)
+
+    assert low.result_exists(0)
+    assert high.result_exists(0)
+
+    low_result = low.load_run_results(0)
+    high_result = high.load_run_results(0)
+    assert low_result["metrics"]["val"]["loss"] == 0.5
+    assert high_result["metrics"]["val"]["loss"] == 0.3
