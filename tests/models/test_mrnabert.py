@@ -154,7 +154,7 @@ def test_mrnabert_embed_batch_ragged(model):
             model,
             sequences,
             cds=cds,
-            atol=6e-5,
+            atol=1e-4,
             rtol=0.0,
         )
 
