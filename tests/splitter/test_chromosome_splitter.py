@@ -115,3 +115,17 @@ def test_real_data():
 
         # Check that full dataset is split/preserved
         assert len(train_df) + len(test_df) == len(data_df)
+
+
+def test_chromosome_splitter_named():
+    """Named chromosomes give fixed splits regardless of ratios."""
+    splitter = ChromosomeSplitter(
+        val_chromosomes=["1"], test_chromosomes=["8", "22"]
+    )
+    df = pd.DataFrame({"chromosome": ["1", "2", "8", "22", "X", "8"]})
+
+    train_df, val_df, test_df = splitter.get_all_splits_df(df, (0.9, 0.05, 0.05))
+    assert set(train_df["chromosome"]) == {"2", "X"}
+    assert set(val_df["chromosome"]) == {"1"}
+    assert set(test_df["chromosome"]) == {"8", "22"}
+    assert len(train_df) + len(val_df) + len(test_df) == len(df)

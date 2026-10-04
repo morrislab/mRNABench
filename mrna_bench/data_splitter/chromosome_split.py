@@ -7,6 +7,51 @@ from mrna_bench.data_splitter.data_splitter import DataSplitter
 class ChromosomeSplitter(DataSplitter):
     """Hold-out chromosome(s) for train-test split."""
 
+    def __init__(
+        self,
+        default_split_ratio: tuple[float, float, float] = (0.7, 0.15, 0.15),
+        val_chromosomes: list[str] | None = None,
+        test_chromosomes: list[str] | None = None,
+        **kwargs
+    ):
+        """Initialize ChromosomeSplitter.
+
+        Args:
+            default_split_ratio: Ratio of training, validation, test splits.
+            val_chromosomes: Chromosomes held out for validation.
+            test_chromosomes: Chromosomes held out for testing. If set, these
+                named splits replace the size-based random split and split
+                ratios are ignored; all other chromosomes are training.
+            **kwargs: Additional arguments for DataSplitter.
+        """
+        super().__init__(default_split_ratio, **kwargs)
+        self.val_chromosomes = set(val_chromosomes or [])
+        self.test_chromosomes = set(test_chromosomes or [])
+
+    def get_all_splits_df(
+        self,
+        df: pd.DataFrame,
+        split_ratios: tuple[float, float, float] | None = None,
+        random_seed: int = 2541,
+    ) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+        """Get train, validation, test splits from dataframe.
+
+        Args:
+            df: Dataframe to split.
+            split_ratios: Split ratios, used only without named chromosomes.
+            random_seed: Random seed, used only without named chromosomes.
+
+        Returns:
+            Train, validation, and test dataframes.
+        """
+        if not self.test_chromosomes:
+            return super().get_all_splits_df(df, split_ratios, random_seed)
+
+        chrom = df["chromosome"]
+        is_val = chrom.isin(self.val_chromosomes)
+        is_test = chrom.isin(self.test_chromosomes)
+        return df[~is_val & ~is_test], df[is_val], df[is_test]
+
     def split_df(
         self,
         df: pd.DataFrame,
