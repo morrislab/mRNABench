@@ -12,6 +12,7 @@ def load_model(
     model_version: str | None = None,
     device: "torch.device | None" = None,
     attn_implementation: str | None = None,
+    **model_kwargs,
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
@@ -23,6 +24,8 @@ def load_model(
         attn_implementation: Attention implementation override.  One of
             "eager", "sdpa", or "flash_attention_2".  Pass None to use the
             model's default.
+        **model_kwargs: Extra arguments for the model constructor. These do
+            not change the model's short name used to persist embeddings.
 
     Returns:
         Initialized EmbeddingModel in inference mode.
@@ -50,7 +53,10 @@ def load_model(
         attn_implementation = model_class.default_attn_implementation
 
     model = model_class(
-        model_version, device, attn_implementation=attn_implementation
+        model_version,
+        device,
+        attn_implementation=attn_implementation,
+        **model_kwargs,
     )
     model.set_inference_mode()
 

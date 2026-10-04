@@ -79,6 +79,7 @@ class NaiveBaseline(EmbeddingModel):
         model_version: str,
         device: torch.device,
         attn_implementation: str | None,
+        kmer_list: list[int] = [3, 4, 5, 6, 7],
     ):
         """Initialize NaiveBaseline model.
 
@@ -87,6 +88,7 @@ class NaiveBaseline(EmbeddingModel):
             device: PyTorch device (unused, kept for interface consistency).
             attn_implementation: Attention backend (unused, kept
                 for interface consistency).
+            kmer_list: List of k-mer lengths to count.
         """
         super().__init__(
             model_version,
@@ -97,8 +99,8 @@ class NaiveBaseline(EmbeddingModel):
         self.model = torch.nn.Identity()
         self.kmer_vectorizer = CountVectorizer(
             analyzer="char",
-            ngram_range=(3, 7),
-            vocabulary=generate_kmer_vocab(),
+            ngram_range=(min(kmer_list), max(kmer_list)),
+            vocabulary=generate_kmer_vocab(kmer_list),
             lowercase=False,
         )
 
@@ -153,6 +155,7 @@ class NaiveBaselineSixTrack(EmbeddingModel):
         model_version: str,
         device: torch.device,
         attn_implementation: str | None,
+        kmer_list: list[int] = [3, 4, 5, 6, 7],
     ):
         """Initialize NaiveBaselineSixTrack model.
 
@@ -161,6 +164,7 @@ class NaiveBaselineSixTrack(EmbeddingModel):
             device: PyTorch device (unused, kept for interface consistency).
             attn_implementation: Attention backend (unused, kept
                 for interface consistency).
+            kmer_list: List of k-mer lengths to count.
         """
         super().__init__(
             model_version,
@@ -171,8 +175,8 @@ class NaiveBaselineSixTrack(EmbeddingModel):
         self.model = torch.nn.Identity()
         self.kmer_vectorizer = CountVectorizer(
             analyzer="char",
-            ngram_range=(3, 7),
-            vocabulary=generate_kmer_vocab(),
+            ngram_range=(min(kmer_list), max(kmer_list)),
+            vocabulary=generate_kmer_vocab(kmer_list),
             lowercase=False,
         )
 
