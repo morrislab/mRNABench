@@ -44,7 +44,8 @@ class MRNAFM(EmbeddingModel):
         """Get shortened name of model version."""
         if model_version == "mRNA-FM":
             return "mrna-fm"
-        return model_version.replace("_", "-")
+        else:
+            return model_version.replace("_", "-")
 
     def __init__(
         self,
@@ -159,8 +160,8 @@ class MRNAFM(EmbeddingModel):
         if len(proposed_cds) % 3 != 0:
             warnings.warn("Irregular CDS. Returning truncated sequence.")
             return proposed_cds[:-(len(proposed_cds) % 3)]
-
-        return proposed_cds
+        else:
+            return proposed_cds
 
     def embed(
         self,

@@ -169,8 +169,8 @@ def get_top_n_priority_transcripts(
         appris_priority = genome.appris_principality(transcript)
         if appris_priority is not None:
             return (1, appris_priority, transcript.id)
-
-        return (2, 0, transcript.id)
+        else:
+            return (2, 0, transcript.id)
 
     all_unique_transcripts = list(unique_transcripts_map.values())
     all_unique_transcripts.sort(key=get_sort_key)

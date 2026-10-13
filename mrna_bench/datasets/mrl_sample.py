@@ -381,7 +381,8 @@ class MRLSampleEGFP(MRLSample):
         # this is a "mixed" or "in between" sequence
         if strong == weak:
             return "mixed"
-        return "strong" if strong else "weak"
+        else:
+            return "strong" if strong else "weak"
 
 
 class MRLSampleMCherry(MRLSample):

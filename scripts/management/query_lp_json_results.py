@@ -105,15 +105,16 @@ def _parse_filename(path: Path) -> LPRecord | None:
     m = _FILENAME_RE.match(path.name)
     if m is None:
         return None
-    return LPRecord(
-        dataset=m.group("dataset"),
-        model=m.group("model"),
-        task=m.group("task"),
-        target_col=m.group("target_col"),
-        split_type=m.group("split_type"),
-        seed=m.group("seed"),
-        path=path,
-    )
+    else:
+        return LPRecord(
+            dataset=m.group("dataset"),
+            model=m.group("model"),
+            task=m.group("task"),
+            target_col=m.group("target_col"),
+            split_type=m.group("split_type"),
+            seed=m.group("seed"),
+            path=path,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -127,7 +128,8 @@ def _match(value: str, pattern: str) -> bool:
 def _auto_pattern(val: str, exact: bool) -> str:
     if exact or "*" in val or "?" in val:
         return val
-    return f"*{val}*"
+    else:
+        return f"*{val}*"
 
 
 def _matches_any(value: str, patterns: list[str], exact: bool) -> bool:

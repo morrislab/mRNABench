@@ -209,7 +209,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         """Return the model dtype for the selected attention backend."""
         if self.attn_implementation == "flash_attention_2":
             return self.flash_attn_dtype
-        return torch.float32
+        else:
+            return torch.float32
 
     def _set_logits_model(self, model: Any) -> None:
         """Keep an LM head while exposing its backbone for embedding.
@@ -477,17 +478,18 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         chunk_length = getattr(self, "sequence_score_chunk_length", 0)
         if not chunk_length:
             return [(sequence, cds, splice)]
-        return [
-            (
-                sequence[start:start + chunk_length],
-                None if cds is None else cds[start:start + chunk_length],
+        else:
+            return [
                 (
-                    None if splice is None
-                    else splice[start:start + chunk_length]
-                ),
-            )
-            for start in range(0, len(sequence), chunk_length)
-        ]
+                    sequence[start:start + chunk_length],
+                    None if cds is None else cds[start:start + chunk_length],
+                    (
+                        None if splice is None
+                        else splice[start:start + chunk_length]
+                    ),
+                )
+                for start in range(0, len(sequence), chunk_length)
+            ]
 
     def _prepare_sequence_for_scoring(
         self,
@@ -632,7 +634,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         token_scores = torch.cat(scores)
         if normalization == "mean":
             return float(token_scores.mean().item())
-        return float(token_scores.sum().item())
+        else:
+            return float(token_scores.sum().item())
 
     def _pseudo_log_likelihood(
         self,
@@ -694,7 +697,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         total = torch.stack(scores)
         if normalization == "mean":
             return float(total.mean().item())
-        return float(total.sum().item())
+        else:
+            return float(total.sum().item())
 
     def _masked_marginal_llr(
         self,
@@ -790,7 +794,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         alt_total = torch.stack(alternate_scores)
         if normalization == "mean":
             return float((ref_total.mean() - alt_total.mean()).item())
-        return float((ref_total.sum() - alt_total.sum()).item())
+        else:
+            return float((ref_total.sum() - alt_total.sum()).item())
 
     def _masked_token_log_probs(
         self,

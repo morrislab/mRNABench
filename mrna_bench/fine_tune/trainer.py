@@ -145,11 +145,12 @@ class FineTuneTrainer:
                 ref_splice=batch.get("ref_splice"),
                 alt_splice=batch.get("alt_splice"),
             )
-        return self.wrapper.forward(
-            sequences=batch["sequence"],
-            cds=batch.get("cds"),
-            splice=batch.get("splice"),
-        )
+        else:
+            return self.wrapper.forward(
+                sequences=batch["sequence"],
+                cds=batch.get("cds"),
+                splice=batch.get("splice"),
+            )
 
     def _get_amp_dtype(self) -> torch.dtype | None:
         """Return the autocast dtype if AMP is enabled, else None."""
@@ -157,7 +158,8 @@ class FineTuneTrainer:
             return None
         if self.device.type == "cuda":
             return torch.bfloat16
-        return None
+        else:
+            return None
 
     def train_epoch(self, dataloader: DataLoader) -> float:
         """Train for one epoch.

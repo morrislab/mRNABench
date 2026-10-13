@@ -259,7 +259,8 @@ class VEPTraitGym(BenchmarkDataset):
             principality = ref_genome.appris_principality(t)
             if principality is None:
                 return 100
-            return principality
+            else:
+                return principality
 
         transcripts = sorted(transcripts, key=appris_sort)
 

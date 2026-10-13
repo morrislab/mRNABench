@@ -136,7 +136,8 @@ class DatasetMetadata:
             return None
         if self.vep_target_col is None:
             return self.task_specs[0]
-        return TaskSpec(self.task[0], self.vep_target_col)
+        else:
+            return TaskSpec(self.task[0], self.vep_target_col)
 
     def compatible_evaluations(
         self,

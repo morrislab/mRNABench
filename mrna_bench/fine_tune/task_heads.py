@@ -129,7 +129,8 @@ class TaskHead(nn.Module):
         """
         if self.task_type == "classification":
             return torch.from_numpy(targets).long()
-        return torch.from_numpy(targets).float()
+        else:
+            return torch.from_numpy(targets).float()
 
     def predict(self, logits: torch.Tensor) -> torch.Tensor:
         """Convert logits to task-appropriate predictions."""
@@ -198,12 +199,13 @@ class TaskHead(nn.Module):
                     "pearson_r": pearson_vals[0],
                     "spearman_r": spearman_vals[0],
                 }
-            return {
-                "pearson_r_mean": float(np.nanmean(pearson_vals)),
-                "spearman_r_mean": float(np.nanmean(spearman_vals)),
-                "pearson_r_per_target": pearson_vals,
-                "spearman_r_per_target": spearman_vals,
-            }
+            else:
+                return {
+                    "pearson_r_mean": float(np.nanmean(pearson_vals)),
+                    "spearman_r_mean": float(np.nanmean(spearman_vals)),
+                    "pearson_r_per_target": pearson_vals,
+                    "spearman_r_per_target": spearman_vals,
+                }
 
         scores_np = self.score(logits).numpy()
         targets_np = targets.numpy()

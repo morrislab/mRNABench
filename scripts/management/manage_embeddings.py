@@ -80,7 +80,8 @@ def _parse_emb_filename(filename: str, dataset_name: str) -> str | None:
 def _auto_pattern(val: str, exact: bool) -> str:
     if exact or "%" in val:
         return val
-    return f"%{val}%"
+    else:
+        return f"%{val}%"
 
 
 def _fnmatch_pattern(val: str, exact: bool) -> str:

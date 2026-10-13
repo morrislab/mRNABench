@@ -97,7 +97,8 @@ def _auto_pattern(val: str, exact: bool = False) -> str:
     """Wrap val with %…% for substring matching unless exact or already contains %."""
     if exact or "%" in val:
         return val
-    return f"%{val}%"
+    else:
+        return f"%{val}%"
 
 
 def _or_clause(col: str, vals: list[str], exact: bool) -> tuple[str, list[str]]:

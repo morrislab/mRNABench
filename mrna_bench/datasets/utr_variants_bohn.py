@@ -102,14 +102,15 @@ class UTRVariantsBohn(BenchmarkDataset):
         def interval_lengths(intervals, position=None, delta=0):
             if position is None:
                 return [len(interval) for interval in intervals]
-            return [
-                len(interval) + (
-                    delta
-                    if interval.start <= position < interval.end
-                    else 0
-                )
-                for interval in intervals
-            ]
+            else:
+                return [
+                    len(interval) + (
+                        delta
+                        if interval.start <= position < interval.end
+                        else 0
+                    )
+                    for interval in intervals
+                ]
 
         def encode(
             source_genome,

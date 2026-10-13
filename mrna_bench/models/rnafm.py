@@ -42,7 +42,8 @@ class RNAFM(EmbeddingModel):
         """Get shortened name of model version."""
         if model_version == "RNA-FM":
             return "rna-fm"
-        return model_version.replace("_", "-")
+        else:
+            return model_version.replace("_", "-")
 
     def __init__(
         self,

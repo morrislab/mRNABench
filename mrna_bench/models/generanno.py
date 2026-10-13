@@ -65,7 +65,8 @@ class GENERanno(EmbeddingModel):
         behaviors = super().behaviors_for_version(model_version)
         if model_version in cls._BASE_VERSIONS:
             return behaviors | {ModelBehavior.PSEUDO_LIKELIHOOD}
-        return behaviors
+        else:
+            return behaviors
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
