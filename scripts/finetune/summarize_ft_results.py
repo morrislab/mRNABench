@@ -1,13 +1,12 @@
 """Summarize fine-tuning results into a CSV."""
 
 import argparse
-import json
-from pathlib import Path
 
 import pandas as pd
 
 import mrna_bench as mb
 from mrna_bench.datasets.dataset_catalog import DATASET_CATALOG
+from mrna_bench.persister import ResultsPersister
 
 parser = argparse.ArgumentParser(
     description="Aggregate fine-tuning results into a summary CSV."
@@ -29,33 +28,19 @@ if __name__ == "__main__":
             print("Skipping {}: {}".format(dataset_name, e))
             continue
 
-        ft_dir = Path(dataset.dataset_path) / "ft_results"
-        if not ft_dir.exists():
-            continue
-
-        for json_path in sorted(ft_dir.glob("result_ft_*.json")):
-            try:
-                with open(json_path) as f:
-                    data = json.load(f)
-            except (json.JSONDecodeError, IOError) as e:
-                print("Skipping {}: {}".format(json_path.name, e))
+        for result in ResultsPersister.load_all_results(dataset.dataset_path):
+            if result["evaluation"] != "fine_tune":
                 continue
-
-            config = data.get("config", {})
-            metrics = data.get("metrics", {})
-
-            row = dict(config)
-
-            val_metrics = metrics.get("val", {})
-            if val_metrics:
-                for k, v in val_metrics.items():
-                    row["val_{}".format(k)] = v
-
-            test_metrics = metrics.get("test", {})
-            if test_metrics:
-                for k, v in test_metrics.items():
-                    row["test_{}".format(k)] = v
-
+            row = {
+                key: result[key]
+                for key in ("model", "task", "target_col", "split_type", "seed")
+            }
+            row["dataset"] = dataset_name
+            row.update(result["embedding_config"])
+            row.update(result["probe_config"])
+            for split, split_metrics in result["metrics"].items():
+                for metric, value in split_metrics.items():
+                    row["{}_{}".format(split, metric)] = value
             rows.append(row)
 
     if not rows:

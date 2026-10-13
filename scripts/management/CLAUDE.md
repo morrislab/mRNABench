@@ -1,6 +1,6 @@
 # Management Scripts
 
-Tools for managing the LP results and embedding files stored under the data
+Tools for managing the evaluation results and embedding files stored under the data
 root.
 
 ## Data layout
@@ -10,7 +10,7 @@ root.
 └── {dataset}/
     ├── embeddings/          # {dataset}_{model}_{config_hash}.npz or .h5
     ├── lp_results/          # v1.3 JSON files (mRNABench ≤ 1.3, now legacy)
-    └── results.db           # v2.0 SQLite DB (mRNABench ≥ 2.0, current)
+    └── results.db           # SQLite DB: runs + metrics tables (current)
 ```
 
 ## Files
@@ -33,11 +33,19 @@ python query_lp_db_results.py --model old-name --delete
 python query_lp_db_results.py --rename-model OLD NEW            # exact match on OLD
 ```
 
-Key flags: `--dataset`, `--model`, `--task`, `--target-col`, `--split-type`,
-`--seed`, `--exclude-*` variants, `--exact`, `--expected-seeds`.
+Key flags: `--dataset`, `--model`, `--evaluation`, `--task`, `--target-col`,
+`--split-type`, `--seed`, `--exclude-*` variants, `--exact`,
+`--expected-seeds`.
 
-Current regression rows use task identities `regression_ols` and
-`regression_ridge`. Legacy unqualified `regression` rows used RidgeCV.
+Each row of `runs` is one seed of one configuration: `model`, `evaluation`
+(`linear_probe`, `positional_probe`, `fine_tune`, `embedding_vep`,
+`likelihood_vep`), `task`, `target_col`, `split_type`, `seed`, plus
+`embedding_config` (pooling, layer, attention implementation, as stored in
+the embedding file) and `probe_config` (estimator, probe or training
+settings) with their hashes. `fit_info` holds what fitting chose (alpha, C,
+split sizes, training history). `metrics` has one row per
+(`run_id`, `split`, `metric`). Zero-shot VEP runs use seed and split type
+`none` and split `all`.
 
 ### `query_lp_json_results.py` — query v1.3 JSON results (legacy)
 
@@ -66,14 +74,27 @@ python manage_embeddings.py --rename-model OLD NEW       # exact match on OLD
 
 ### `migrate_json_to_sqlite.py` — one-time v1.3 -> v2.0 migration
 
-Reads all `lp_results/*.json` files and upserts them into `results.db`.
-Old JSON files are not deleted.  Safe to re-run (uses `INSERT OR REPLACE`).
+Reads all `lp_results/*.json` files and writes them into the `runs` and
+`metrics` tables of `results.db` as `linear_probe` runs, with the legacy
+estimator as their probe config.
+Old JSON files are not deleted.  Safe to re-run (a run with the same key is
+replaced).
 
 ```bash
 python migrate_json_to_sqlite.py --dry-run      # parse only, no writes
 python migrate_json_to_sqlite.py                # migrate
 python migrate_json_to_sqlite.py --fallback-model Orthrus  # local checkpoints
 python migrate_json_to_sqlite.py --verify-only  # check DB matches JSON files
+```
+
+### `migrate_embedding_names.py` — name embeddings by config hash
+
+Renames embeddings saved before config hashing to
+`{dataset}_{model}_{config_hash}` and stores their config in the file.
+
+```bash
+python migrate_embedding_names.py --data_dir DIR --dry-run
+python migrate_embedding_names.py --data_dir DIR --fallback_model Orthrus
 ```
 
 ## Renaming a model (both data stores)

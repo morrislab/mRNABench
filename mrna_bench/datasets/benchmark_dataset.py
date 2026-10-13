@@ -302,6 +302,7 @@ class BenchmarkDataset(ABC):
         |    - dataset_name
         |    |    - raw_data
         |    |    - embeddings
+        |    |    - checkpoints
         """
         ds_path = Path(self.data_storage_path) / self.dataset_name
         ds_path.mkdir(exist_ok=True)
@@ -312,9 +313,13 @@ class BenchmarkDataset(ABC):
         emb_dir = Path(ds_path) / "embeddings"
         emb_dir.mkdir(exist_ok=True)
 
+        checkpoint_dir = Path(ds_path) / "checkpoints"
+        checkpoint_dir.mkdir(exist_ok=True)
+
         self.dataset_path = str(ds_path)
         self.raw_data_dir = str(raw_data_dir)
         self.embedding_dir = str(emb_dir)
+        self.checkpoint_dir = str(checkpoint_dir)
 
     def save_processed_df(self, df: pd.DataFrame):
         """Save dataframe to data storage path.

@@ -1,4 +1,4 @@
-"""Compute lp metrics for all embeddings for a dataset for multiple seeds."""
+"""Print mean LP metrics over seeds for all embeddings of a dataset."""
 
 import argparse
 import os
@@ -30,5 +30,13 @@ if __name__ == "__main__":
         )
 
         seeds = [2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]
-        metrics = prober.persister.load_multirun_results(seeds)
-        results = prober.compute_multirun_results(metrics, persist=True)
+        metrics = {
+            seed: {
+                "{}_{}".format(split, name): value
+                for split, split_metrics in run.items()
+                for name, value in split_metrics.items()
+            }
+            for seed, run in prober.persister.load_multirun_results(seeds).items()
+        }
+        print(embedding_fn)
+        prober.compute_multirun_results(metrics, print_output=True)

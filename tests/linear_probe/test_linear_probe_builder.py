@@ -9,7 +9,7 @@ from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.datasets.utr_variants_bohn import UTRVariantsBohn
 from mrna_bench.embedder import get_config_hash, get_embedding_config
 from mrna_bench.linear_probe import LinearProbeBuilder
-from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.persister import ResultsPersister
 
 
 @pytest.fixture
@@ -221,6 +221,7 @@ def test_build(mock_builder: LinearProbeBuilder):
     """Check that build returns a LinearProbe instance."""
     mock_builder.embeddings = Mock()
     mock_builder.model_short_name = "test_model"
+    mock_builder.embedding_config = {}
     mock_builder.target_col = "target"
     mock_builder.task = "task"
     mock_builder.splitter = Mock()
@@ -229,7 +230,7 @@ def test_build(mock_builder: LinearProbeBuilder):
     mock_builder.eval_all_splits = True
 
     with patch(
-        "mrna_bench.linear_probe.linear_probe_builder.LinearProbePersister"
+        "mrna_bench.linear_probe.linear_probe_builder.ResultsPersister"
     ) as mock_persister:
         with patch(
             "mrna_bench.linear_probe.linear_probe_builder.LinearProbe"
@@ -238,7 +239,7 @@ def test_build(mock_builder: LinearProbeBuilder):
                 LinearProbeBuilder, "validate", return_value=[]
             ):
                 mock_persister.return_value = Mock()
-                mock_persister.return_value.__class__ = LinearProbePersister
+                mock_persister.return_value.__class__ = ResultsPersister
 
                 mock_builder.build()
                 mock_probe.assert_called_once()

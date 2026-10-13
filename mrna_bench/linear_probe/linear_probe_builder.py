@@ -7,7 +7,7 @@ from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
 from mrna_bench.embedder import EmbeddingFetcher
 
 from mrna_bench.linear_probe.linear_probe import LinearProbe
-from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.persister import ResultsPersister
 from mrna_bench.linear_probe.evaluator import LinearProbeEvaluator
 
 
@@ -231,6 +231,10 @@ class LinearProbeBuilder(EmbeddingFetcher):
             missing.append(
                 "model_short_name (required when persister is enabled)"
             )
+        if self.persister_flag and self.embedding_config is None:
+            missing.append(
+                "embedding_config (required when persister is enabled)"
+            )
 
         return missing
 
@@ -269,17 +273,20 @@ class LinearProbeBuilder(EmbeddingFetcher):
                 )
             )
 
-        self.persister: LinearProbePersister | None = None
+        self.persister: ResultsPersister | None = None
 
         if self.persister_flag:
             assert self.model_short_name is not None
-            self.persister = LinearProbePersister(
+            assert self.embedding_config is not None
+            self.persister = ResultsPersister(
                 self.dataset,
                 self.model_short_name,
+                "linear_probe",
                 self.task,
                 self.target_col,
                 self.split_type,
-                regressor=self.regressor,
+                self.embedding_config,
+                LinearProbe.get_probe_config(self.task, self.regressor),
             )
 
         assert self.embeddings is not None

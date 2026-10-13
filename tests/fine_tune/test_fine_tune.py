@@ -1,9 +1,6 @@
 import torch
-from types import SimpleNamespace
 
 from mrna_bench.fine_tune import (
-    FineTunePersister,
-    FineTuneTrainer,
     FineTuneWrapper,
     TaskHead,
 )
@@ -129,34 +126,3 @@ def test_trainable_peft_state_round_trips():
     wrapper.load_trainable_state_dict(state)
 
     assert torch.equal(parameter, original)
-
-
-def test_persister_distinguishes_lora_alpha(tmp_path):
-    """Different LoRA alphas store separate rows in the database."""
-    dataset = SimpleNamespace(
-        dataset_name="test",
-        dataset_path=str(tmp_path),
-    )
-    common = {
-        "dataset": dataset,
-        "model_short_name": "model",
-        "task": "classification",
-        "target_col": "target",
-        "split_type": "default",
-        "learning_rate": 1e-4,
-        "lora_rank": 8,
-    }
-
-    low = FineTunePersister(**common, lora_alpha=8)
-    high = FineTunePersister(**common, lora_alpha=32)
-
-    low.persist_run_results({"val": {"loss": 0.5}}, random_seed=0)
-    high.persist_run_results({"val": {"loss": 0.3}}, random_seed=0)
-
-    assert low.result_exists(0)
-    assert high.result_exists(0)
-
-    low_result = low.load_run_results(0)
-    high_result = high.load_run_results(0)
-    assert low_result["metrics"]["val"]["loss"] == 0.5
-    assert high_result["metrics"]["val"]["loss"] == 0.3

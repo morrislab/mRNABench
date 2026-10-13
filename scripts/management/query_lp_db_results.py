@@ -1,4 +1,4 @@
-"""Interactive query tool for LP results stored in SQLite databases.
+"""Interactive query tool for evaluation results stored in SQLite databases.
 
 Searches across ALL results.db files under a root data directory and prints
 rows that match the given filters.  All filters are optional and AND-combined.
@@ -16,8 +16,8 @@ python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4
 # Multiple models at once
 python scripts/linear_probe/query_lp_db_results.py --model orthrus-deep-4 rna-fm
 
-# All results for a model on a specific task
-python scripts/management/query_lp_db_results.py --model orthrus-deep-4 --task regression_ridge
+# Linear probe results for a model on a specific task
+python scripts/management/query_lp_db_results.py --model orthrus-deep-4 --evaluation linear_probe --task regression
 
 # Filter by dataset and split
 python scripts/linear_probe/query_lp_db_results.py --dataset prot-loc --split-type homology
@@ -34,7 +34,7 @@ python scripts/linear_probe/query_lp_db_results.py --model rna-fm --count
 # Delete all rows for a deprecated model (confirms before deleting)
 python scripts/linear_probe/query_lp_db_results.py --model old-model-name --delete
 
-# Find all incomplete (model, task, target_col, split_type) combos (missing from default seed set)
+# Find all incomplete run configs (missing from default seed set)
 python scripts/linear_probe/query_lp_db_results.py --incomplete
 
 # Check incomplete combos for a specific dataset or model
@@ -59,8 +59,8 @@ def _default_data_dir() -> str:
 
 _DEFAULT_SEEDS = ["2541", "413", "411", "412", "2547", "321", "421", "311", "2516", "2515"]
 
-_COLUMNS = ("dataset", "model", "task", "target_col", "split_type", "seed")
-_INCOMPLETE_COLUMNS = ("dataset", "model", "task", "target_col", "split_type", "have", "missing")
+_COLUMNS = ("dataset", "model", "evaluation", "task", "target_col", "split_type", "seed")
+_INCOMPLETE_COLUMNS = ("dataset", "model", "evaluation", "task", "target_col", "split_type", "have", "missing")
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +120,7 @@ def _build_where(args) -> tuple[str, list]:
 
     for col, vals, excls in [
         ("model",      args.model,       args.exclude_model),
+        ("evaluation", args.evaluation,  args.exclude_evaluation),
         ("task",       args.task,        args.exclude_task),
         ("target_col", args.target_col,  args.exclude_target_col),
         ("split_type", args.split_type,  args.exclude_split_type),
@@ -142,7 +143,10 @@ def _query(db_path: Path, where: str, params: list) -> list[sqlite3.Row]:
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        f"SELECT model, task, target_col, split_type, seed, metrics FROM lp_results {where}",
+        "SELECT model, evaluation, task, target_col, split_type, seed,"
+        " (SELECT json_group_object(split || '_' || metric, value)"
+        "  FROM metrics WHERE metrics.run_id = runs.run_id) AS metrics"
+        f" FROM runs {where}",
         params,
     ).fetchall()
     conn.close()
@@ -153,7 +157,7 @@ def _rename_model(db_path: Path, old_name: str, new_name: str) -> int:
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
     cur = conn.execute(
-        "UPDATE lp_results SET model=? WHERE model=?", (new_name, old_name)
+        "UPDATE runs SET model=? WHERE model=?", (new_name, old_name)
     )
     n = cur.rowcount
     conn.commit()
@@ -167,14 +171,14 @@ def _query_incomplete(
     extra_params: list,
     expected_seeds: set[str],
 ) -> list[tuple]:
-    """Return (model, task, target_col, split_type, have, missing) for combos
-    that are missing at least one seed from expected_seeds.
+    """Return (model, evaluation, task, target_col, split_type, have, missing)
+    for run configs missing at least one seed from expected_seeds.
 
     extra_where/extra_params come from _build_where but with seed filters
     stripped (seed completeness is the whole point here).
     """
     clauses = [
-        "task NOT IN ('zeroshot', 'embedding_vep', 'likelihood_vep')"
+        "evaluation NOT IN ('embedding_vep', 'likelihood_vep')"
     ]
     params: list = []
     if extra_where:
@@ -186,9 +190,11 @@ def _query_incomplete(
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.row_factory = sqlite3.Row
     rows = conn.execute(
-        f"SELECT model, task, target_col, split_type, GROUP_CONCAT(seed) AS seeds"
-        f" FROM lp_results {where}"
-        f" GROUP BY model, task, target_col, split_type",
+        "SELECT model, evaluation, task, target_col, split_type,"
+        " GROUP_CONCAT(seed) AS seeds"
+        f" FROM runs {where}"
+        " GROUP BY model, evaluation, task, target_col, split_type,"
+        "  embedding_hash, probe_hash",
         params,
     ).fetchall()
     conn.close()
@@ -199,7 +205,7 @@ def _query_incomplete(
         missing = sorted(expected_seeds - have)
         if missing:
             incomplete.append((
-                r["model"], r["task"], r["target_col"],
+                r["model"], r["evaluation"], r["task"], r["target_col"],
                 r["split_type"], sorted(have), missing,
             ))
     return incomplete
@@ -208,9 +214,11 @@ def _query_incomplete(
 def _delete(db_path: Path, where: str, params: list) -> int:
     conn = sqlite3.connect(str(db_path), timeout=30)
     conn.execute("PRAGMA journal_mode=WAL")
-    cur = conn.execute(
-        f"DELETE FROM lp_results {where}", params
+    conn.execute(
+        f"DELETE FROM metrics WHERE run_id IN (SELECT run_id FROM runs {where})",
+        params,
     )
+    cur = conn.execute(f"DELETE FROM runs {where}", params)
     n = cur.rowcount
     conn.commit()
     conn.close()
@@ -231,8 +239,8 @@ def _print_incomplete_table(
     cols = _INCOMPLETE_COLUMNS
     widths = [len(h) for h in cols]
     for row in all_rows:
-        dataset, model, task, target_col, split_type, have, missing = row
-        vals = (dataset, model, task, target_col, split_type,
+        dataset, model, evaluation, task, target_col, split_type, have, missing = row
+        vals = (dataset, model, evaluation, task, target_col, split_type,
                 str(len(have)), str(missing))
         for i, v in enumerate(vals):
             widths[i] = max(widths[i], len(str(v)))
@@ -243,14 +251,14 @@ def _print_incomplete_table(
     print(sep)
 
     for row in all_rows:
-        dataset, model, task, target_col, split_type, have, missing = row
-        vals = (dataset, model, task, target_col, split_type,
+        dataset, model, evaluation, task, target_col, split_type, have, missing = row
+        vals = (dataset, model, evaluation, task, target_col, split_type,
                 str(len(have)), str(missing))
         print("  ".join(str(v).ljust(w) for v, w in zip(vals, widths)))
 
 
 def _format_metrics(metrics_json: str, all_splits: bool = False) -> str:
-    d: dict = json.loads(metrics_json)
+    d: dict = json.loads(metrics_json or "{}")
     if not all_splits:
         d = {k: v for k, v in d.items() if k.startswith("test_")}
     return "  ".join(f"{k}={v:.4f}" if isinstance(v, float) else f"{k}={v}"
@@ -266,7 +274,7 @@ def _col_widths(rows_with_dataset: list[tuple]) -> list[int]:
 
 
 def _print_table(
-    all_rows: list[tuple],   # (dataset, model, task, target_col, split_type, seed, metrics_json)
+    all_rows: list[tuple],   # (dataset, model, evaluation, task, target_col, split_type, seed, metrics_json)
     show_metrics: bool,
     all_splits: bool = False,
 ) -> None:
@@ -281,11 +289,8 @@ def _print_table(
     print(sep)
 
     for row in all_rows:
-        dataset, model, task, target_col, split_type, seed, metrics_json = row
-        line = "  ".join(
-            str(v).ljust(w)
-            for v, w in zip((dataset, model, task, target_col, split_type, seed), widths)
-        )
+        *key, metrics_json = row
+        line = "  ".join(str(v).ljust(w) for v, w in zip(key, widths))
         if show_metrics:
             line += "  " + _format_metrics(metrics_json, all_splits)
         print(line)
@@ -310,12 +315,14 @@ def main() -> None:
     )
     g.add_argument("--dataset",    metavar="PATTERN", nargs="+", help="Dataset name(s)")
     g.add_argument("--model",      metavar="PATTERN", nargs="+", help="Model short name(s)")
+    g.add_argument("--evaluation", metavar="PATTERN", nargs="+",
+                   help="Evaluation(s), e.g. linear_probe, fine_tune")
     g.add_argument("--task",       metavar="PATTERN", nargs="+", help="Task type(s)")
     g.add_argument("--target-col", metavar="PATTERN", nargs="+", dest="target_col",
                    help="Target column(s)")
     g.add_argument("--split-type", metavar="PATTERN", nargs="+", dest="split_type",
                    help="Split type(s)")
-    g.add_argument("--seed",       metavar="PATTERN", nargs="+", help="Random seed(s) or 'all'")
+    g.add_argument("--seed",       metavar="PATTERN", nargs="+", help="Random seed(s)")
 
     # Exclusion filters (NOT LIKE; multiple values all excluded)
     e = parser.add_argument_group(
@@ -325,6 +332,9 @@ def main() -> None:
                    help="Exclude dataset(s) matching these patterns")
     e.add_argument("--exclude-model",      metavar="PATTERN", nargs="+", dest="exclude_model",
                    help="Exclude model(s) matching these patterns")
+    e.add_argument("--exclude-evaluation", metavar="PATTERN", nargs="+",
+                   dest="exclude_evaluation",
+                   help="Exclude evaluation(s) matching these patterns")
     e.add_argument("--exclude-task",       metavar="PATTERN", nargs="+", dest="exclude_task",
                    help="Exclude task(s) matching these patterns")
     e.add_argument("--exclude-target-col", metavar="PATTERN", nargs="+",
@@ -410,7 +420,7 @@ def main() -> None:
             for r in rows:
                 all_rows.append((
                     dataset_name,
-                    r["model"], r["task"], r["target_col"],
+                    r["model"], r["evaluation"], r["task"], r["target_col"],
                     r["split_type"], r["seed"],
                     r["metrics"],
                 ))

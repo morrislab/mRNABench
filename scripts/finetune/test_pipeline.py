@@ -5,8 +5,8 @@ import torch
 from torch.utils.data import DataLoader
 
 from mrna_bench import load_dataset
+from mrna_bench.embedder import get_embedding_config
 from mrna_bench.fine_tune import (
-    FineTunePersister,
     FineTuneTrainer,
     FineTuneWrapper,
     SequenceDataset,
@@ -15,6 +15,7 @@ from mrna_bench.fine_tune import (
     collate_fn,
 )
 from mrna_bench.models import MODEL_CATALOG
+from mrna_bench.persister import ResultsPersister
 
 
 if __name__ == "__main__":
@@ -81,24 +82,22 @@ if __name__ == "__main__":
     print("\nVal metrics: {}".format(val_metrics))
 
     # Test persister
-    persister = FineTunePersister(
-        dataset=dataset,
-        model_short_name=model_short_name,
-        task=task,
-        target_col=target_col,
-        split_type=split_type,
-        learning_rate=learning_rate,
-        lora_rank=lora_rank,
+    persister = ResultsPersister(
+        dataset,
+        model_short_name,
+        "fine_tune",
+        task,
+        target_col,
+        split_type,
+        get_embedding_config(model),
+        {"lr": learning_rate, "lora_rank": lora_rank},
     )
 
     random_seed = "test"
     persister.persist_run_results(
-        metrics={"val": val_metrics, "test": None},
-        random_seed=random_seed,
-        history=history,
+        {"val": val_metrics}, random_seed, fit_info={"history": history}
     )
-    result_path = persister._get_path(random_seed, ".json")
-    print("\nPersisted results to: {}".format(result_path))
+    print("\nPersisted results to: {}".format(persister._db_path))
 
     # Load back and verify
     loaded = persister.load_run_results(random_seed)

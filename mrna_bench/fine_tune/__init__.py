@@ -8,7 +8,6 @@ from mrna_bench.fine_tune.dataloader import (
     create_dataloaders,
     create_vep_dataloaders,
 )
-from mrna_bench.fine_tune.persister import FineTunePersister
 
 __all__ = [
     "FineTuneWrapper",
@@ -21,5 +20,4 @@ __all__ = [
     "collate_fn",
     "create_dataloaders",
     "create_vep_dataloaders",
-    "FineTunePersister",
 ]

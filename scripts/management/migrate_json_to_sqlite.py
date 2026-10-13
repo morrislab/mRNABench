@@ -1,57 +1,66 @@
-"""Migrate old JSON linear probe results to the new SQLite format.
+"""Migrate JSON linear probe results of mRNABench <= 1.3 to results.db.
 
 Reads all result_lp_*.json files from::
 
     {source_dir}/{dataset}/lp_results/
 
-and writes them into::
+and writes them into the ``runs`` and ``metrics`` tables of::
 
     {dest_dir}/{dataset}/results.db
 
-using the same ``lp_results`` table schema as
-``mrna_bench.linear_probe.persister.LinearProbePersister``.
+through ``mrna_bench.persister.ResultsPersister``. Each result is stored as a
+``linear_probe`` run whose probe config is the estimator those versions used
+(RidgeCV with alphas 1e-3 to 10 on raw embeddings for ridge regression, OLS
+for ``reg_lin``, and LogisticRegression with C=1 for classification), so
+legacy results never share a key with results of the current probe. The
+embedding config is mean pooling of the final layer with the model's
+default attention implementation.
 
-Old JSON files are NOT deleted.  Re-running the script is safe because
-inserts use ``INSERT OR REPLACE`` (upsert on the composite primary key).
+Old JSON files are NOT deleted. Re-running the script is safe: a run with
+the same key is replaced.
 
 Usage
 -----
 # Dry-run: parse filenames, print what would be written, write nothing
-python scripts/linear_probe/migrate_json_to_sqlite.py --dry-run
+python scripts/management/migrate_json_to_sqlite.py --dry-run
 
 # Migrate then verify
-python scripts/linear_probe/migrate_json_to_sqlite.py
+python scripts/management/migrate_json_to_sqlite.py
+
+# Local checkpoints not in the model catalog take a catalog model's defaults
+python scripts/management/migrate_json_to_sqlite.py --fallback-model Orthrus
 
 # Verify only (no writes)
-python scripts/linear_probe/migrate_json_to_sqlite.py --verify-only
+python scripts/management/migrate_json_to_sqlite.py --verify-only
 """
 
 import argparse
 import json
-import sqlite3
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
+from sklearn.linear_model import LinearRegression, LogisticRegression, RidgeCV
+from sklearn.multioutput import MultiOutputClassifier
 
-_LP_SCHEMA = """\
-CREATE TABLE IF NOT EXISTS lp_results (
-    model      TEXT NOT NULL,
-    task       TEXT NOT NULL,
-    target_col TEXT NOT NULL,
-    split_type TEXT NOT NULL,
-    seed       TEXT NOT NULL,
-    metrics    TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (model, task, target_col, split_type, seed)
-)
-"""
+from mrna_bench.embedder import get_config_hash, get_embedding_config
+from mrna_bench.models import MODEL_CATALOG
+from mrna_bench.persister import ResultsPersister, metrics_by_split
 
 # Order matters: check "reg_lin" / "reg_ridge" before "regression" to avoid
 # matching "reg" as a prefix of the longer task names.
 _TASKS = ["reg_lin", "reg_ridge", "regression", "classification", "multilabel"]
+
+# Estimators of mRNABench <= 1.3 for each task name in the JSON filenames.
+_LEGACY_ESTIMATORS = {
+    "regression": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+    "reg_lin": LinearRegression(n_jobs=-1),
+    "reg_ridge": RidgeCV(alphas=[1e-3, 1e-2, 1e-1, 1, 10]),
+    "classification": LogisticRegression(max_iter=5000, n_jobs=-1),
+    "multilabel": MultiOutputClassifier(
+        LogisticRegression(max_iter=5000, n_jobs=-1), n_jobs=-1
+    ),
+}
 
 def _default_data_dir() -> str:
     try:
@@ -142,105 +151,140 @@ def parse_filename(filename: str, dataset_name: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# SQLite helpers
+# Run configs
 # ---------------------------------------------------------------------------
 
-def _open_db(db_path: Path) -> sqlite3.Connection:
-    conn = sqlite3.connect(str(db_path), timeout=30)
-    conn.execute("PRAGMA journal_mode=WAL")
-    conn.row_factory = sqlite3.Row
-    conn.execute(_LP_SCHEMA)
-    return conn
+def run_key(parsed: dict) -> tuple:
+    """Key shared by the JSON files of one run config (all seeds)."""
+    return (
+        parsed["model"], parsed["task"], parsed["target_col"],
+        parsed["split_type"],
+    )
+
+
+def make_persister(
+    dataset_dir: Path,
+    key: tuple,
+    model_classes: dict,
+    fallback,
+) -> ResultsPersister | None:
+    """Build the persister for a run config, or None for unknown models."""
+    model, task, target_col, split_type = key
+    model_class = model_classes.get(model, fallback)
+    if model_class is None:
+        return None
+    probe_config = {
+        "estimator": " ".join(repr(_LEGACY_ESTIMATORS[task]).split())
+    }
+    return ResultsPersister(
+        SimpleNamespace(dataset_path=str(dataset_dir)),
+        model,
+        "linear_probe",
+        task if task in ("classification", "multilabel") else "regression",
+        target_col,
+        split_type,
+        get_embedding_config(model_class),
+        probe_config,
+    )
+
+
+def group_files(lp_dir: Path, dataset_name: str) -> tuple[dict, list]:
+    """Group seed files by run config; return groups and parse errors."""
+    groups: dict[tuple, dict[str, Path]] = {}
+    errors = []
+    for jf in sorted(lp_dir.glob("result_lp_*.json")):
+        try:
+            parsed = parse_filename(jf.name, dataset_name)
+        except ValueError as exc:
+            errors.append(str(exc))
+            continue
+        if parsed["seed"] == "all":
+            continue  # aggregate over seeds, recomputed from the seed runs
+        groups.setdefault(run_key(parsed), {})[parsed["seed"]] = jf
+    return groups, errors
+
+
+def iter_dataset_dirs(source_dir: Path):
+    """Yield (dataset_name, lp_results dir) for each dataset with results."""
+    for dataset_dir in sorted(source_dir.iterdir()):
+        lp_dir = dataset_dir / "lp_results"
+        if dataset_dir.is_dir() and lp_dir.exists():
+            yield dataset_dir.name, lp_dir
 
 
 # ---------------------------------------------------------------------------
 # Migration
 # ---------------------------------------------------------------------------
 
-def migrate(source_dir: Path, dest_dir: Path, *, dry_run: bool = False) -> bool:
-    """Migrate JSON results to SQLite.
+def migrate(
+    source_dir: Path,
+    dest_dir: Path,
+    model_classes: dict,
+    fallback,
+    *,
+    dry_run: bool = False,
+) -> bool:
+    """Migrate JSON results to results.db.
 
     Args:
         source_dir: Root directory whose sub-directories are dataset dirs.
-        dest_dir: Root directory where ``{dataset}/results.db`` files are written.
-        dry_run: If True, parse filenames and report without writing anything.
+        dest_dir: Root directory where ``{dataset}/results.db`` is written.
+        model_classes: Model class for each model short name.
+        fallback: Model class for short names not in model_classes, or None
+            to skip them.
+        dry_run: If True, parse filenames and report without writing.
 
     Returns:
         True if migration completed with zero errors.
     """
     total_migrated = 0
     total_errors = 0
+    skipped_models: set[str] = set()
 
-    for dataset_dir in sorted(source_dir.iterdir()):
-        if not dataset_dir.is_dir():
-            continue
-        lp_dir = dataset_dir / "lp_results"
-        if not lp_dir.exists():
-            continue
+    for dataset_name, lp_dir in iter_dataset_dirs(source_dir):
+        groups, parse_errors = group_files(lp_dir, dataset_name)
+        for error in parse_errors:
+            print(f"  ERROR {error}", file=sys.stderr)
+        total_errors += len(parse_errors)
 
-        dataset_name = dataset_dir.name
-        json_files = sorted(lp_dir.glob("result_lp_*.json"))
-        if not json_files:
-            continue
+        n_files = sum(len(seeds) for seeds in groups.values())
+        print(f"\n[{dataset_name}]  {n_files} seed files in "
+              f"{len(groups)} run configs", flush=True)
 
-        print(f"\n[{dataset_name}]  {len(json_files)} JSON files", flush=True)
+        dataset_dir = dest_dir / dataset_name
+        if not dry_run:
+            dataset_dir.mkdir(parents=True, exist_ok=True)
 
-        if dry_run:
-            # Parse a few filenames to sanity-check
-            sample_errors = 0
-            for jf in json_files[:5]:
-                try:
-                    parsed = parse_filename(jf.name, dataset_name)
-                    print(f"  ok  {jf.name}")
-                    print(f"      -> model={parsed['model']!r}  task={parsed['task']!r}"
-                          f"  tcol={parsed['target_col']!r}"
-                          f"  split={parsed['split_type']!r}  seed={parsed['seed']!r}")
-                except ValueError as exc:
-                    print(f"  ERR {jf.name}: {exc}")
-                    sample_errors += 1
-            if len(json_files) > 5:
-                print(f"  ... (showing 5 of {len(json_files)})")
-            continue
-
-        dest_dataset_dir = dest_dir / dataset_name
-        dest_dataset_dir.mkdir(parents=True, exist_ok=True)
-        db_path = dest_dataset_dir / "results.db"
-
-        conn = _open_db(db_path)
-        dataset_errors = 0
-
-        for jf in json_files:
+        for i, (key, seed_files) in enumerate(sorted(groups.items())):
+            persister = make_persister(dataset_dir, key, model_classes, fallback)
+            if persister is None:
+                skipped_models.add(key[0])
+                continue
+            if dry_run:
+                if i < 3:
+                    print(f"  {key} seeds={sorted(seed_files)}")
+                    print(f"    embedding_config={persister.embedding_config}")
+                    print(f"    probe_config={persister.probe_config}")
+                continue
             try:
-                parsed = parse_filename(jf.name, dataset_name)
-                metrics = json.loads(jf.read_text())
-                conn.execute(
-                    "INSERT OR REPLACE INTO lp_results"
-                    " (model, task, target_col, split_type, seed, metrics)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
-                    (
-                        parsed["model"], parsed["task"], parsed["target_col"],
-                        parsed["split_type"], parsed["seed"],
-                        json.dumps(metrics, default=float),
-                    ),
-                )
-                total_migrated += 1
+                persister.persist_multirun_results({
+                    seed: metrics_by_split(json.loads(path.read_text()))
+                    for seed, path in seed_files.items()
+                })
+                total_migrated += len(seed_files)
             except Exception as exc:
-                print(f"  ERROR {jf.name}: {exc}", file=sys.stderr)
-                dataset_errors += 1
+                print(f"  ERROR {key}: {exc}", file=sys.stderr)
                 total_errors += 1
 
-        conn.commit()
-        row_count = conn.execute("SELECT COUNT(*) FROM lp_results").fetchone()[0]
-        conn.close()
-
-        status = "OK" if dataset_errors == 0 else f"ERRORS={dataset_errors}"
-        print(f"  [{status}]  {row_count} rows written to results.db", flush=True)
-
+    if skipped_models:
+        print(f"\nSkipped models not in the catalog (use --fallback-model): "
+              f"{sorted(skipped_models)}")
     print()
     if dry_run:
         print("Dry-run complete — no files were written.")
     else:
-        print(f"Migration complete: {total_migrated} rows inserted, {total_errors} errors.")
+        print(f"Migration complete: {total_migrated} runs written, "
+              f"{total_errors} errors.")
 
     return total_errors == 0
 
@@ -249,105 +293,70 @@ def migrate(source_dir: Path, dest_dir: Path, *, dry_run: bool = False) -> bool:
 # Verification
 # ---------------------------------------------------------------------------
 
-def verify(source_dir: Path, dest_dir: Path) -> bool:
-    """Verify that every JSON result file is present in the SQLite database.
+def verify(
+    source_dir: Path,
+    dest_dir: Path,
+    model_classes: dict,
+    fallback,
+) -> bool:
+    """Verify that every migrated JSON result is in results.db.
 
     Args:
         source_dir: Root directory containing dataset sub-directories.
         dest_dir: Root directory containing ``{dataset}/results.db`` files.
+        model_classes: Model class for each model short name.
+        fallback: Model class for short names not in model_classes.
 
     Returns:
-        True if all files are present and metric keys match.
+        True if all results are present with the same metric names.
     """
-    total_files = 0
     total_verified = 0
     total_missing = 0
-    total_key_mismatch = 0
-    total_parse_errors = 0
+    total_mismatch = 0
 
-    for dataset_dir in sorted(source_dir.iterdir()):
-        if not dataset_dir.is_dir():
-            continue
-        lp_dir = dataset_dir / "lp_results"
-        if not lp_dir.exists():
-            continue
+    for dataset_name, lp_dir in iter_dataset_dirs(source_dir):
+        groups, _ = group_files(lp_dir, dataset_name)
+        stored = {
+            (r["model"], r["task"], r["target_col"], r["split_type"],
+             r["seed"], r["probe_hash"]): {
+                f"{split}_{metric}"
+                for split, values in r["metrics"].items()
+                for metric in values
+            }
+            for r in ResultsPersister.load_all_results(dest_dir / dataset_name)
+        }
 
-        dataset_name = dataset_dir.name
-        json_files = sorted(lp_dir.glob("result_lp_*.json"))
-        if not json_files:
-            continue
-
-        total_files += len(json_files)
-
-        db_path = (dest_dir / dataset_name) / "results.db"
-        if not db_path.exists():
-            print(f"[MISSING DB]  {dataset_name}  — results.db not found at {db_path}")
-            total_missing += len(json_files)
-            continue
-
-        conn = sqlite3.connect(str(db_path), timeout=30)
-        conn.row_factory = sqlite3.Row
-
-        ds_verified = 0
-        ds_missing = 0
-        ds_key_mismatch = 0
-        ds_parse_errors = 0
-
-        for jf in json_files:
-            try:
-                parsed = parse_filename(jf.name, dataset_name)
-            except ValueError as exc:
-                print(f"  PARSE ERROR {jf.name}: {exc}", file=sys.stderr)
-                ds_parse_errors += 1
-                total_parse_errors += 1
+        verified = missing = mismatch = 0
+        for key, seed_files in groups.items():
+            persister = make_persister(
+                dest_dir / dataset_name, key, model_classes, fallback
+            )
+            if persister is None:
                 continue
-
-            row = conn.execute(
-                "SELECT metrics FROM lp_results"
-                " WHERE model=? AND task=? AND target_col=? AND split_type=? AND seed=?",
-                (parsed["model"], parsed["task"], parsed["target_col"],
-                    parsed["split_type"], parsed["seed"]),
-            ).fetchone()
-
-            if row is None:
-                ds_missing += 1
-                total_missing += 1
-                if ds_missing <= 3:
-                    print(f"  MISSING  {jf.name}")
-            else:
-                original_keys = set(json.loads(jf.read_text()).keys())
-                db_keys = set(json.loads(row["metrics"]).keys())
-                if original_keys != db_keys:
-                    ds_key_mismatch += 1
-                    total_key_mismatch += 1
-                    if ds_key_mismatch <= 3:
-                        print(f"  KEY MISMATCH  {jf.name}")
-                        print(f"    original: {sorted(original_keys)}")
-                        print(f"    database: {sorted(db_keys)}")
+            probe_hash = get_config_hash(persister.probe_config)
+            for seed, path in seed_files.items():
+                names = stored.get((
+                    persister.model_short_name, persister.task,
+                    persister.target_col, persister.split_type, seed,
+                    probe_hash,
+                ))
+                if names is None:
+                    missing += 1
+                elif names != set(json.loads(path.read_text())):
+                    mismatch += 1
                 else:
-                    ds_verified += 1
-                    total_verified += 1
+                    verified += 1
 
-        conn.close()
+        status = "OK" if missing + mismatch == 0 else "ISSUES"
+        print(f"[{status}]  {dataset_name}:  {verified} verified  |  "
+              f"{missing} missing  |  {mismatch} metric mismatch", flush=True)
+        total_verified += verified
+        total_missing += missing
+        total_mismatch += mismatch
 
-        issues = ds_missing + ds_key_mismatch + ds_parse_errors
-        status = "OK" if issues == 0 else f"ISSUES={issues}"
-        print(
-            f"[{status}]  {dataset_name}:  "
-            f"{len(json_files)} files  |  "
-            f"{ds_verified} verified  |  "
-            f"{ds_missing} missing  |  "
-            f"{ds_key_mismatch} key-mismatch  |  "
-            f"{ds_parse_errors} parse-errors",
-            flush=True,
-        )
-
-    print()
-    print(f"TOTAL:  {total_files} files  |  {total_verified} verified  |  "
-          f"{total_missing} missing  |  {total_key_mismatch} key-mismatch  |  "
-          f"{total_parse_errors} parse-errors")
-
-    return (total_missing + total_key_mismatch + total_parse_errors) == 0
+    print(f"\nTOTAL:  {total_verified} verified  |  {total_missing} missing  "
+          f"|  {total_mismatch} metric mismatch")
+    return total_missing + total_mismatch == 0
 
 
 # ---------------------------------------------------------------------------
@@ -356,7 +365,7 @@ def verify(source_dir: Path, dest_dir: Path) -> bool:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Migrate old LP JSON results to SQLite (results.db).",
+        description="Migrate LP JSON results of mRNABench <= 1.3 to results.db.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
@@ -382,7 +391,22 @@ def main() -> None:
         action="store_true",
         help="Skip migration; only verify existing results.db files.",
     )
+    parser.add_argument(
+        "--fallback-model",
+        default=None,
+        help="Catalog model whose defaults apply to model names not in the "
+             "catalog, e.g. Orthrus for local Orthrus checkpoints.",
+    )
     args = parser.parse_args()
+
+    model_classes = {
+        cls.get_model_short_name(version): cls
+        for cls in MODEL_CATALOG.values()
+        for version in cls.valid_versions
+    }
+    fallback = (
+        MODEL_CATALOG[args.fallback_model] if args.fallback_model else None
+    )
 
     raw = args.source_dir or _default_data_dir()
     if not raw:
@@ -397,14 +421,17 @@ def main() -> None:
 
     if args.verify_only:
         print(f"Verifying results in {dest_dir} against JSON files in {source_dir}\n")
-        ok = verify(source_dir, dest_dir)
+        ok = verify(source_dir, dest_dir, model_classes, fallback)
     else:
         print(f"Migrating JSON results from {source_dir}  ->  {dest_dir}\n")
-        ok = migrate(source_dir, dest_dir, dry_run=args.dry_run)
+        ok = migrate(
+            source_dir, dest_dir, model_classes, fallback,
+            dry_run=args.dry_run,
+        )
 
         if not args.dry_run:
             print("\n--- VERIFICATION ---\n")
-            ok = verify(source_dir, dest_dir) and ok
+            ok = verify(source_dir, dest_dir, model_classes, fallback) and ok
 
     sys.exit(0 if ok else 1)
 

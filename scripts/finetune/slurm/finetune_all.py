@@ -60,8 +60,6 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
 
-    from mrna_bench.fine_tune import FineTunePersister
-
     for _, dataset_info in DATASET_INFO.items():
         dataset_name = dataset_info["dataset"]
 
@@ -116,27 +114,7 @@ if __name__ == "__main__":
                     for split_type in valid_split_types:
                         for lr in learning_rates:
                             for lora_rank, lora_alpha in zip(lora_ranks, lora_alphas):
-                                persister = FineTunePersister(
-                                    dataset=dataset,
-                                    model_short_name=model_short_name,
-                                    task=task,
-                                    target_col=target_col,
-                                    split_type=split_type,
-                                    learning_rate=lr,
-                                    lora_rank=lora_rank,
-                                    lora_alpha=lora_alpha,
-                                )
-
-                                all_exists = True
-                                for seed in random_seeds:
-                                    path = persister._get_path(seed, ".json")
-                                    if not path.exists() or args.force_recompute:
-                                        all_exists = False
-                                        break
-
-                                if all_exists:
-                                    continue
-
+                                # run_finetune.py skips seeds with existing results
                                 cmd = [
                                     "sbatch",
                                     "./finetune_slurm.sh",

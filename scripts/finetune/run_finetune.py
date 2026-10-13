@@ -17,7 +17,10 @@ from mrna_bench.fine_tune import (
     create_dataloaders,
     create_vep_dataloaders,
 )
+from mrna_bench.embedder import get_embedding_config
 from mrna_bench.models import MODEL_CATALOG
+from mrna_bench.models.pooling import MeanPool, NoPool, Pooling, PositionPool
+from mrna_bench.persister import ResultsPersister
 
 default_seeds = "[0]"
 default_lrs = "[1e-5, 1e-4, 1e-3]"
@@ -257,17 +260,31 @@ if __name__ == "__main__":
     print("Seeds: {}".format(seeds))
     print("Eval test: {}".format(args.eval_test))
 
+    embedding_config = get_embedding_config(
+        model_class, get_pooling(task, args.pooling)
+    )
+
     for lr in learning_rates:
         for lora_rank, lora_alpha in zip(lora_ranks, lora_alphas):
-            persister = FineTunePersister(
-                dataset=dataset,
-                model_short_name=model_short_name,
-                task=task,
-                target_col=target,
-                split_type=split_type,
-                learning_rate=lr,
-                lora_rank=lora_rank,
-                lora_alpha=lora_alpha,
+            persister = ResultsPersister(
+                dataset,
+                model_short_name,
+                "fine_tune",
+                task,
+                target,
+                split_type,
+                embedding_config,
+                {
+                    "lr": lr,
+                    "lora_rank": lora_rank or None,
+                    "lora_alpha": lora_alpha if lora_rank else None,
+                    "lora_layers": lora_layers,
+                    "trainable_layers": trainable_layers,
+                    "epochs": args.epochs,
+                    "batch_size": args.batch_size,
+                    "accumulation_steps": args.accumulation_steps,
+                    "lr_schedule": args.lr_schedule,
+                },
             )
 
             for seed in seeds:
@@ -309,13 +326,11 @@ if __name__ == "__main__":
                     for key, value in test_metrics.items():
                         print("  {}: {:.4f}".format(key, value))
 
+                metrics = {"val": val_metrics}
+                if test_metrics is not None:
+                    metrics["test"] = test_metrics
                 persister.persist_run_results(
-                    metrics={
-                        "val": val_metrics,
-                        "test": test_metrics,
-                    },
-                    random_seed=seed,
-                    history=history,
+                    metrics, seed, fit_info={"history": history}
                 )
 
                 del val_metrics, test_metrics, history

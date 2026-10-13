@@ -3,10 +3,17 @@ from unittest.mock import Mock, patch
 
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression, RidgeCV
+import torch
+from sklearn.linear_model import (
+    LinearRegression,
+    LogisticRegression,
+    Ridge,
+    RidgeCV,
+)
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.pipeline import Pipeline
 
-from mrna_bench.linear_probe.linear_probe import LinearProbe
-from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.linear_probe.linear_probe import LinearProbe, to_torch
 
 
 def test_regression_model_names_are_distinct():
@@ -21,28 +28,14 @@ def test_regression_model_names_are_distinct():
     )
 
 
-def test_regression_results_use_explicit_persistence_identity(tmp_path):
-    """New OLS results do not overwrite historical RidgeCV rows."""
-    dataset = Mock(dataset_path=str(tmp_path))
-    persister = LinearProbePersister(
-        dataset,
-        "model",
-        "regression",
-        "target",
-        "default",
-    )
+def test_probe_config_names_the_estimator():
+    """Ridge and OLS probes persist under different probe configs."""
+    ridge = LinearProbe.get_probe_config("regression", "ridge")
+    ols = LinearProbe.get_probe_config("regression", "ols")
 
-    assert persister.task == "regression_ols"
-
-    ridge = LinearProbePersister(
-        dataset,
-        "model",
-        "regression",
-        "target",
-        "default",
-        regressor="ridge",
-    )
-    assert ridge.task == "regression_ridge"
+    assert ridge != ols
+    assert "RidgeCV" in ridge["estimator"]
+    assert "LinearRegression" in ols["estimator"]
 
 
 @pytest.fixture
@@ -61,7 +54,7 @@ def linear_probe() -> LinearProbe:
     task = "regression"
     splitter = Mock()
     evaluator = Mock()
-    evaluator.evaluate_linear_probe = Mock()
+    evaluator.evaluate_linear_probe = Mock(return_value={"val_r": 0.1})
 
     eval_all_splits = True
 
@@ -77,10 +70,11 @@ def linear_probe() -> LinearProbe:
 
 
 @pytest.fixture
-def linear_probe_persister(linear_probe: LinearProbe) -> LinearProbe:
+def linear_probe_persister(linear_probe: LinearProbe, tmp_path) -> LinearProbe:
     """Return a LinearProbe instance with a persister."""
     persister = Mock()
     persister.persist_run_results = Mock()
+    persister.get_checkpoint_path = Mock(return_value=tmp_path / "probe.pt")
     linear_probe.persister = persister
     return linear_probe
 
@@ -171,3 +165,39 @@ def test_linear_probe_no_persister_persist(
 
         with pytest.raises(RuntimeError):
             linear_probe.run_linear_probe(random_seed=42, persist=True)
+
+
+@pytest.mark.parametrize("model, y", [
+    (LinearRegression(), np.arange(20.0)),
+    (RidgeCV(alphas=[1e-3, 1]), np.arange(40.0).reshape(20, 2)),
+    (Ridge(solver="sag", alpha=1e-3), np.arange(20.0)),
+    (LogisticRegression(), np.arange(20) % 2),
+    (LogisticRegression(), np.arange(20) % 3),
+    (MultiOutputClassifier(LogisticRegression()),
+     np.stack([np.arange(20) % 2, np.arange(20) // 10], axis=1)),
+    (LinearProbe.regression_models["ridge"](), np.arange(20.0)),
+    (LinearProbe.linear_models["classification"](), np.arange(20) % 2),
+    (LinearProbe.linear_models["multilabel"](),
+     np.stack([np.arange(20) % 2, np.arange(20) // 10], axis=1)),
+])
+def test_torch_checkpoint_matches_sklearn(model, y, tmp_path):
+    """The saved torch module reproduces the fitted sklearn model."""
+    X = np.random.default_rng(0).normal(size=(20, 5))
+    model.fit(X, y)
+    torch.save(to_torch(model), tmp_path / "probe.pt")
+
+    module = LinearProbe.load_checkpoint(tmp_path / "probe.pt")
+    out = module(torch.tensor(X, dtype=torch.float32)).detach().numpy()
+
+    final = model[-1] if isinstance(model, Pipeline) else model
+    if isinstance(final, MultiOutputClassifier):
+        expected = np.stack(
+            [p[:, 1] for p in model.predict_proba(X)], axis=1
+        )
+    elif isinstance(final, LogisticRegression):
+        expected = model.predict_proba(X)
+        if expected.shape[1] == 2:
+            expected = expected[:, 1:]
+    else:
+        expected = model.predict(X).reshape(len(X), -1)
+    np.testing.assert_allclose(out, expected, rtol=1e-4, atol=1e-5)

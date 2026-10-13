@@ -1,16 +1,78 @@
+from collections.abc import Callable
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
+import torch
+import torch.nn as nn
 
 from sklearn.base import BaseEstimator
 from sklearn.linear_model import LinearRegression, LogisticRegressionCV
 from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.multioutput import MultiOutputClassifier
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import Pipeline, make_pipeline
 from sklearn.preprocessing import StandardScaler
 
 from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.linear_probe.evaluator import LinearProbeEvaluator
-from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.persister import ResultsPersister, metrics_by_split
+
+
+_ACTIVATIONS: dict[str, Callable[[], nn.Module]] = {
+    "identity": nn.Identity,
+    "sigmoid": nn.Sigmoid,
+    "softmax": lambda: nn.Softmax(dim=-1),
+}
+
+
+def to_torch(model: BaseEstimator) -> dict:
+    """Convert a fitted linear probe to a torch checkpoint.
+
+    The module rebuilt by LinearProbe.load_checkpoint() returns, with one
+    column per output, predict() for regression, the positive class
+    probability for binary and multilabel classification, and the per-class
+    probabilities (in ``classes`` order) for multiclass classification.
+
+    A leading StandardScaler is folded into the linear layer.
+
+    Args:
+        model: Fitted scikit-learn linear model, optionally a pipeline of
+            a StandardScaler and a linear model.
+
+    Returns:
+        Checkpoint with the linear layer weights, output activation, and
+        class labels.
+    """
+    scaler = None
+    if isinstance(model, Pipeline):
+        scaler, model = model[0], model[-1]
+
+    if isinstance(model, MultiOutputClassifier):
+        estimators = model.estimators_
+        activation = "sigmoid"
+        classes = None
+    else:
+        estimators = [model]
+        classes = getattr(model, "classes_", None)
+        if classes is None:
+            activation = "identity"
+        else:
+            activation = "sigmoid" if len(classes) == 2 else "softmax"
+
+    in_dim = estimators[0].coef_.shape[-1]
+    weight = np.concatenate([e.coef_.reshape(-1, in_dim) for e in estimators])
+    bias = np.concatenate([np.ravel(e.intercept_) for e in estimators])
+    if scaler is not None:
+        weight = weight / scaler.scale_
+        bias = bias - weight @ scaler.mean_
+    return {
+        "activation": activation,
+        "classes": None if classes is None else classes.tolist(),
+        "state_dict": {
+            "0.weight": torch.tensor(weight, dtype=torch.float32),
+            "0.bias": torch.tensor(bias, dtype=torch.float32),
+        },
+    }
 
 
 class LinearProbe:
@@ -76,8 +138,8 @@ class LinearProbe:
         splitter: DataSplitter,
         evaluator: LinearProbeEvaluator,
         eval_all_splits: bool,
-        persister: LinearProbePersister | None = None,
-        regressor: str = "ols",
+        persister: ResultsPersister | None = None,
+        regressor: str = "ridge",
     ):
         """Initialize LinearProbe.
 
@@ -182,11 +244,7 @@ class LinearProbe:
         Returns:
             Dictionary of linear probing metrics per split.
         """
-        model = (
-            self.regression_models[self.regressor]()
-            if self.task == "regression"
-            else self.linear_models[self.task]()
-        )
+        model = self.make_model(self.task, self.regressor)
         splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
@@ -216,11 +274,67 @@ class LinearProbe:
         metrics = self.evaluator.evaluate_linear_probe(model, eval_splits)
 
         if self.persister and persist:
-            self.persister.persist_run_results(metrics, random_seed)
+            self.persister.persist_run_results(
+                metrics_by_split(metrics),
+                random_seed,
+                fit_info=self._fit_info(model, splits),
+            )
+            torch.save(
+                to_torch(model),
+                self.persister.get_checkpoint_path(random_seed),
+            )
         elif persist and not self.persister:
             raise RuntimeError("Must provide persister to persist results.")
 
         return metrics
+
+    @classmethod
+    def make_model(cls, task: str, regressor: str = "ridge") -> BaseEstimator:
+        """Create the unfitted estimator for a task.
+
+        Args:
+            task: Linear probing task.
+            regressor: Regression estimator, either ``ols`` or ``ridge``.
+
+        Returns:
+            Unfitted scikit-learn estimator.
+        """
+        if task == "regression":
+            return cls.regression_models[regressor]()
+        else:
+            return cls.linear_models[task]()
+
+    @classmethod
+    def get_probe_config(cls, task: str, regressor: str = "ridge") -> dict:
+        """Get the probe config persisted with results.
+
+        Args:
+            task: Linear probing task.
+            regressor: Regression estimator, either ``ols`` or ``ridge``.
+
+        Returns:
+            Config holding the estimator's repr, which lists its settings.
+        """
+        estimator = repr(cls.make_model(task, regressor))
+        return {"estimator": " ".join(estimator.split())}
+
+    @staticmethod
+    def _fit_info(model: BaseEstimator, splits: dict) -> dict:
+        """Get split sizes and the regularization chosen when fitting."""
+        info: dict = {
+            "n_" + name.removesuffix("_y"): len(values)
+            for name, values in splits.items() if name.endswith("_y")
+        }
+        final = model[-1] if isinstance(model, Pipeline) else model
+        if isinstance(final, MultiOutputClassifier):
+            info["C"] = [float(e.C_) for e in final.estimators_]
+        elif hasattr(final, "C_"):
+            info["C"] = float(final.C_)
+        elif hasattr(final, "alpha_"):
+            info["alpha"] = float(final.alpha_)
+        elif hasattr(final, "alpha"):
+            info["alpha"] = float(final.alpha)
+        return info
 
     def linear_probe_multirun(
         self,
@@ -246,7 +360,6 @@ class LinearProbe:
         metrics: dict[int, dict[str, float]],
         print_output: bool = False,
         ci_multiplier: float = 1.96,
-        persist: bool = False
     ) -> dict[str, str]:
         """Aggregate multi-run linear probing results.
 
@@ -256,7 +369,6 @@ class LinearProbe:
             metrics: Result of multi-run linear probing.
             print_output: Prints aggregated metrics.
             ci_multiplier: Constant multiplied to standard error to get CI.
-            persist: Save results to data directory.
 
         Returns:
             Dictionary of mean metric and CI per data split.
@@ -279,11 +391,6 @@ class LinearProbe:
             if print_output:
                 print("{} ± {}".format(metric_mean[k], se))
 
-        if self.persister and persist:
-            self.persister.persist_run_results(metric_out, "all")
-        elif persist and not self.persister:
-            raise RuntimeError("Must provide persister to persist results.")
-
         return metric_out
 
     def get_fit_model(self, random_seed: int) -> BaseEstimator:
@@ -296,3 +403,22 @@ class LinearProbe:
             Estimator fitted for the requested seed.
         """
         return self.models[random_seed]
+
+    @staticmethod
+    def load_checkpoint(path: str | Path) -> nn.Module:
+        """Load a linear probe saved with its results as a torch module.
+
+        Args:
+            path: Checkpoint path, see ResultsPersister.
+
+        Returns:
+            Module mapping embeddings (N, H) to predictions; see to_torch().
+        """
+        checkpoint = torch.load(path)
+        out_dim, in_dim = checkpoint["state_dict"]["0.weight"].shape
+        module = nn.Sequential(
+            nn.Linear(in_dim, out_dim),
+            _ACTIVATIONS[checkpoint["activation"]](),
+        )
+        module.load_state_dict(checkpoint["state_dict"])
+        return module.eval()

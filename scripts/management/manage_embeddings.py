@@ -244,7 +244,9 @@ def action_missing(
 
         # Models with LP results in the DB
         conn = sqlite3.connect(str(db_path), timeout=30)
-        rows = conn.execute("SELECT DISTINCT model FROM lp_results").fetchall()
+        rows = conn.execute(
+            "SELECT DISTINCT model FROM runs WHERE evaluation='linear_probe'"
+        ).fetchall()
         conn.close()
         db_models = {r[0] for r in rows}
 
