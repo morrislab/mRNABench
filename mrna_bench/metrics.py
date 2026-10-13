@@ -23,6 +23,34 @@ def regression_metrics(
     }
 
 
+def ranking_metrics(
+    targets: np.ndarray,
+    scores: np.ndarray,
+    missing_class_nan: bool = False,
+) -> dict[str, float]:
+    """Compute how well scores rank binary targets.
+
+    Args:
+        targets: Binary targets.
+        scores: Scores, higher for the positive class.
+        missing_class_nan: Return NaN AUROC and AUPRC instead of raising
+            when targets contain only one class.
+
+    Returns:
+        AUROC, AUPRC, and the positive prevalence, which is the AUPRC of a
+        random ranking.
+    """
+    metrics = {"prevalence": float(np.mean(targets))}
+    if missing_class_nan and len(np.unique(targets)) < 2:
+        metrics.update({"auroc": float("nan"), "auprc": float("nan")})
+    else:
+        metrics.update({
+            "auroc": float(roc_auc_score(targets, scores)),
+            "auprc": float(average_precision_score(targets, scores)),
+        })
+    return metrics
+
+
 def classification_metrics(
     targets: np.ndarray,
     scores: np.ndarray,
@@ -38,17 +66,9 @@ def classification_metrics(
         ),
     }
     if scores.shape[1] == 2:
-        if missing_class_nan and len(np.unique(targets)) < 2:
-            metrics.update({"auroc": float("nan"), "auprc": float("nan")})
-        else:
-            metrics.update({
-                "auroc": float(roc_auc_score(targets, scores[:, 1])),
-                "auprc": float(average_precision_score(
-                    targets,
-                    scores[:, 1],
-                    pos_label=classes[1],
-                )),
-            })
+        metrics.update(ranking_metrics(
+            targets == classes[1], scores[:, 1], missing_class_nan
+        ))
         return metrics
 
     binary_targets = label_binarize(targets, classes=classes)

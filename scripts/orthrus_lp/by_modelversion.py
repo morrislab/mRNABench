@@ -3,12 +3,9 @@
 import argparse
 import ast
 
-import numpy as np
 import mrna_bench as mb
-from mrna_bench.embedder import get_embedding_filepath
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
-from mrna_bench.linear_probe.persister import LinearProbePersister
-from mrna_bench.zeroshot import ZeroShotVEP
+from mrna_bench.zeroshot import ZeroShotBuilder
 
 default_seeds = "[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
@@ -40,30 +37,19 @@ if __name__ == "__main__":
     dataset = mb.load_dataset(args.dataset_name)
 
     if args.task == "embedding_vep":
-        path = get_embedding_filepath(
-            dataset.embedding_dir,
-            args.model_short_name,
-            dataset.dataset_name,
-        ) + ".npz"
-        persister = LinearProbePersister(
-            dataset,
-            args.model_short_name,
-            "embedding_vep",
-            args.target,
-            "none",
-        )
-        prober = ZeroShotVEP.from_embeddings(
-            dataset,
-            np.load(path)["embedding"],
-            target_col=args.target,
-            persister=persister,
+        zero_shot = (
+            ZeroShotBuilder(dataset=dataset)
+            .fetch_embedding_by_model_name(args.model_short_name)
+            .set_target(args.target)
+            .use_persister()
+            .build()
         )
 
-        if not args.force_recompute and prober.result_exists():
+        if not args.force_recompute and zero_shot.result_exists():
             print("Results already computed, skipping.")
         else:
             print("Running embedding VEP.")
-            metrics = prober.run(persist=True)
+            metrics = zero_shot.run_zero_shot(persist=True)
             print("Finished:", metrics)
 
     else:

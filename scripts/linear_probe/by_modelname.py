@@ -3,61 +3,13 @@
 import argparse
 import ast
 
-import numpy as np
 import mrna_bench as mb
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
-from mrna_bench.linear_probe.persister import LinearProbePersister
-from mrna_bench.embedder import get_embedding_filepath
 from mrna_bench.models import MODEL_CATALOG
-from mrna_bench.zeroshot import ZeroShotVEP
-
-
-# NAIVE BASELINE FEATURES
-K = 21824  # number of all possible unique 3-7mers
-
-FEATURE_BLOCKS = {
-    "kmer": np.arange(0, K),
-    "gc": np.array([K]),
-    "cds": np.array([K + 1]),
-    "exon": np.array([K + 2]),
-}
-
-FEATURE_COMBOS = {
-    "kmer": ["kmer"],
-    "struct": ["cds", "exon"],
-    "gc-struct": ["gc", "cds", "exon"],
-    "all": ["kmer", "gc", "cds", "exon"],
-}
+from mrna_bench.zeroshot import ZeroShotBuilder
 
 
 default_seeds = "[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
-
-
-def load_embeddings(dataset, model_short_name):
-    """Load one model's persisted dataset embeddings."""
-    path = get_embedding_filepath(
-        dataset.embedding_dir,
-        model_short_name,
-        dataset.dataset_name,
-    ) + ".npz"
-    return np.load(path)["embedding"]
-
-
-def build_embedding_vep(dataset, embeddings, model_short_name, target):
-    """Build embedding VEP without routing through LinearProbeBuilder."""
-    persister = LinearProbePersister(
-        dataset,
-        model_short_name,
-        "embedding_vep",
-        target,
-        "none",
-    )
-    return ZeroShotVEP.from_embeddings(
-        dataset,
-        embeddings,
-        target_col=target,
-        persister=persister,
-    )
 
 
 parser = argparse.ArgumentParser()
@@ -129,25 +81,21 @@ if __name__ == "__main__":
         if args.score_batch_size < 1:
             raise ValueError("score_batch_size must be at least 1.")
         model.sequence_score_batch_size = args.score_batch_size
-        persister = LinearProbePersister(
-            dataset,
-            model_short_name,
-            "likelihood_vep",
-            args.target,
-            "none",
+        zero_shot = (
+            ZeroShotBuilder(dataset=dataset)
+            .use_likelihood(
+                model,
+                score_method=args.score_method,
+                normalization=args.normalization,
+            )
+            .set_target(args.target)
+            .use_persister()
+            .build()
         )
-        evaluator = ZeroShotVEP.from_model(
-            dataset,
-            model,
-            score_method=args.score_method,
-            target_col=args.target,
-            normalization=args.normalization,
-            persister=persister,
-        )
-        if not args.force_recompute and evaluator.result_exists():
+        if not args.force_recompute and zero_shot.result_exists():
             print("Results already computed, skipping.", flush=True)
         else:
-            metrics = evaluator.run(persist=True)
+            metrics = zero_shot.run_zero_shot(persist=True)
             print("Finished:", metrics, flush=True)
         raise SystemExit(0)
 
@@ -162,11 +110,11 @@ if __name__ == "__main__":
             .build()
         )
 
-        if not args.force_recompute and prober.result_exists():
+        if not args.force_recompute and zero_shot.result_exists():
             print("Results already computed, skipping.", flush=True)
         else:
             print("Running zero-shot VEP.", flush=True)
-            metrics = prober.run(persist=True)
+            metrics = zero_shot.run_zero_shot(persist=True)
             print("Finished:", metrics, flush=True)
 
     else:

@@ -3,13 +3,9 @@
 import argparse
 import ast
 
-import numpy as np
-
 from mrna_bench.datasets import DATASET_CATALOG
-from mrna_bench.embedder import get_embedding_filepath
 from mrna_bench.linear_probe.linear_probe_builder import LinearProbeBuilder
-from mrna_bench.linear_probe.persister import LinearProbePersister
-from mrna_bench.zeroshot import ZeroShotVEP
+from mrna_bench.zeroshot import ZeroShotBuilder
 
 default_seeds = "[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
@@ -34,32 +30,15 @@ if __name__ == "__main__":
     dataset = DATASET_CATALOG[args.dataset_name]()
 
     if args.task == "embedding_vep":
-        name_parts = args.embedding_fn.removesuffix(".npz").split("_")
-        if len(name_parts) < 2:
-            raise ValueError(
-                "Invalid embedding filename: {}".format(args.embedding_fn)
-            )
-        model_short_name = name_parts[1]
-        path = get_embedding_filepath(
-            dataset.embedding_dir,
-            model_short_name,
-            dataset.dataset_name,
-        ) + ".npz"
-        persister = LinearProbePersister(
-            dataset,
-            model_short_name,
-            "embedding_vep",
-            args.target,
-            "none",
+        zero_shot = (
+            ZeroShotBuilder(dataset=dataset)
+            .fetch_embedding_by_filename(args.embedding_fn)
+            .set_target(args.target)
+            .use_persister()
+            .build()
         )
-        evaluator = ZeroShotVEP.from_embeddings(
-            dataset,
-            np.load(path)["embedding"],
-            target_col=args.target,
-            persister=persister,
-        )
-        if args.force_recompute or not evaluator.result_exists():
-            evaluator.run(persist=True)
+        if args.force_recompute or not zero_shot.result_exists():
+            zero_shot.run_zero_shot(persist=True)
         raise SystemExit(0)
 
     prober = (

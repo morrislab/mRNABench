@@ -5,10 +5,17 @@ from pathlib import Path
 import argparse
 import mrna_bench as mb
 from mrna_bench.datasets.dataset_catalog import DATASET_INFO
-from mrna_bench.linear_probe.persister import LinearProbePersister
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
+from mrna_bench.embedder import get_embedding_config
+from mrna_bench.linear_probe import LinearProbe
+from mrna_bench.models import MODEL_CATALOG
+from mrna_bench.persister import ResultsPersister
+from mrna_bench.zeroshot import EmbeddingDeltaScorer
 
 split_types = list(SPLIT_CATALOG.keys())
+
+# local Orthrus checkpoints are embedded with the catalog model's defaults
+EMBEDDING_CONFIG = get_embedding_config(MODEL_CATALOG["Orthrus"])
 
 random_seeds = [2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]
 
@@ -137,14 +144,17 @@ if __name__ == "__main__":
                         # ----------------------------
                         if task == "embedding_vep":
                             if not args.force_recompute:
-                                persister = LinearProbePersister(
+                                persister = ResultsPersister(
                                     dataset,
                                     model_short_name,
                                     "embedding_vep",
+                                    vep_spec.task,
                                     target_col,
                                     "none",
+                                    EMBEDDING_CONFIG,
+                                    EmbeddingDeltaScorer.get_probe_config(),
                                 )
-                                if persister.result_exists("embedding_vep"):
+                                if persister.result_exists("none"):
                                     continue
 
                             cmd = [
@@ -193,13 +203,17 @@ if __name__ == "__main__":
                                 seeds = [seed_block] if args.per_seed else seed_block
 
                                 if not args.force_recompute:
-                                    persister = LinearProbePersister(
+                                    persister = ResultsPersister(
                                         dataset,
                                         model_short_name,
+                                        "linear_probe",
                                         task,
                                         target_col,
                                         split_type,
-                                        regressor=args.regressor,
+                                        EMBEDDING_CONFIG,
+                                        LinearProbe.get_probe_config(
+                                            task, args.regressor
+                                        ),
                                     )
                                     if all(persister.result_exists(seed) for seed in seeds):
                                         continue

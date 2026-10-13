@@ -3,19 +3,13 @@ import argparse
 
 import mrna_bench as mb
 from mrna_bench.datasets.dataset_catalog import DATASET_INFO
-from mrna_bench.linear_probe.persister import LinearProbePersister
+from mrna_bench.embedder import get_embedding_config
+from mrna_bench.linear_probe import LinearProbe
 from mrna_bench.models import ModelBehavior
 from mrna_bench.models.model_catalog import MODEL_VERSION_MAP, MODEL_CATALOG
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
-from mrna_bench.zeroshot import ZeroShotVEP
-
-# NAIVE BASELINE FEATURES
-K = 21824  # number of all possible unique 3-7mers
-
-MODEL_FEATURE_COMBOS = {
-    "naive-4": ["gc", "kmer", "all"],
-    "naive-6": ["kmer", "struct", "gc-struct", "all"],
-}
+from mrna_bench.persister import ResultsPersister
+from mrna_bench.zeroshot import EmbeddingDeltaScorer, LikelihoodRatioScorer
 
 split_types = list(SPLIT_CATALOG.keys())
 
@@ -149,24 +143,25 @@ if __name__ == "__main__":
                                         .default_attn_implementation
                                     )
                                 )
-                                result_key = ZeroShotVEP.likelihood_result_key(
-                                    method,
-                                    "sum",
-                                    effective_attn or "none",
-                                    ZeroShotVEP.default_likelihood_direction(
-                                        vep_spec.task
-                                    ),
-                                )
-                                persister = LinearProbePersister(
+                                persister = ResultsPersister(
                                     dataset,
                                     model_short_name,
                                     "likelihood_vep",
+                                    vep_spec.task,
                                     target_col,
                                     "none",
+                                    {"attn_implementation": effective_attn},
+                                    LikelihoodRatioScorer.get_probe_config(
+                                        method,
+                                        "sum",
+                                        LikelihoodRatioScorer.default_direction(
+                                            vep_spec.task
+                                        ),
+                                    ),
                                 )
                                 if (
                                     not args.force_recompute
-                                    and persister.result_exists(result_key)
+                                    and persister.result_exists("none")
                                 ):
                                     continue
                                 cmd = [
@@ -219,52 +214,41 @@ if __name__ == "__main__":
                             region = dataset.metadata.variant_region
                             if scope != "full" and scope != region:
                                 continue
-                            if "NaiveBaseline" in model_name and model_short_name in MODEL_FEATURE_COMBOS:
-                                combos = MODEL_FEATURE_COMBOS[model_short_name]
+                            if not args.force_recompute:
+                                persister = ResultsPersister(
+                                    dataset,
+                                    model_short_name,
+                                    "embedding_vep",
+                                    vep_spec.task,
+                                    target_col,
+                                    "none",
+                                    get_embedding_config(model_class),
+                                    EmbeddingDeltaScorer.get_probe_config(),
+                                )
+                                if persister.result_exists("none"):
+                                    continue
+
+                            cmd = [
+                                "sbatch",
+                                "./modelname_slurm.sh",
+                                "--model_name", model_name,
+                                "--model_version", model_version,
+                                "--dataset_name", dataset_name,
+                                "--task", "embedding_vep",
+                                "--target", target_col,
+                                "--split_type", "none",
+                                "--seeds", '["embedding_vep"]',
+                                "--force_recompute", str(args.force_recompute),
+                            ]
+
+                            if args.dry_run:
+                                print("\t\tDry run:", " ".join(cmd))
                             else:
-                                combos = [""]
-
-                            for combo in combos:
-                                if not args.force_recompute:
-                                    if combo and combo != "all":
-                                        check_name = f"{model_short_name}-{combo}"
-                                    else:
-                                        check_name = model_short_name
-
-                                    persister = LinearProbePersister(
-                                        dataset,
-                                        check_name,
-                                        "embedding_vep",
-                                        target_col,
-                                        "none",
-                                    )
-                                    if persister.result_exists(
-                                        "embedding_vep"
-                                    ):
-                                        continue
-
-                                cmd = [
-                                    "sbatch",
-                                    "./modelname_slurm.sh",
-                                    "--model_name", model_name,
-                                    "--model_version", model_version,
-                                    "--dataset_name", dataset_name,
-                                    "--task", "embedding_vep",
-                                    "--target", target_col,
-                                    "--split_type", "none",
-                                    "--combo", combo,
-                                    "--seeds", '["embedding_vep"]',
-                                    "--force_recompute", str(args.force_recompute),
-                                ]
-
-                                if args.dry_run:
-                                    print("\t\tDry run:", " ".join(cmd))
-                                else:
-                                    result = subprocess.run(cmd, capture_output=True, text=True)
-                                    if result.stdout:
-                                        print('\t' + result.stdout.strip())
-                                    if result.stderr:
-                                        print('\t' + result.stderr.strip())
+                                result = subprocess.run(cmd, capture_output=True, text=True)
+                                if result.stdout:
+                                    print('\t' + result.stdout.strip())
+                                if result.stderr:
+                                    print('\t' + result.stderr.strip())
                             continue
 
                         # ----------------------------
@@ -282,66 +266,57 @@ if __name__ == "__main__":
                         for split_type in valid_split_types:
 
                             # ----------------------------
-                            # decide feature combos
-                            # ----------------------------
-                            if "NaiveBaseline" in model_name and model_short_name in MODEL_FEATURE_COMBOS:
-                                combos = MODEL_FEATURE_COMBOS[model_short_name]
-                            else:
-                                combos = [""]
-
-                            # ----------------------------
                             # decide seeds
                             # ----------------------------
                             seeds_to_run = random_seeds if args.per_seed else [random_seeds]
 
-                            for combo in combos:
-                                for seed_block in seeds_to_run:
+                            for seed_block in seeds_to_run:
 
-                                    seeds = [seed_block] if args.per_seed else seed_block
+                                seeds = [seed_block] if args.per_seed else seed_block
 
-                                    # ----------------------------
-                                    # existence check
-                                    # ----------------------------
-                                    if not args.force_recompute:
-                                        if combo and combo != "all":
-                                            check_name = f"{model_short_name}-{combo}"
-                                        else:
-                                            check_name = model_short_name
+                                # ----------------------------
+                                # existence check
+                                # ----------------------------
+                                if not args.force_recompute:
+                                    persister = ResultsPersister(
+                                        dataset,
+                                        model_short_name,
+                                        "linear_probe",
+                                        task,
+                                        target_col,
+                                        split_type,
+                                        get_embedding_config(
+                                            MODEL_CATALOG[model_name]
+                                        ),
+                                        LinearProbe.get_probe_config(
+                                            task, args.regressor
+                                        ),
+                                    )
+                                    if all(persister.result_exists(seed) for seed in seeds):
+                                        continue
 
-                                        persister = LinearProbePersister(
-                                            dataset,
-                                            check_name,
-                                            task,
-                                            target_col,
-                                            split_type,
-                                            regressor=args.regressor,
-                                        )
-                                        if all(persister.result_exists(seed) for seed in seeds):
-                                            continue
+                                seed_arg = f"[{seeds[0]}]" if args.per_seed else str(seeds)
 
-                                    seed_arg = f"[{seeds[0]}]" if args.per_seed else str(seeds)
+                                cmd = [
+                                    "sbatch",
+                                    "./modelname_slurm.sh",
+                                    "--model_name", model_name,
+                                    "--model_version", model_version,
+                                    "--dataset_name", dataset_name,
+                                    "--task", task,
+                                    "--regressor", args.regressor,
+                                    "--target", target_col,
+                                    "--split_type", split_type,
+                                    "--seeds", seed_arg,
+                                    "--force_recompute", str(args.force_recompute),
+                                ]
 
-                                    cmd = [
-                                        "sbatch",
-                                        "./modelname_slurm.sh",
-                                        "--model_name", model_name,
-                                        "--model_version", model_version,
-                                        "--dataset_name", dataset_name,
-                                        "--task", task,
-                                        "--regressor", args.regressor,
-                                        "--target", target_col,
-                                        "--split_type", split_type,
-                                        "--combo", combo,
-                                        "--seeds", seed_arg,
-                                        "--force_recompute", str(args.force_recompute),
-                                    ]
+                                if args.dry_run:
+                                    print("\t\tDry run:", " ".join(cmd))
+                                else:
+                                    result = subprocess.run(cmd, capture_output=True, text=True)
 
-                                    if args.dry_run:
-                                        print("\t\tDry run:", " ".join(cmd))
-                                    else:
-                                        result = subprocess.run(cmd, capture_output=True, text=True)
-
-                                        if result.stdout:
-                                            print('\t' + result.stdout.strip())
-                                        if result.stderr:
-                                            print('\t' + result.stderr.strip())
+                                    if result.stdout:
+                                        print('\t' + result.stdout.strip())
+                                    if result.stderr:
+                                        print('\t' + result.stderr.strip())
