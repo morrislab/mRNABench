@@ -34,6 +34,16 @@ parser.add_argument("--split_type", type=str, default=None)
 parser.add_argument("--learning_rates", type=str, default=default_lrs)
 parser.add_argument("--lora_ranks", type=str, default=default_ranks)
 parser.add_argument("--lora_alphas", type=str, default=default_alphas)
+parser.add_argument("--lora_layers", type=str, default=None,
+                    help="Layer indices for LoRA, e.g. '[-4, -3, -2, -1]'.")
+parser.add_argument("--trainable_layers", type=str, default=None,
+                    help="'all', or layer indices to fine-tune, e.g. "
+                    "'[-2, -1]'. LoRA rank 0 with no trainable layers "
+                    "trains the head only.")
+parser.add_argument("--window_size", type=int, default=64)
+parser.add_argument("--stride", type=int, default=64)
+parser.add_argument("--val_chromosomes", type=str, default=None)
+parser.add_argument("--test_chromosomes", type=str, default=None)
 parser.add_argument("--epochs", type=int, default=15)
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--accumulation_steps", type=int, default=1)
@@ -104,6 +114,11 @@ def run_finetune(
     device,
     lr_schedule="none",
     eval_test=False,
+    trainable_layers=None,
+    lora_layers=None,
+    split_kwargs=None,
+    checkpoint_path=None,
+    pooling="mean",
 ):
     """Run fine-tuning for a single (lr, rank, seed) configuration.
 
@@ -124,6 +139,12 @@ def run_finetune(
         device: PyTorch device.
         lr_schedule: Learning rate schedule type ("none", "linear", "cosine").
         eval_test: Whether to also evaluate on test set.
+        trainable_layers: Backbone layers to fine-tune ("all" or indices).
+        lora_layers: Layer indices to restrict LoRA adapters to.
+        split_kwargs: Additional arguments for the split type.
+        checkpoint_path: Where to save the trained weights, if given.
+        pooling: "mean", or "attention" for a learned attention pooling
+            head (sequence-level tasks).
 
     Returns:
         Tuple of (val_metrics, test_metrics, history).
@@ -168,6 +189,11 @@ def run_finetune(
     )
     trainer = FineTuneTrainer(wrapper, config)
     trainer.fit(train_loader, val_loader)
+    if checkpoint_path is not None:
+        torch.save(
+            {"args": vars(args), "state_dict": wrapper.trainable_state_dict()},
+            checkpoint_path,
+        )
 
     # Full metrics from the best checkpoint are captured during fit()
     val_metrics = trainer.best_val_metrics
@@ -190,6 +216,19 @@ if __name__ == "__main__":
         raise ValueError(
             "lora_alphas must contain one value or match lora_ranks."
         )
+
+    trainable_layers = args.trainable_layers
+    if trainable_layers not in (None, "all"):
+        trainable_layers = json.loads(trainable_layers)
+    lora_layers = json.loads(args.lora_layers) if args.lora_layers else None
+    split_kwargs = {
+        key: json.loads(value)
+        for key, value in (
+            ("val_chromosomes", args.val_chromosomes),
+            ("test_chromosomes", args.test_chromosomes),
+        )
+        if value is not None
+    }
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device: {}".format(device))

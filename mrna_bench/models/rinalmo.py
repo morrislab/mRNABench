@@ -31,6 +31,12 @@ class RiNALMo(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"final_layer_norm"
+    # Fused attention QKV + output, and the SwiGLU feed-forward projections.
+    lora_target_modules = [
+        "qkv_proj", "out_proj",
+        "linear", "linear_gate", "ffn_down",
+    ]
     uses_rna_alphabet = True
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,

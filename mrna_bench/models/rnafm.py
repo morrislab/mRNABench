@@ -27,7 +27,11 @@ class RNAFM(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"emb_layer_norm_after"
     uses_rna_alphabet = True
+    lora_target_modules = [
+        "q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2",
+    ]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,

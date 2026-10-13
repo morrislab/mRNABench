@@ -24,7 +24,11 @@ class RNAMSM(EmbeddingModel):
         "eager",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"emb_layer_norm_after"
     uses_rna_alphabet = True
+    lora_target_modules = [
+        "q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2",
+    ]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,
@@ -207,25 +211,30 @@ class RNAMSM(EmbeddingModel):
                     [chunk], return_tensors="pt", padding=False
                 ).to(self.device)
 
-                outputs = self.model(
-                    **toks,
-                    output_hidden_states=True,
-                    output_attentions=return_attentions,
+                # Hooks rather than hidden_states: the model replaces the
+                # last layer's hidden state with the final norm output.
+                outputs, captured = self._run_with_layer_capture(
+                    resolved,
+                    lambda: self.model(
+                        **toks,
+                        output_attentions=return_attentions,
+                    ),
                 )
-                # tuple of (B, num_msa, T, D)
-                hf_hidden = outputs.hidden_states
 
                 for path in resolved:
-                    idx = layer_to_idx[path]
-                    hs_idx = idx + 1  # HF offset: index 0 is embedding
-                    h = hf_hidden[hs_idx][0, 0]  # squeeze B, num_msa -> (T, D)
+                    # Outputs are (num_msa, T, B, D); take (T, D).
+                    h = captured[path][0][0, :, 0]
                     seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
 
-                    if return_attentions and outputs.attentions is not None:
+                    idx = layer_to_idx.get(path)
+                    attentions = (
+                        outputs.attentions if return_attentions else None
+                    )
+                    if attentions is not None and idx is not None:
                         # attentions[idx]: (H, num_msa, T, T) — attends over
                         # sequence positions; squeeze the (degenerate) MSA dim
                         # for single-sequence inputs to get (H, T, T).
-                        a = outputs.attentions[idx][:, 0]  # (H, T, T)
+                        a = attentions[idx][:, 0]  # (H, T, T)
                         seq_scores[path].append(
                             a.cpu() if offload_to_cpu else a)
 

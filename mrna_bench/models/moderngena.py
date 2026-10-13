@@ -28,6 +28,8 @@ class ModernGENA(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"final_norm"
+    lora_target_modules = ["Wqkv", "Wo", "Wi"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,

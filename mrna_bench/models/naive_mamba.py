@@ -116,9 +116,12 @@ class NaiveMamba(EmbeddingModel):
     valid_versions = ["naive-mamba"]
     default_attn_implementation = None
 
-    lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
+    # mamba_ssm applies in_proj and dt_proj by their weights, bypassing
+    # LoRA; x_proj and out_proj are adapted once the fast path is off.
+    lora_target_modules = ["x_proj", "out_proj"]
     valid_attn_implementations = None
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"norm_f"
     supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
     def __init__(

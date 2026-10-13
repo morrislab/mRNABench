@@ -138,6 +138,19 @@ def test_resolve_layer_paths_rejects_undeclared_strings(model):
         model._resolve_layer_paths(["weight"])
 
 
+def test_resolve_layer_paths_final(model):
+    """'final' selects the final layer module, else the last block."""
+    model.model = torch.nn.ModuleDict({
+        "norm": torch.nn.LayerNorm(4),
+        "layers": torch.nn.Sequential(torch.nn.Linear(4, 4)),
+    })
+    model.hookable_layer_patterns = [r"layers\.\d+"]
+
+    assert model._resolve_layer_paths([-1, "final"]) == ["layers.0"]
+    model.final_layer_pattern = r"norm"
+    assert model._resolve_layer_paths([-1, "final"]) == ["layers.0", "norm"]
+
+
 def test_run_with_layer_capture_supports_multiple_paths(model):
     """Selected layer outputs can be captured without detaching gradients."""
     model.model = torch.nn.Sequential(

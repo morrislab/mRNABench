@@ -45,8 +45,12 @@ class Enformer(EmbeddingModel):
         r"conv_tower\.\d+",
         r"transformer\.\d+",
     ]
+    final_layer_pattern = r"final_pointwise"
 
-    lora_target_modules = ["to_q", "to_k", "to_v", "to_out"]
+    # 1.fn.1 and 1.fn.4 are each transformer block's feed-forward.
+    lora_target_modules = [
+        "to_q", "to_k", "to_v", "to_out", "1.fn.1", "1.fn.4",
+    ]
 
     prediction_window = 114_688  # embedding is of the center 114688 bases
     bin_size = 128  # embedding is in 128 base bins

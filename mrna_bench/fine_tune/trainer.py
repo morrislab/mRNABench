@@ -32,6 +32,9 @@ class TrainerConfig:
     total_steps: int | None = None
     use_amp: bool = True
     random_seed: int | None = None
+    # Validation metric used for early stopping and checkpoint selection;
+    # "loss" is minimized, any other metric (e.g. "auprc") is maximized.
+    select_metric: str = "loss"
 
 
 class FineTuneTrainer:
@@ -85,13 +88,6 @@ class FineTuneTrainer:
                 )
             )
 
-        warmup = torch.optim.lr_scheduler.LinearLR(
-            optimizer,
-            start_factor=1e-8,
-            end_factor=1.0,
-            total_iters=self.config.warmup_steps,
-        )
-
         decay_steps = max(total_steps - self.config.warmup_steps, 1)
 
         if self.config.lr_schedule == "none":
@@ -112,46 +108,21 @@ class FineTuneTrainer:
                 optimizer, T_max=decay_steps, eta_min=0.0,
             )
 
+        # A zero-length warmup would leave the rate at its start factor.
+        if self.config.warmup_steps == 0:
+            return decay
+
+        warmup = torch.optim.lr_scheduler.LinearLR(
+            optimizer,
+            start_factor=1e-8,
+            end_factor=1.0,
+            total_iters=self.config.warmup_steps,
+        )
         return torch.optim.lr_scheduler.SequentialLR(
             optimizer,
             schedulers=[warmup, decay],
             milestones=[self.config.warmup_steps],
         )
-
-    def _save_trainable_state(self) -> dict:
-        """Save only trainable (LoRA + head) state dicts.
-
-        Returns:
-            Dictionary with per-target LoRA states and head state dict.
-        """
-        lora_states = []
-        for target in self.wrapper.backbone.get_peft_targets():
-            trainable = {
-                name for name, parameter in target.named_parameters()
-                if parameter.requires_grad
-            }
-            lora_states.append({
-                name: value.detach().clone()
-                for name, value in target.state_dict().items()
-                if name in trainable
-            })
-        head_state = {
-            name: value.detach().clone()
-            for name, value in self.wrapper.task_head.state_dict().items()
-        }
-        return {"lora": lora_states, "head": head_state}
-
-    def _restore_trainable_state(self, state: dict):
-        """Restore trainable state dicts.
-
-        Args:
-            state: Dictionary with per-target LoRA states and head state.
-        """
-        targets = self.wrapper.backbone.get_peft_targets()
-        for target, lora_state in zip(targets, state["lora"]):
-            target.load_state_dict(lora_state, strict=False)
-
-        self.wrapper.task_head.load_state_dict(state["head"])
 
     def _forward_batch(
         self, batch: dict, is_vep: bool
@@ -350,7 +321,7 @@ class FineTuneTrainer:
         )
         self.scheduler = self._create_scheduler(self.optimizer, total_steps)
 
-        best_val_loss = float("inf")
+        best_score = -float("inf")
         best_state = None
         best_val_metrics: dict[str, float] = {}
         patience_counter = 0
@@ -368,9 +339,11 @@ class FineTuneTrainer:
                 self.history["val_loss"].append(val_loss)
                 print("Val loss: {:.4f}".format(val_loss))
 
-                if val_loss < best_val_loss:
-                    best_val_loss = val_loss
-                    best_state = self._save_trainable_state()
+                metric = self.config.select_metric
+                score = -val_loss if metric == "loss" else val_metrics[metric]
+                if score > best_score:
+                    best_score = score
+                    best_state = self.wrapper.trainable_state_dict()
                     best_val_metrics = val_metrics
                     patience_counter = 0
                 else:
@@ -381,7 +354,7 @@ class FineTuneTrainer:
                     break
 
         if best_state is not None:
-            self._restore_trainable_state(best_state)
+            self.wrapper.load_trainable_state_dict(best_state)
 
         self.best_val_metrics = best_val_metrics
 

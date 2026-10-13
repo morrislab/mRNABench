@@ -50,8 +50,11 @@ class AlphaGenome(EmbeddingModel):
         r"tower\.blocks\.\d+\.mlp",
         r"decoder\.up_blocks\.\d+",
     ]
+    final_layer_pattern = r"embedder_1bp"
 
-    lora_target_modules = ["q_proj", "k_proj", "v_proj", "linear_embedding"]
+    lora_target_modules = [
+        "q_proj", "k_proj", "v_proj", "linear_embedding", "fc1", "fc2",
+    ]
 
     def __init__(
         self,
@@ -266,9 +269,13 @@ class AlphaGenome(EmbeddingModel):
         """Extract per-layer hidden states from AlphaGenome.
 
         Uses forward hooks on named modules. Layer paths follow the pattern:
-        - encoder.down_blocks.{0-5} : encoder hidden states (NCL, downsampled)
-        - tower.blocks.{0-8}.mlp : transformer MLP output delta (NLC)
-        - decoder.up_blocks.{0-6} : decoder hidden states (NCL, upsampled)
+        - encoder.down_blocks.{0-5} : encoder hidden states (downsampled)
+        - tower.blocks.{0-8}.mlp : transformer block states (128 bp)
+        - decoder.up_blocks.{0-6} : decoder hidden states (upsampled)
+        - embedder_1bp ("final") : 1 bp output embeddings, as in embed()
+
+        Each layer is returned as (positions, channels) at its own
+        resolution, without the padding added to reach a multiple of 2048.
 
         Note: transformer blocks are hooked at the MLP sub-module. Because
         each block's container is a ModuleDict with no forward method, the
@@ -362,21 +369,27 @@ class AlphaGenome(EmbeddingModel):
                 )
                 try:
                     model: Any = self.model
-                    model.encode(batch, organism_index)
+                    # Full FP32 convolutions, as in embed().
+                    with self._full_precision_cudnn():
+                        model.encode(batch, organism_index)
                 finally:
                     self._remove_hooks(handles)
                     self._remove_hooks(mlp_handles)
 
-                for path in other_paths:
-                    h = activations[path][0]
+                captured = {
+                    **{p: activations[p][0] for p in other_paths},
+                    **{p: mlp_activations[p][0] for p in mlp_paths},
+                }
+                for path, h in captured.items():
                     if h.dim() == 3:
                         h = h[0]
-                    seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
-
-                for path in mlp_paths:
-                    h = mlp_activations[path][0]
-                    if h.dim() == 3:
-                        h = h[0]
+                    # Convolutional layers are channels-first; transformer
+                    # MLP outputs are already (positions, channels).
+                    if path not in mlp_paths:
+                        h = h.transpose(0, 1)
+                    # Drop the right padding at this layer's resolution.
+                    resolution = len(padded_chunk) // h.shape[0]
+                    h = h[:math.ceil(len(chunk) / resolution)]
                     seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
 
             for path in resolved:

@@ -44,9 +44,8 @@ def discover_layers(
     (i.e. submodule registration order). For most architectures this equals
     the forward / ``hidden_states`` order, so a model only needs to declare
     its block patterns rather than reimplement this loop. Models whose
-    registration order differs from their execution order (e.g. Evo, whose
-    final ``norm`` is registered before the blocks but applied after them)
-    must override the ``hookable_layers`` property instead.
+    registration order differs from their execution order must override
+    the ``hookable_layers`` property instead.
 
     Args:
         model: Module to search.
@@ -92,6 +91,14 @@ class EmbeddingModel(SupportsEmbedding, ABC):
     default_attn_implementation: ClassVar[str | None]
     valid_attn_implementations: ClassVar[list[str] | None]
     hookable_layer_patterns: ClassVar[list[str]]
+    # Fullmatch regex for the module whose output is the model's final
+    # representation (e.g. a final norm after the last block), selected with
+    # the layer name "final". None, or no matching module, means the last
+    # hookable layer.
+    final_layer_pattern: ClassVar[str | None] = None
+    # Names of the linear layers LoRA adapts, matched against the end of each
+    # module's path. None means the model does not support LoRA.
+    lora_target_modules: ClassVar[list[str] | None] = None
     # Constructor options that change the embeddings, only where they differ
     # from their defaults. Stored in the embedding config.
     model_options: dict = {}
@@ -848,6 +855,18 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         """
         return discover_layers(self.model, self.hookable_layer_patterns)
 
+    @property
+    def final_layer(self) -> str:
+        """Module path of the model's final representation (layer "final").
+
+        This is the module matching ``final_layer_pattern``, or the last
+        hookable layer if there is none.
+        """
+        matches = []
+        if self.final_layer_pattern is not None:
+            matches = discover_layers(self.model, [self.final_layer_pattern])
+        return matches[0] if matches else self.hookable_layers[-1]
+
     def _resolve_layer_paths(
         self,
         layers: list[int | str] | None,
@@ -856,7 +875,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
 
         Args:
             layers: None (all hookable_layers), integers (index into
-                hookable_layers, supports negative), or declared path strings.
+                hookable_layers, supports negative), declared path strings,
+                or "final" for final_layer.
 
         Returns:
             Ordered list of module path strings.
@@ -868,6 +888,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         for layer in layers:
             if isinstance(layer, int):
                 resolved.append(hookable[layer])
+            elif layer == "final":
+                resolved.append(self.final_layer)
             else:
                 if layer not in hookable:
                     raise ValueError(
@@ -876,7 +898,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
                         )
                     )
                 resolved.append(layer)
-        return resolved
+        # "final" can name the same module as an index; capture it once.
+        return list(dict.fromkeys(resolved))
 
     def _register_hooks(
         self,
@@ -1086,7 +1109,8 @@ class EmbeddingModel(SupportsEmbedding, ABC):
                         h.cpu() if offload_to_cpu else h
                     )
 
-                    attention_index = layer_to_idx[path]
+                    # The final layer may not be a block with attention.
+                    attention_index = layer_to_idx.get(path, len(hookable))
                     a = None
                     if return_attentions and attentions is not None:
                         if attention_index < len(attentions):
@@ -1128,7 +1152,9 @@ class EmbeddingModel(SupportsEmbedding, ABC):
             layers: Which layers to extract. None = all hookable_layers.
                 Integers index into self.hookable_layers (negative supported).
                 Strings are passed as raw get_submodule() paths, allowing
-                sub-block access such as 'encoder.layer.3.attention'.
+                sub-block access such as 'encoder.layer.3.attention'. The
+                name "final" selects self.final_layer, the model's final
+                representation (e.g. after a final norm).
             return_attentions: If True, also extract attention weights.
                 For models using Flash Attention or non-transformer layers,
                 scores[layer_name] will be None.

@@ -32,6 +32,7 @@ class Evo1(EmbeddingModel):
         "Evo1-1-7B-8K",
         "Evo1-1-7B-131K",
     ]
+    final_layer_pattern = r"norm"
     default_attn_implementation = "flash_attention_2"
     valid_attn_implementations = [
         "eager",
@@ -128,9 +129,9 @@ class Evo1(EmbeddingModel):
 
     @property
     def hookable_layers(self) -> list[str]:
-        """Ordered Evo1 representation labels exposed by hidden_states."""
+        """Ordered Evo1 blocks; the final norm is layer "final"."""
         num_layers = self.version_to_num_layers[self.model_version]
-        return [f"blocks.{idx}" for idx in range(num_layers)] + ["norm"]
+        return [f"blocks.{idx}" for idx in range(num_layers)]
 
     def embed(
         self,

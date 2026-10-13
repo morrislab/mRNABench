@@ -28,6 +28,7 @@ class GLM2(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layers\.\d+"]
+    lora_target_modules = ["wqkv", "wo", "w1", "w2", "w3"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,

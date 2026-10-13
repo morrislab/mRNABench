@@ -30,6 +30,7 @@ class CodonBERT(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
+    lora_target_modules = ["query", "key", "value", "dense"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,

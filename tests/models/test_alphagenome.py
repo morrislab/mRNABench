@@ -175,6 +175,24 @@ def test_alphagenome_extract_transformer_hidden_state_shape(alphagenome):
     assert state.shape[1] == 1536  # transformer hidden dim
 
 
+def test_alphagenome_extract_positions_first_without_padding(alphagenome):
+    """Layers are (positions, channels) cropped to the sequence; the final
+    layer matches embed()."""
+    seq = "ACGT" * 1000 + "A"
+    h, _ = alphagenome.extract(
+        [seq], layers=["encoder.down_blocks.2", "tower.blocks.0.mlp", "final"]
+    )
+    final = h[alphagenome.final_layer][0][0]
+    assert h["tower.blocks.0.mlp"][0][0].shape[0] == math.ceil(len(seq) / 128)
+    assert h["encoder.down_blocks.2"][0][0].shape[0] < len(seq)
+    torch.testing.assert_close(
+        final,
+        alphagenome.embed([seq], agg_fn=lambda x: x)[0].cpu(),
+        atol=1e-3,
+        rtol=1e-3,
+    )
+
+
 def test_alphagenome_extract_encoder_scores_none(alphagenome):
     """Encoder layers return None scores even when return_attentions=True."""
     seq = "ACGT" * 1000

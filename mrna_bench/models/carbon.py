@@ -37,6 +37,7 @@ class Carbon(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"norm"
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.CAUSAL_LIKELIHOOD,

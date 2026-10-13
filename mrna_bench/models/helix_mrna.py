@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 import torch
@@ -15,6 +16,9 @@ class HelixmRNA(EmbeddingModel):
     hybrid backbone. Helix-mRNA is pre-trained on 26M mRNAs from diverse
     eukaryotic and viral species.
 
+    CDS tracks are ignored: the released weights were not trained on the
+    codon-start token 'E' that upstream recommends inserting.
+
     Link: https://github.com/helicalAI/helical
     """
 
@@ -27,7 +31,15 @@ class HelixmRNA(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
-    supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
+    final_layer_pattern = r"norm_f"
+    lora_target_modules = [
+        "q_proj", "k_proj", "v_proj", "o_proj", "in_proj", "out_proj",
+        "gate_proj", "up_proj", "down_proj",
+    ]
+    supported_behaviors = frozenset({
+        ModelBehavior.EMBEDDING,
+        ModelBehavior.CAUSAL_LIKELIHOOD,
+    })
 
     def __init__(
         self,
@@ -49,27 +61,29 @@ class HelixmRNA(EmbeddingModel):
         )
 
         try:
-            from transformers import AutoTokenizer, AutoModel
+            from transformers import AutoModelForCausalLM, AutoTokenizer
         except ImportError:
             raise ImportError("Helix-mRNA missing required dependencies.")
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "Taykhoom/Helix-mRNA-Wrapper",
+            "Taykhoom/Helix-mRNA",
             trust_remote_code=True,
             cache_dir=get_model_weights_path()
         )
 
         dtype = self._get_inference_dtype()
 
-        self.model = AutoModel.from_pretrained(
-            "Taykhoom/Helix-mRNA-Wrapper",
+        model: Any = AutoModelForCausalLM.from_pretrained(
+            "Taykhoom/Helix-mRNA",
             trust_remote_code=True,
             cache_dir=get_model_weights_path(),
             attn_implementation=self.attn_implementation,
             dtype=dtype,
-        ).to(self.device)
+        )
+        self._set_logits_model(model.to(self.device))
 
         self.max_length = self.tokenizer.model_max_length
+        self.sequence_score_chunk_length = self.max_length
 
     def _forward_chunks(
         self,
@@ -105,16 +119,6 @@ class HelixmRNA(EmbeddingModel):
 
         return hidden_states, pooling_mask
 
-    def _tokenize_cds(self, sequence: str, cds: np.ndarray) -> str:
-        """Convert sequence to Helix-mRNA vocab by inserting 'E' tokens."""
-        modified_sequence = ""
-        for i in range(len(sequence)):
-            if cds[i] == 1:
-                modified_sequence += "E"
-            modified_sequence += sequence[i]
-
-        return modified_sequence
-
     def embed(
         self,
         sequences: list[str],
@@ -124,12 +128,9 @@ class HelixmRNA(EmbeddingModel):
     ) -> list[torch.Tensor]:
         """Batch embed sequences using Helix-mRNA.
 
-        If cds is provided, inserts 'E' tokens at the start of each codon
-        to use Helix-mRNA's codon-aware vocabulary.
-
         Args:
             sequences: List of sequences to embed.
-            cds: List of binary encodings of first nucleotide of each codon.
+            cds: Unused.
             splice: Unused.
             agg_fn: Method used to aggregate across sequence dimension.
 
@@ -137,15 +138,7 @@ class HelixmRNA(EmbeddingModel):
             Embeddings with item shape depending on agg_fn.
              - default (mean): (256,)
         """
-        _ = splice  # Unused
-
-        if cds is not None:
-            sequences = [
-                self._tokenize_cds(seq, c).upper().replace("T", "U")
-                for seq, c in zip(sequences, cds)
-            ]
-        else:
-            sequences = [s.upper().replace("T", "U") for s in sequences]
+        _ = cds, splice  # Unused
 
         return self._embed_with_chunking(
             sequences=sequences,
@@ -168,9 +161,6 @@ class HelixmRNA(EmbeddingModel):
     ]:
         """Extract per-layer representations from Helix-mRNA.
 
-        If cds is provided, inserts 'E' tokens at the start of each codon
-        to use Helix-mRNA's codon-aware vocabulary.
-
         Attention extraction requires the model to be loaded with
         attn_implementation="eager". Flash Attention 2 does not materialise
         the (H, T, T) attention matrix; scores will be None for all layers
@@ -179,8 +169,8 @@ class HelixmRNA(EmbeddingModel):
         produce attention weights; Mamba and MLP layers yield None.
 
         Args:
-            sequences: RNA sequences (T or U bases; T->U applied internally).
-            cds: Optional CDS tracks; if provided, codon 'E' tokens are added.
+            sequences: RNA sequences (T or U; the tokenizer reads T as U).
+            cds: Unused.
             splice: Unused.
             layers: Layer selection; see EmbeddingModel.extract().
             return_attentions: Whether to extract attention weights.
@@ -191,15 +181,7 @@ class HelixmRNA(EmbeddingModel):
             scores[layer] is None for Mamba and MLP layers regardless of
             return_attentions.
         """
-        _ = splice
-
-        if cds is not None:
-            sequences = [
-                self._tokenize_cds(seq, c).upper().replace("T", "U")
-                for seq, c in zip(sequences, cds)
-            ]
-        else:
-            sequences = [s.upper().replace("T", "U") for s in sequences]
+        _ = cds, splice
 
         def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
             toks = self.tokenizer(  # type: ignore[return-value]

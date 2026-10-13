@@ -43,6 +43,13 @@ class GENERator(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"norm"
+    # The eukaryote 3B models overflow in FP16 under FA; need BF16 for range
+    flash_attn_dtype = torch.bfloat16
+    lora_target_modules = [
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
+    ]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.CAUSAL_LIKELIHOOD,

@@ -29,25 +29,49 @@ class TinyBackbone(EmbeddingModel):
         return list(self.model(values))
 
 
+class LayeredBackbone(TinyBackbone):
+    """Backbone with hookable layers."""
+
+    hookable_layer_patterns = [r"layers\.\d+"]
+
+    def __init__(self):
+        super().__init__()
+        self.model = torch.nn.Module()
+        self.model.layers = torch.nn.ModuleList(
+            torch.nn.Linear(2, 2) for _ in range(3)
+        )
+
+
+def test_wrapper_trains_only_requested_layers():
+    """No trainable_layers keeps the backbone frozen; [-1] the last layer."""
+    frozen = LayeredBackbone()
+    FineTuneWrapper(frozen, TaskHead(2, 1, "regression"))
+    assert not any(p.requires_grad for p in frozen.model.parameters())
+
+    last = LayeredBackbone()
+    FineTuneWrapper(last, TaskHead(2, 1, "regression"), trainable_layers=[-1])
+    trainable = [p.requires_grad for p in last.model.parameters()]
+    assert trainable == [False, False, False, False, True, True]
+
+
 def test_head_only_state_round_trips():
     """Without PEFT, backbone is frozen and only head state is saved."""
     backbone = TinyBackbone()
     head = TaskHead(2, 1, "regression")
     wrapper = FineTuneWrapper(backbone, head)
-    trainer = FineTuneTrainer(wrapper)
 
     assert not any(
         p.requires_grad for p in backbone.model.parameters()
     )
 
-    state = trainer._save_trainable_state()
+    state = wrapper.trainable_state_dict()
     assert all(not s for s in state["lora"])
     assert state["head"]
 
     original = head.mlp[0].weight.detach().clone()
     with torch.no_grad():
         head.mlp[0].weight.add_(1)
-    trainer._restore_trainable_state(state)
+    wrapper.load_trainable_state_dict(state)
 
     assert torch.equal(head.mlp[0].weight, original)
 
@@ -90,9 +114,8 @@ def test_trainable_peft_state_round_trips():
         alpha=4,
         target_modules=["query", "value"],
     )
-    trainer = FineTuneTrainer(wrapper)
 
-    state = trainer._save_trainable_state()
+    state = wrapper.trainable_state_dict()
     assert any("lora_" in name for s in state["lora"] for name in s)
 
     parameter = next(
@@ -103,7 +126,7 @@ def test_trainable_peft_state_round_trips():
     original = parameter.detach().clone()
     with torch.no_grad():
         parameter.add_(1)
-    trainer._restore_trainable_state(state)
+    wrapper.load_trainable_state_dict(state)
 
     assert torch.equal(parameter, original)
 

@@ -33,6 +33,7 @@ class UTRBERT(EmbeddingModel):
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
     uses_rna_alphabet = True
+    lora_target_modules = ["query", "key", "value", "dense"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.PSEUDO_LIKELIHOOD,

@@ -53,6 +53,10 @@ class NucleotideTransformerV3(EmbeddingModel):
         r"core\.transformer_blocks\.\d+",
         r"core\.deconv_tower_blocks\.\d+",
     ]
+    lora_target_modules = [
+        "query_head.linear", "key_head.linear", "value_head.linear",
+        "mha_output", "fc1", "fc2",
+    ]
     supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
 
     @classmethod

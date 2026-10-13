@@ -34,6 +34,8 @@ class HyenaDNA(EmbeddingModel):
     default_attn_implementation = None
     valid_attn_implementations = None
     hookable_layer_patterns = [r"backbone\.layers\.\d+"]
+    final_layer_pattern = r"backbone\.ln_f"
+    lora_target_modules = ["in_proj", "out_proj", "fc1", "fc2"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
         ModelBehavior.CAUSAL_LIKELIHOOD,

@@ -66,6 +66,12 @@ class Borzoi(EmbeddingModel):
         r"upsampling_unet\d+\.\d+",
         r"separable\d+",
     ]
+    # Borzoi attention uses to_q/to_k/to_v/to_out and Flashzoi a fused
+    # Wqkv/out_proj; 1.fn.1 and 1.fn.4 are each block's feed-forward.
+    lora_target_modules = [
+        "to_q", "to_k", "to_v", "to_out", "Wqkv", "out_proj",
+        "1.fn.1", "1.fn.4",
+    ]
 
     def __init__(
         self,

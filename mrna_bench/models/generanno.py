@@ -36,6 +36,11 @@ class GENERanno(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"layers\.\d+"]
+    final_layer_pattern = r"norm"
+    lora_target_modules = [
+        "q_proj", "k_proj", "v_proj", "o_proj",
+        "gate_proj", "up_proj", "down_proj",
+    ]
     supported_behaviors = frozenset({ModelBehavior.EMBEDDING})
     # GENERanno overflows in FP16 under FA; need BF16 for range
     flash_attn_dtype = torch.bfloat16
