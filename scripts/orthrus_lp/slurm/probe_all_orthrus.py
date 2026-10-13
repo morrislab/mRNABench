@@ -74,7 +74,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--regressor",
         choices=["ols", "ridge"],
-        default="ols",
+        default="ridge",
     )
     args = parser.parse_args()
 

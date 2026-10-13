@@ -42,7 +42,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--regressor",
         choices=["ols", "ridge"],
-        default="ols",
+        default="ridge",
     )
     parser.add_argument("--model_version", type=str, default=None, help="Specify a model version to run. If not provided, all versions will be run.")
     args = parser.parse_args()

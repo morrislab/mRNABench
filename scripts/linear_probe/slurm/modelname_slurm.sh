@@ -20,8 +20,8 @@ export NUMEXPR_NUM_THREADS=4
 
 # set default value for force_recompute
 force_recompute="False"
-combo=""
-regressor="ols"
+regressor="ridge"
+kmers=""
 seeds="[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
 while [[ "$#" -gt 0 ]]; do

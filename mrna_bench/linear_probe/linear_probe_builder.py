@@ -81,7 +81,7 @@ class LinearProbeBuilder:
 
         self.target_col = self._resolve_default_target_col(metadata)
         self.task = self._resolve_default_task(metadata)
-        self.regressor = "ols"
+        self.regressor = "ridge"
         self.split_type = self._resolve_default_split_type(metadata)
         self.is_vep = self._target_uses_vep(
             metadata,

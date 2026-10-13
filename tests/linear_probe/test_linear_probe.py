@@ -10,13 +10,13 @@ from mrna_bench.linear_probe.persister import LinearProbePersister
 
 
 def test_regression_model_names_are_distinct():
-    """Use OLS for regression and cross-validated Ridge when requested."""
+    """Regressor names map to OLS and standardized RidgeCV."""
     assert isinstance(
         LinearProbe.regression_models["ols"](),
         LinearRegression,
     )
     assert isinstance(
-        LinearProbe.regression_models["ridge"](),
+        LinearProbe.regression_models["ridge"]()[-1],
         RidgeCV,
     )
 

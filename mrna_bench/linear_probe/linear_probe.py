@@ -2,9 +2,11 @@ import numpy as np
 import pandas as pd
 
 from sklearn.base import BaseEstimator
-from sklearn.linear_model import LinearRegression, LogisticRegression
+from sklearn.linear_model import LinearRegression, LogisticRegressionCV
 from sklearn.linear_model import Ridge, RidgeCV
 from sklearn.multioutput import MultiOutputClassifier
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
 
 from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.linear_probe.evaluator import LinearProbeEvaluator
@@ -28,18 +30,41 @@ class LinearProbe:
     to a disk.
     """
 
+    # Penalized probes standardize the embeddings so that one penalty grid
+    # suits every model, whatever the scale of its embeddings.
     regression_models = {
         "ols": lambda: LinearRegression(n_jobs=-1),
-        "ridge": lambda: RidgeCV(
-            alphas=[1e-3, 1e-2, 1e-1, 1, 10]
+        "ridge": lambda: make_pipeline(
+            StandardScaler(),
+            RidgeCV(alphas=np.logspace(-3, 6, 10)),
         ),
     }
     linear_models = {
-        "classification": lambda: LogisticRegression(max_iter=5000),
-        "multilabel": lambda: MultiOutputClassifier(
-            LogisticRegression(max_iter=5000),
-            n_jobs=-1
-        )
+        "classification": lambda: make_pipeline(
+            StandardScaler(),
+            LogisticRegressionCV(
+                Cs=np.logspace(-5, 2, 8),
+                cv=5,
+                scoring="neg_log_loss",
+                max_iter=5000,
+                l1_ratios=(0,),
+                use_legacy_attributes=False,
+            ),
+        ),
+        "multilabel": lambda: make_pipeline(
+            StandardScaler(),
+            MultiOutputClassifier(
+                LogisticRegressionCV(
+                    Cs=np.logspace(-5, 2, 8),
+                    cv=5,
+                    scoring="neg_log_loss",
+                    max_iter=5000,
+                    l1_ratios=(0,),
+                    use_legacy_attributes=False,
+                ),
+                n_jobs=-1,
+            ),
+        ),
     }
 
     def __init__(
@@ -165,13 +190,16 @@ class LinearProbe:
         splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
+        # sklearn >= 1.9 fits float32 input in float32, which stops L-BFGS
+        # early on poorly scaled embeddings.
+        train_X = splits["train_X"].astype(np.float64)
 
         try:
-            model.fit(splits["train_X"], splits["train_y"])
+            model.fit(train_X, splits["train_y"])
         except ValueError:
             if self.task == "regression" and self.regressor == "ridge":
                 model = Ridge(solver="sag", alpha=1e-3)
-                model.fit(splits["train_X"], splits["train_y"])
+                model.fit(train_X, splits["train_y"])
             else:
                 raise
 

@@ -185,7 +185,7 @@ def test_use_persister(mock_builder: LinearProbeBuilder):
 
 def test_set_regressor(mock_builder: LinearProbeBuilder):
     """Regression estimators are selected independently of dataset task."""
-    assert mock_builder.set_regressor("ridge").regressor == "ridge"
+    assert mock_builder.set_regressor("ols").regressor == "ols"
     with pytest.raises(ValueError, match="regressor"):
         mock_builder.set_regressor("invalid")
 

@@ -10,7 +10,7 @@ parser.add_argument("--task", type=str)
 parser.add_argument(
     "--regressor",
     choices=["ols", "ridge"],
-    default="ols",
+    default="ridge",
 )
 parser.add_argument("--target", type=str, default="target")
 args = parser.parse_args()

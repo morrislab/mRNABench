@@ -12,4 +12,4 @@ python ../by_embname.py \
     --task "$3" \
     --target "$4" \
     --split_type "$5" \
-    --regressor "${6:-ols}"
+    --regressor "${6:-ridge}"

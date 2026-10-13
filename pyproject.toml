@@ -20,7 +20,7 @@ classifiers = [
 dependencies = [
     "tqdm",
     "PyYAML",
-    "scikit-learn",
+    "scikit-learn>=1.9,<1.10",
     "numpy==2.4.3",
     "pandas==3.0.1",
     "requests",

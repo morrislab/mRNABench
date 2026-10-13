@@ -11,7 +11,7 @@
 
 # set default value for force_recompute
 force_recompute="False"
-regressor="ols"
+regressor="ridge"
 seeds="[2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]"
 
 export OMP_NUM_THREADS=4

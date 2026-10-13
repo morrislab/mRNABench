@@ -68,7 +68,7 @@ parser.add_argument("--task", type=str)
 parser.add_argument(
     "--regressor",
     choices=["ols", "ridge"],
-    default="ols",
+    default="ridge",
 )
 parser.add_argument("--target", type=str, default="target")
 parser.add_argument("--split_type", type=str, default="default")
