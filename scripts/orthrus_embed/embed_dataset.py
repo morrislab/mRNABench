@@ -5,7 +5,12 @@ import torch
 
 from mrna_bench import load_dataset
 from orthrus_bench_model import Orthrus
-from mrna_bench.embedder import DatasetEmbedder, get_embedding_filepath
+from mrna_bench.embedder import (
+    DatasetEmbedder,
+    get_config_hash,
+    get_embedding_config,
+    get_embedding_filepath,
+)
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_dir", type=str)
@@ -37,7 +42,8 @@ if __name__ == "__main__":
     out_fn_full = get_embedding_filepath(
         dataset.embedding_dir,
         model.short_name,
-        dataset.dataset_name
+        dataset.dataset_name,
+        get_config_hash(get_embedding_config(model)),
     ) + ".npz"
 
     if Path(out_fn_full).exists() and not args.force_recompute:

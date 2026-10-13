@@ -10,6 +10,7 @@ from mrna_bench.models.embedding_model import (
     ModelBehavior,
     TrackOutput,
 )
+from mrna_bench.models.pooling import MeanPool
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 
 
@@ -92,7 +93,7 @@ class Enformer(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using Enformer in one fixed-length model batch.
 

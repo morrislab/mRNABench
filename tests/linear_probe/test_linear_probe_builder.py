@@ -7,6 +7,7 @@ import pandas as pd
 
 from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.datasets.utr_variants_bohn import UTRVariantsBohn
+from mrna_bench.embedder import get_config_hash, get_embedding_config
 from mrna_bench.linear_probe import LinearProbeBuilder
 from mrna_bench.linear_probe.persister import LinearProbePersister
 
@@ -49,40 +50,66 @@ def test_builder_initialization_data(mock_dataset: BenchmarkDataset):
 
 def test_fetch_embedding_model_name(mock_builder: LinearProbeBuilder):
     """Check that fetch functions set embeddings and model names."""
-    with patch.object(LinearProbeBuilder, "load_persisted_embeddings") as mock:
+    with (
+        patch.object(LinearProbeBuilder, "load_persisted_embeddings") as mock,
+        patch(
+            "mrna_bench.embedder.embedding_fetcher.find_embedding_file"
+        ) as find,
+        patch(
+            "mrna_bench.embedder.embedding_fetcher.read_embedding_config"
+        ),
+    ):
         mock.return_value = np.zeros((10, 10))
         mock_builder.fetch_embedding_by_model_name("test_model")
-        mock.assert_called_once()
+        mock.assert_called_once_with(find.return_value)
 
         assert mock_builder.model_short_name == "test_model"
         assert mock_builder.embeddings is not None
 
 
-def test_fetch_embedding_instance(mock_builder: LinearProbeBuilder):
-    """Model instances load embeddings by their short name."""
-    model = Mock(short_name="test_model")
-    with patch.object(
-        mock_builder,
-        "fetch_embedding_by_model_name",
-        return_value=mock_builder,
-    ) as fetch:
-        result = mock_builder.fetch_embedding_by_model_instance(model)
+def test_fetch_embedding_instance(mock_builder: LinearProbeBuilder, tmp_path):
+    """Model instances load the file named by their config hash."""
+    model = Mock(
+        short_name="test_model",
+        attn_implementation="sdpa",
+        default_attn_implementation="sdpa",
+        model_options={},
+    )
+    config = get_embedding_config(model)
+    mock_builder.dataset.embedding_dir = str(tmp_path)
+    mock_builder.dataset.dataset_name = "data"
+    np.savez(
+        tmp_path / "data_test_model_{}.npz".format(get_config_hash(config)),
+        embedding=np.ones((2, 3)),
+    )
 
-    fetch.assert_called_once_with("test_model")
+    result = mock_builder.fetch_embedding_by_model_instance(model)
+
     assert result is mock_builder
+    assert mock_builder.model_short_name == "test_model"
+    assert mock_builder.embedding_config == config
+    np.testing.assert_array_equal(mock_builder.embeddings, np.ones((2, 3)))
 
 
 def test_fetch_embedding_file_name(mock_builder: LinearProbeBuilder):
     """Check that fetch functions set embeddings and model names."""
-    embedding_fn = "dataset_model-name.npz"
+    embedding_fn = "dataset_model-name_0123abcd.npz"
+    mock_builder.dataset.embedding_dir = "embeddings"
 
-    with patch.object(LinearProbeBuilder, "load_persisted_embeddings") as mock:
+    with (
+        patch.object(LinearProbeBuilder, "load_persisted_embeddings") as mock,
+        patch(
+            "mrna_bench.embedder.embedding_fetcher.read_embedding_config",
+            return_value={"layer": "final"},
+        ),
+    ):
         mock.return_value = np.zeros((10, 10))
         mock_builder.fetch_embedding_by_filename(embedding_fn)
         mock.assert_called_once()
 
         assert mock_builder.model_short_name == "model-name"
         assert mock_builder.embeddings is not None
+        assert mock_builder.embedding_config == {"layer": "final"}
 
 
 def test_build_splitter(mock_builder: LinearProbeBuilder):

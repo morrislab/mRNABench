@@ -8,7 +8,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from mrna_bench.models.embedding_model import EmbeddingModel, mean_pool
+from mrna_bench.models.embedding_model import EmbeddingModel
+from mrna_bench.models.pooling import MeanPool
 
 
 class FineTuneWrapper(nn.Module):
@@ -165,7 +166,7 @@ class FineTuneWrapper(nn.Module):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = mean_pool,
+        agg_fn: Callable = MeanPool(),
     ) -> torch.Tensor:
         """Embed sequences and stack into a batch tensor.
 
@@ -193,7 +194,7 @@ class FineTuneWrapper(nn.Module):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = mean_pool,
+        agg_fn: Callable = MeanPool(),
     ) -> torch.Tensor:
         """Forward pass through backbone and task head.
 
@@ -217,7 +218,7 @@ class FineTuneWrapper(nn.Module):
         alt_cds: list[np.ndarray] | None = None,
         ref_splice: list[np.ndarray] | None = None,
         alt_splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = mean_pool,
+        agg_fn: Callable = MeanPool(),
     ) -> torch.Tensor:
         """VEP forward: embed ref and alt separately, return score difference.
 

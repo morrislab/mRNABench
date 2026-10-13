@@ -46,20 +46,6 @@ if __name__ == "__main__":
         force_redownload_hf=args.force_recompute
     )
 
-    out_fn = get_embedding_filepath(
-        dataset.embedding_dir,
-        model.short_name,
-        dataset.dataset_name,
-        d_chunk_ind=args.d_chunk_ind,
-        d_num_chunks=args.d_num_chunks
-    ) + ".npz"
-
-    out_fn_full = get_embedding_filepath(
-        dataset.embedding_dir,
-        model.short_name,
-        dataset.dataset_name
-    ) + ".npz"
-
     embedder = DatasetEmbedder(
         model=model,
         dataset=dataset,
@@ -67,6 +53,22 @@ if __name__ == "__main__":
         d_num_chunks=args.d_num_chunks,
         batch_size=args.batch_size,
     )
+
+    out_fn = get_embedding_filepath(
+        dataset.embedding_dir,
+        model.short_name,
+        dataset.dataset_name,
+        embedder.config_hash,
+        d_chunk_ind=args.d_chunk_ind,
+        d_num_chunks=args.d_num_chunks
+    ) + ".npz"
+
+    out_fn_full = get_embedding_filepath(
+        dataset.embedding_dir,
+        model.short_name,
+        dataset.dataset_name,
+        embedder.config_hash,
+    ) + ".npz"
 
     if Path(out_fn_full).exists() and not args.force_recompute:
         print(f"Full embedding already computed: {out_fn_full}")

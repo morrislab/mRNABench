@@ -8,14 +8,28 @@ import pytest
 pytest.importorskip("torch")
 import torch
 
-from mrna_bench.embedder import DatasetEmbedder
+from mrna_bench.embedder import (
+    DatasetEmbedder,
+    find_embedding_file,
+    read_embedding_config,
+)
+from mrna_bench.models.pooling import PositionPool
+
+
+def mock_model(**model_options) -> Mock:
+    """Create a model mock with the attributes stored in embedding configs."""
+    return Mock(
+        short_name="mockmodel",
+        attn_implementation=None,
+        default_attn_implementation="sdpa",
+        model_options=model_options,
+    )
 
 
 @pytest.fixture
 def embedder(tmp_path) -> DatasetEmbedder:
     """Create an embedder configured to persist into a temporary directory."""
-    model = Mock()
-    model.short_name = "mockmodel"
+    model = mock_model()
 
     dataset = Mock()
     dataset.data_df = []
@@ -35,7 +49,8 @@ def test_persist_pooled_half_as_float32(embedder, tmp_path, dtype):
 
     embedder.persist_embeddings(embeddings)
 
-    with np.load(tmp_path / "mockdata_mockmodel.npz") as saved:
+    path = tmp_path / f"mockdata_mockmodel_{embedder.config_hash}.npz"
+    with np.load(path) as saved:
         persisted = saved["embedding"]
 
     assert persisted.dtype == np.float32
@@ -59,7 +74,8 @@ def test_persist_ragged_half_as_float32(embedder, tmp_path, dtype):
 
     embedder.persist_embeddings(embeddings)
 
-    with h5py.File(tmp_path / "mockdata_mockmodel.h5", "r") as saved:
+    path = tmp_path / f"mockdata_mockmodel_{embedder.config_hash}.h5"
+    with h5py.File(path, "r") as saved:
         persisted = [saved["embeddings"][str(i)][:] for i in range(2)]
 
     for actual, expected in zip(persisted, embeddings):
@@ -67,9 +83,72 @@ def test_persist_ragged_half_as_float32(embedder, tmp_path, dtype):
         np.testing.assert_array_equal(actual, expected.float().numpy())
 
 
+def test_persisted_config_finds_file(embedder, tmp_path):
+    """Embeddings are named by config hash and found by stored config."""
+    embedder.persist_embeddings([torch.zeros(2), torch.ones(2)])
+
+    path = find_embedding_file(str(tmp_path), "mockmodel", "mockdata")
+    assert path.stem.split("_")[2] == embedder.config_hash
+    assert read_embedding_config(path) == {
+        "pooling": {"name": "MeanPool"},
+        "layer": "final",
+        "attn_implementation": "sdpa",
+    }
+    with pytest.raises(FileNotFoundError):
+        find_embedding_file(
+            str(tmp_path), "mockmodel", "mockdata",
+            pooling=PositionPool(64, 64),
+        )
+
+
+def test_model_options_separate_files(tmp_path):
+    """Non-default model options get their own file and lookup."""
+    dataset = Mock(dataset_name="mockdata", embedding_dir=str(tmp_path))
+    dataset.data_df = []
+    for model, value in ((mock_model(), 0.0), (mock_model(kmer_list=[3]), 1.0)):
+        DatasetEmbedder(model, dataset).persist_embeddings([torch.full((2,), value)])
+
+    default = find_embedding_file(str(tmp_path), "mockmodel", "mockdata")
+    custom = find_embedding_file(
+        str(tmp_path), "mockmodel", "mockdata",
+        model_options={"kmer_list": [3]},
+    )
+    assert np.load(default)["embedding"][0, 0] == 0
+    assert np.load(custom)["embedding"][0, 0] == 1
+    assert "model_options" not in read_embedding_config(default)
+
+
+def test_merged_chunks_keep_config(tmp_path):
+    """Merging chunk files writes the config into the merged file."""
+    dataset = Mock(dataset_name="mockdata", embedding_dir=str(tmp_path))
+    dataset.data_df = list(range(4))
+    pooling = PositionPool(2, 2)
+    for i in range(2):
+        chunk = DatasetEmbedder(
+            mock_model(), dataset, d_chunk_ind=i, d_num_chunks=2,
+            agg_fn=pooling,
+        )
+        chunk.persist_embeddings([torch.full((1, 2), float(i))] * 2)
+    chunk.merge_embeddings()
+
+    path = find_embedding_file(
+        str(tmp_path), "mockmodel", "mockdata", pooling=pooling
+    )
+    assert read_embedding_config(path)["pooling"] == pooling.config
+    np.testing.assert_array_equal(
+        np.load(path)["embedding"][:, 0, 0], [0, 0, 1, 1]
+    )
+
+
+def test_embedder_rejects_plain_functions():
+    """Pooling must be a Pooling so it can be stored with the embeddings."""
+    with pytest.raises(TypeError, match="Pooling"):
+        DatasetEmbedder(mock_model(), Mock(), agg_fn=lambda h: h.mean(0))
+
+
 def test_embed_dataset_batches_rows_in_order():
     """Pass dataset rows to embed in configurable batches."""
-    model = Mock()
+    model = mock_model()
     model.embed.side_effect = lambda sequences, **kwargs: [
         torch.tensor([len(sequence)]) for sequence in sequences
     ]
@@ -95,7 +174,7 @@ def test_embed_dataset_batches_rows_in_order():
 
 def test_embed_dataset_supports_sequence_only_data():
     """Omit optional tracks when the dataset does not provide them."""
-    model = Mock()
+    model = mock_model()
     model.embed.return_value = [torch.tensor([1.0]), torch.tensor([2.0])]
     dataset = Mock()
     dataset.data_df = pd.DataFrame({"sequence": ["A", "CC"]})
@@ -113,8 +192,7 @@ def test_embed_dataset_supports_sequence_only_data():
 
 def test_from_dataframe_preserves_optional_tracks():
     """Custom dataframes require sequence but retain optional model tracks."""
-    model = Mock()
-    model.short_name = "mockmodel"
+    model = mock_model()
     sequence_only = pd.DataFrame({"sequence": ["AC"]})
 
     embedder = DatasetEmbedder.from_dataframe(model, sequence_only)

@@ -5,6 +5,7 @@ import numpy as np
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel, ModelBehavior
+from mrna_bench.models.pooling import MeanPool
 
 
 class GENERanno(EmbeddingModel):
@@ -174,7 +175,7 @@ class GENERanno(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using GENERanno.
 

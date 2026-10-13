@@ -72,7 +72,6 @@ parser.add_argument(
 )
 parser.add_argument("--target", type=str, default="target")
 parser.add_argument("--split_type", type=str, default="default")
-parser.add_argument("--combo", type=str, default=None)
 parser.add_argument("--seeds", type=str, default=default_seeds)
 parser.add_argument("--force_recompute", action="store_true")
 parser.add_argument(
@@ -93,12 +92,24 @@ parser.add_argument(
     choices=["eager", "sdpa", "flash_attention_2"],
 )
 parser.add_argument("--score_batch_size", type=int, default=16)
+parser.add_argument(
+    "--kmers",
+    type=str,
+    default=None,
+    help="k-mer lengths for NaiveBaseline, e.g. '[3, 4]'.",
+)
 args = parser.parse_args()
 
 
 if __name__ == "__main__":
     model_class = MODEL_CATALOG[args.model_name]
     model_short_name = model_class.get_model_short_name(args.model_version)
+    model_options = None
+    if args.kmers:
+        model_options = mb.load_model(
+            args.model_name, args.model_version,
+            kmer_list=ast.literal_eval(args.kmers),
+        ).model_options
 
     print("Running linear probe for model:", model_short_name, flush=True)
     print("Dataset:", args.dataset_name, flush=True)
@@ -140,79 +151,15 @@ if __name__ == "__main__":
             print("Finished:", metrics, flush=True)
         raise SystemExit(0)
 
-    if "NaiveBaseline" in args.model_name:
-        embeddings = load_embeddings(dataset, model_short_name)
-
-        if model_short_name == "naive-4":
-
-            FEATURE_COMBOS = {
-                "gc": ["gc"],
-                "kmer": ["kmer"],
-                "all": ["kmer", "gc"],
-            }
-
-        if args.combo is not None:
-            FEATURE_COMBOS = {
-                args.combo: FEATURE_COMBOS[args.combo]
-            }
-
-        for combo_name, blocks in FEATURE_COMBOS.items():
-            print("Running naive baseline for feature combo:", combo_name, flush=True)
-
-            idx = np.concatenate([FEATURE_BLOCKS[feat] for feat in blocks])
-            idx = np.sort(idx)
-
-            if combo_name == "all":
-                feature_model_name = model_short_name
-                embeddings_subset = embeddings.copy()
-            else:
-                feature_model_name = f"{model_short_name}-{combo_name}"
-                embeddings_subset = embeddings[:, idx].copy()
-
-            if args.task == "embedding_vep":
-                prober = build_embedding_vep(
-                    dataset,
-                    embeddings_subset,
-                    feature_model_name,
-                    args.target,
-                )
-
-                if not args.force_recompute and prober.result_exists():
-                    print("Results already computed, skipping.", flush=True)
-                else:
-                    print("Running zero-shot VEP.", flush=True)
-                    metrics = prober.run(persist=True)
-                    print("Finished:", metrics, flush=True)
-
-            else:
-                prober = (
-                    LinearProbeBuilder(dataset_name=args.dataset_name)
-                    .fetch_embedding_by_embedding_instance(feature_model_name, embeddings_subset)
-                    .build_splitter(args.split_type, species=dataset.metadata.species, eval_all_splits=True)
-                    .build_evaluator(args.task)
-                    .set_regressor(args.regressor)
-                    .set_target(args.target)
-                    .use_persister()
-                    .build()
-                )
-
-                seeds = ast.literal_eval(args.seeds)
-
-                for seed in seeds:
-                    if not args.force_recompute and prober.persister.result_exists(seed):
-                        print("Results already computed for seed:", seed, flush=True)
-                        continue
-
-                    print("Running linear probe for seed:", seed, flush=True)
-                    metrics = prober.run_linear_probe(seed, persist=True)
-                    print("Finished.")
-
-    elif args.task == "embedding_vep":
-        prober = build_embedding_vep(
-            dataset,
-            load_embeddings(dataset, model_short_name),
-            model_short_name,
-            args.target,
+    if args.task == "embedding_vep":
+        zero_shot = (
+            ZeroShotBuilder(dataset=dataset)
+            .fetch_embedding_by_model_name(
+                model_short_name, model_options=model_options
+            )
+            .set_target(args.target)
+            .use_persister()
+            .build()
         )
 
         if not args.force_recompute and prober.result_exists():
@@ -225,7 +172,9 @@ if __name__ == "__main__":
     else:
         prober = (
             LinearProbeBuilder(dataset_name=args.dataset_name)
-            .fetch_embedding_by_model_name(model_short_name)
+            .fetch_embedding_by_model_name(
+                model_short_name, model_options=model_options
+            )
             .build_splitter(args.split_type, species=dataset.metadata.species, eval_all_splits=True)
             .build_evaluator(args.task)
             .set_regressor(args.regressor)

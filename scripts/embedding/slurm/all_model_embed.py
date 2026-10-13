@@ -4,7 +4,11 @@ import argparse
 import mrna_bench as mb
 from pathlib import Path
 
-from mrna_bench.embedder import get_embedding_filepath
+from mrna_bench.embedder import (
+    get_config_hash,
+    get_embedding_config,
+    get_embedding_filepath,
+)
 from mrna_bench.models.model_catalog import MODEL_VERSION_MAP, MODEL_CATALOG
 from mrna_bench.datasets.dataset_catalog import DATASET_CATALOG
 
@@ -97,11 +101,12 @@ if __name__ == "__main__":
                     continue
 
                 model_short_name = MODEL_CATALOG[model_name].get_model_short_name(model_version)
+                config_hash = get_config_hash(get_embedding_config(MODEL_CATALOG[model_name]))
 
                 if sum([k in model_short_name for k in skip_model_keys]) > 0:
                     continue
 
-                if (emb_dir / f"{dataset_name}_{model_short_name}.npz").exists() and not args.force_recompute:
+                if (emb_dir / f"{dataset_name}_{model_short_name}_{config_hash}.npz").exists() and not args.force_recompute:
                     # Skip if embedding already exists
                     # print(f"Embedding for {dataset_name} with {model_name} {model_version} already exists.")
                     continue
@@ -117,6 +122,7 @@ if __name__ == "__main__":
                                 d.embedding_dir,
                                 model_short_name,
                                 dataset_name,
+                                config_hash,
                                 d_chunk_ind,
                                 d_num_chunks,
                             ) + ".npz")

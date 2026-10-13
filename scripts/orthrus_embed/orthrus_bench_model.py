@@ -2,6 +2,7 @@ import os
 import torch
 import numpy as np
 from mrna_bench.models import EmbeddingModel, ModelBehavior
+from mrna_bench.models.pooling import MeanPool
 from collections.abc import Callable
 from mrna_bench.datasets.dataset_utils import str_to_ohe
 from orthrus_src import load_model
@@ -53,7 +54,7 @@ class Orthrus(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using Orthrus.
 
@@ -82,7 +83,7 @@ class Orthrus(EmbeddingModel):
     def _embed_fourtrack(
         self,
         sequences: list[str],
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using 4-track Orthrus.
 
@@ -141,7 +142,7 @@ class Orthrus(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray],
         splice: list[np.ndarray],
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using 6-track Orthrus.
 

@@ -8,7 +8,7 @@ root.
 ```
 {data_root}/
 └── {dataset}/
-    ├── embeddings/          # .npz or .h5 — one file per (dataset, model)
+    ├── embeddings/          # {dataset}_{model}_{config_hash}.npz or .h5
     ├── lp_results/          # v1.3 JSON files (mRNABench ≤ 1.3, now legacy)
     └── results.db           # v2.0 SQLite DB (mRNABench ≥ 2.0, current)
 ```
@@ -72,6 +72,7 @@ Old JSON files are not deleted.  Safe to re-run (uses `INSERT OR REPLACE`).
 ```bash
 python migrate_json_to_sqlite.py --dry-run      # parse only, no writes
 python migrate_json_to_sqlite.py                # migrate
+python migrate_json_to_sqlite.py --fallback-model Orthrus  # local checkpoints
 python migrate_json_to_sqlite.py --verify-only  # check DB matches JSON files
 ```
 

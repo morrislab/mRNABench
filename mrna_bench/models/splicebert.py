@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
+from mrna_bench.models.pooling import MeanPool
 from mrna_bench.utils import get_model_weights_path
 
 
@@ -147,7 +148,7 @@ class SpliceBERT(EmbeddingModel):
     def _embed_1024(
         self,
         sequences: list[str],
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using 1024nt model.
 
@@ -168,7 +169,7 @@ class SpliceBERT(EmbeddingModel):
     def _embed_510(
         self,
         sequences: list[str],
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using the 510-token model.
 
@@ -217,7 +218,7 @@ class SpliceBERT(EmbeddingModel):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = EmbeddingModel.mean_pool
+        agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
         """Embed sequences using SpliceBERT.
 

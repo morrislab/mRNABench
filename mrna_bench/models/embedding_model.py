@@ -10,25 +10,9 @@ import warnings
 import numpy as np
 import torch
 
+from mrna_bench.models.pooling import MeanPool
+
 T = TypeVar("T")
-
-
-def mean_pool(
-    hidden_states: torch.Tensor,
-    dim: int = 0,
-) -> torch.Tensor:
-    """Mean-pool token states in FP32.
-
-    Args:
-        hidden_states: Token representations to pool.
-        dim: Dimension containing the tokens to average.
-
-    Returns:
-        Mean-pooled representations in FP32.
-    """
-    # there can be perf differences if using a FA2
-    # model with FP16 hidden states, so we cast to FP32
-    return hidden_states.float().mean(dim=dim)
 
 
 class ModelBehavior(StrEnum):
@@ -103,12 +87,14 @@ class SupportsEmbedding(Protocol):
 class EmbeddingModel(SupportsEmbedding, ABC):
     """Wrapper class for embedding models used to represent sequences."""
 
-    mean_pool = staticmethod(mean_pool)
     default_version: ClassVar[str]
     valid_versions: ClassVar[list[str]]
     default_attn_implementation: ClassVar[str | None]
     valid_attn_implementations: ClassVar[list[str] | None]
     hookable_layer_patterns: ClassVar[list[str]]
+    # Constructor options that change the embeddings, only where they differ
+    # from their defaults. Stored in the embedding config.
+    model_options: dict = {}
     supported_behaviors: ClassVar[frozenset[ModelBehavior]]
     flash_attn_dtype: ClassVar[torch.dtype] = torch.float16
     sequence_score_scope: ClassVar[str] = "full"
@@ -1208,7 +1194,7 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = mean_pool,
+        agg_fn: Callable = MeanPool(),
     ) -> list[torch.Tensor]:
         """Embed sequences, optionally using cds/splice tracks.
 
@@ -1264,7 +1250,7 @@ class EmbeddingModel(SupportsEmbedding, ABC):
         sequences: list[str],
         max_chunk_length: int,
         embed_fn: Callable[[list[str]], tuple[torch.Tensor, torch.Tensor]],
-        agg_fn: Callable = mean_pool,
+        agg_fn: Callable = MeanPool(),
     ) -> list[torch.Tensor]:
         """Embed sequences with chunking and reassembly.
 

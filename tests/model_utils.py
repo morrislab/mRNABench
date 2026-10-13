@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 
-from mrna_bench.models import mean_pool
+from mrna_bench.models.pooling import MeanPool
 
 
 def embed_one(
@@ -9,7 +9,7 @@ def embed_one(
     sequence: str,
     cds: np.ndarray | None = None,
     splice: np.ndarray | None = None,
-    agg_fn=mean_pool,
+    agg_fn=MeanPool(),
 ) -> torch.Tensor:
     """Call the public batch API for one sequence."""
     return torch.stack(model.embed(

@@ -33,8 +33,8 @@ while [[ "$#" -gt 0 ]]; do
         --regressor) regressor="$2"; shift ;;
         --target) target="$2"; shift ;;
         --split_type) split_type="$2"; shift ;;
-        --combo) combo="$2"; shift ;;
         --seeds) seeds="$2"; shift ;;
+        --kmers) kmers="$2"; shift ;;
         --force_recompute) force_recompute="$2"; shift ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
@@ -51,8 +51,8 @@ if [ "$force_recompute" == "True" ]; then
     --regressor "$regressor" \
     --target "$target" \
     --split_type "$split_type" \
-    --combo "$combo" \
     --seeds "$seeds" \
+    --kmers "$kmers" \
     --force_recompute
 else
     python ../by_modelname.py \
@@ -63,6 +63,6 @@ else
     --regressor "$regressor" \
     --target "$target" \
     --split_type "$split_type" \
-    --combo "$combo" \
-    --seeds "$seeds"
+    --seeds "$seeds" \
+    --kmers "$kmers"
 fi

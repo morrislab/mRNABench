@@ -6,11 +6,8 @@ import numpy as np
 pytest.importorskip("torch")
 import torch
 
-from mrna_bench.models.embedding_model import (
-    EmbeddingModel,
-    ModelBehavior,
-    mean_pool,
-)
+from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
+from mrna_bench.models.pooling import MeanPool
 
 
 class MockEmbeddingModel(EmbeddingModel):
@@ -32,7 +29,7 @@ class MockEmbeddingModel(EmbeddingModel):
         sequences,
         cds=None,
         splice=None,
-        agg_fn=EmbeddingModel.mean_pool,
+        agg_fn=MeanPool(),
     ):
         """Not used directly in these tests."""
         pass
@@ -114,7 +111,7 @@ def test_embed_with_chunking_batch(model):
 def test_mean_pool_uses_float32():
     """Default pooling preserves half-precision token differences."""
     hidden = torch.tensor([[1.0, 2.0], [1.01, 2.01]], dtype=torch.float16)
-    pooled = mean_pool(hidden)
+    pooled = MeanPool()(hidden)
 
     assert pooled.dtype == torch.float32
     torch.testing.assert_close(pooled, hidden.float().mean(dim=0))

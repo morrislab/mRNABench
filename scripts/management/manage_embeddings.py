@@ -2,7 +2,7 @@
 
 Each embedding file lives at::
 
-    {data_dir}/{dataset}/embeddings/{dataset}_{model}.{npz|h5}
+    {data_dir}/{dataset}/embeddings/{dataset}_{model}_{config_hash}.{npz|h5}
 
 All filters are optional and substring-matched by default (use --exact for
 exact matching).  Multiple values per flag are OR-combined for include filters
@@ -65,15 +65,16 @@ _EMB_EXTS = {".npz", ".h5"}
 # ---------------------------------------------------------------------------
 
 def _parse_emb_filename(filename: str, dataset_name: str) -> str | None:
-    """Extract model name from ``{dataset}_{model}.{ext}``.
+    """Extract model name from ``{dataset}_{model}_{config_hash}.{ext}``.
 
     Returns None if the filename doesn't match the expected pattern.
     """
     stem = Path(filename).stem  # strip extension
     prefix = dataset_name + "_"
-    if not stem.startswith(prefix):
+    if not stem.startswith(prefix) or stem.count("_") != 2:
         return None
-    return stem[len(prefix):]
+    else:
+        return stem[len(prefix):].split("_")[0]
 
 
 def _auto_pattern(val: str, exact: bool) -> str:
@@ -327,7 +328,8 @@ def action_rename_model(
             mo = _parse_emb_filename(f.name, dataset_name)
             if mo != old_name:
                 continue
-            new_filename = f"{dataset_name}_{new_name}{f.suffix}"
+            config_hash = f.stem.split("_")[-1]
+            new_filename = f"{dataset_name}_{new_name}_{config_hash}{f.suffix}"
             to_rename.append((f, f.parent / new_filename))
 
     if not to_rename:

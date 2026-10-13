@@ -4,43 +4,17 @@ from mrna_bench import load_dataset
 from mrna_bench.datasets import BenchmarkDataset
 from mrna_bench.data_splitter.data_splitter import DataSplitter
 from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
-from mrna_bench.embedder import get_embedding_filepath
-from mrna_bench.models import EmbeddingModel
+from mrna_bench.embedder import EmbeddingFetcher
 
 from mrna_bench.linear_probe.linear_probe import LinearProbe
 from mrna_bench.linear_probe.persister import LinearProbePersister
 from mrna_bench.linear_probe.evaluator import LinearProbeEvaluator
 
 
-class LinearProbeBuilder:
+class LinearProbeBuilder(EmbeddingFetcher):
     """Factory class for LinearProbeCore."""
 
     _DEFAULT_SPLIT_RATIOS = (0.7, 0.15, 0.15)
-
-    @staticmethod
-    def load_persisted_embeddings(
-        embedding_dir: str,
-        model_short_name: str,
-        dataset_name: str,
-    ) -> np.ndarray:
-        """Load pre-computed embeddings for dataset from persisted location.
-
-        Args:
-            embedding_dir: Directory where embedding is stored.
-            model_short_name: Shortened name of embedding model version.
-            dataset_name: Name of dataset which was embedded.
-
-        Returns:
-            Embeddings for dataset computed using embedding model.
-        """
-        embeddings_fn = get_embedding_filepath(
-            embedding_dir,
-            model_short_name,
-            dataset_name,
-        ) + ".npz"
-
-        embeddings = np.load(embeddings_fn)["embedding"]
-        return embeddings
 
     def __init__(
         self,
@@ -91,6 +65,7 @@ class LinearProbeBuilder:
 
         self.model_short_name: str | None = None
         self.embeddings: np.ndarray | None = None
+        self.embedding_config: dict | None = None
         self.persister_flag = False
 
         self.splitter: DataSplitter | None = None
@@ -150,85 +125,6 @@ class LinearProbeBuilder:
             self._DEFAULT_SPLIT_RATIOS,
             **split_args
         )
-
-    def fetch_embedding_by_model_instance(
-        self,
-        model: EmbeddingModel,
-    ) -> "LinearProbeBuilder":
-        """Load persisted embeddings using a model instance's short name."""
-        return self.fetch_embedding_by_model_name(model.short_name)
-
-    def fetch_embedding_by_model_name(
-        self,
-        model_short_name: str,
-    ) -> "LinearProbeBuilder":
-        """Get embeddings for LinearProbe using model short name.
-
-        Args:
-            model_short_name: Short name of model used to generate embeddings.
-
-        Returns:
-            LinearProbeBuilder with set embeddings.
-        """
-        self.model_short_name = model_short_name
-
-        self.embeddings = self.load_persisted_embeddings(
-            self.dataset.embedding_dir,
-            self.model_short_name,
-            self.dataset.dataset_name,
-        )
-
-        return self
-
-    def fetch_embedding_by_filename(
-        self,
-        embedding_name: str
-    ) -> "LinearProbeBuilder":
-        """Get embeddings for LinearProbe using embedding file name.
-
-        Args:
-            embedding_name: Name of embedding file.
-
-        Returns:
-            LinearProbeBuilder with set embeddings.
-        """
-        embedding_name = embedding_name.replace(".npz", "")
-
-        emb_fn_arr = embedding_name.split("_")
-
-        if len(emb_fn_arr) < 2:
-            raise ValueError(
-                "Invalid embedding filename format: {}".format(embedding_name)
-            )
-
-        self.model_short_name = emb_fn_arr[1]
-
-        self.embeddings = self.load_persisted_embeddings(
-            self.dataset.embedding_dir,
-            self.model_short_name,
-            self.dataset.dataset_name,
-        )
-
-        return self
-
-    def fetch_embedding_by_embedding_instance(
-        self,
-        model_short_name: str,
-        embedding: np.ndarray,
-    ) -> "LinearProbeBuilder":
-        """Store embeddings for LinearProbe using an embedding instance.
-
-        Args:
-            model_short_name: Short name of model used to generate embeddings.
-            embedding: Locally generated embedding for dataset.
-
-        Returns:
-            LinearProbeBuilder with set embeddings.
-        """
-        self.model_short_name = model_short_name
-        self.embeddings = embedding
-
-        return self
 
     def build_splitter(
         self,

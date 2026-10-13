@@ -1,5 +1,5 @@
 from pathlib import Path
-from collections.abc import Callable
+import json
 
 import numpy as np
 import pandas as pd
@@ -8,9 +8,14 @@ import h5py
 
 import torch
 
-from mrna_bench.models import EmbeddingModel, mean_pool
+from mrna_bench.models import EmbeddingModel
+from mrna_bench.models.pooling import MeanPool, Pooling
 from mrna_bench.datasets import BenchmarkDataset, DatasetMetadata
-from mrna_bench.embedder.embedder_utils import get_embedding_filepath
+from mrna_bench.embedder.embedder_utils import (
+    get_config_hash,
+    get_embedding_config,
+    get_embedding_filepath,
+)
 
 
 class DatasetEmbedder:
@@ -28,7 +33,7 @@ class DatasetEmbedder:
         dataset: BenchmarkDataset,
         d_chunk_ind: int = 0,
         d_num_chunks: int = 0,
-        agg_fn: Callable = mean_pool,
+        agg_fn: Pooling = MeanPool(),
         ragged_out: bool = False,
         batch_size: int = 1,
     ):
@@ -39,7 +44,7 @@ class DatasetEmbedder:
             dataset: Dataset to embed.
             d_chunk_ind: Current dataset chunk to be processed.
             d_num_chunks: Total number of chunks to divide dataset into.
-            agg_fn: Aggregation function to apply to sequence embeddings.
+            agg_fn: Pooling applied to sequence embeddings.
             ragged_out: Whether the model produces ragged output under agg_fn.
             batch_size: Number of dataset rows passed to model.embed at once.
 
@@ -54,8 +59,14 @@ class DatasetEmbedder:
             raise ValueError("batch_size must be at least 1.")
         self.batch_size = batch_size
 
+        if not isinstance(agg_fn, Pooling):
+            raise TypeError(
+                "agg_fn must be a Pooling, e.g. MeanPool() or PositionPool()."
+            )
         self.agg_fn = agg_fn
         self.ragged_out = ragged_out
+        self.config = get_embedding_config(model, agg_fn)
+        self.config_hash = get_config_hash(self.config)
 
         if self.d_num_chunks == 0:
             self.d_chunk_size = len(self.data_df)
@@ -141,6 +152,7 @@ class DatasetEmbedder:
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name,
+            self.config_hash,
             self.d_chunk_ind,
             self.d_num_chunks
         )
@@ -152,6 +164,7 @@ class DatasetEmbedder:
 
         if self.ragged_out:
             with h5py.File(out_path + ".h5", "w") as f:
+                f.attrs["config"] = json.dumps(self.config)
                 grp = f.create_group("embeddings")
                 for i, emb in enumerate(embeddings):
                     grp.create_dataset(
@@ -164,7 +177,8 @@ class DatasetEmbedder:
             embeddings_tensor = torch.stack(embeddings, dim=0)
             np.savez_compressed(
                 out_path + ".npz",
-                embedding=embeddings_tensor.numpy()
+                embedding=embeddings_tensor.numpy(),
+                config=json.dumps(self.config),
             )
 
     def merge_embeddings(self):
@@ -176,9 +190,10 @@ class DatasetEmbedder:
         processed_files_paths = []
         processed_chunk_inds = []
 
-        base = "{}_{}_".format(
+        base = "{}_{}_{}_".format(
             self.dataset.dataset_name,
-            self.model.short_name
+            self.model.short_name,
+            self.config_hash,
         )
 
         glob_patterns = [
@@ -193,10 +208,10 @@ class DatasetEmbedder:
                     continue
 
                 file_name_arr = file.stem.split("_")
-                if len(file_name_arr) < 3:
+                if len(file_name_arr) < 4:
                     continue  # merged file, skip
 
-                start, end = map(int, file_name_arr[2].split("-"))
+                start, end = map(int, file_name_arr[3].split("-"))
                 if end != self.d_num_chunks:
                     continue
 
@@ -240,10 +255,12 @@ class DatasetEmbedder:
         out_fn = get_embedding_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
-            self.dataset.dataset_name
+            self.dataset.dataset_name,
+            self.config_hash,
         ) + ".h5"
 
         with h5py.File(out_fn, "w") as out_f:
+            out_f.attrs["config"] = json.dumps(self.config)
             out_grp = out_f.create_group("embeddings")
 
             idx = 0
@@ -309,10 +326,15 @@ class DatasetEmbedder:
         out_fn = get_embedding_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
-            self.dataset.dataset_name
+            self.dataset.dataset_name,
+            self.config_hash,
         ) + ".npz"
 
-        np.savez_compressed(out_fn, embedding=all_embeddings)
+        np.savez_compressed(
+            out_fn,
+            embedding=all_embeddings,
+            config=json.dumps(self.config),
+        )
 
         for file in processed_files_paths:
             Path(file).unlink()
