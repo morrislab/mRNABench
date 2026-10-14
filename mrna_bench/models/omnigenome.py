@@ -115,36 +115,6 @@ class OmniGenome(EmbeddingModel):
                 if hasattr(module, "flash_attn_func"):
                     module.flash_attn_func = None  # type: ignore[assignment]
 
-    def _forward_chunks(
-        self,
-        chunks: list[str]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for a batch of sequence chunks.
-
-        Args:
-            chunks: List of sequence chunks to embed.
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask). The pooling_mask
-            excludes padding and special tokens (CLS/SEP).
-        """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-        pooling_mask = toks["attention_mask"].clone()
-
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            last_pos = seq_lengths[idx] - 1
-            pooling_mask[idx, last_pos] = 0
-
-        return hidden_states, pooling_mask
-
     def embed(
         self,
         sequences: list[str],
@@ -170,7 +140,6 @@ class OmniGenome(EmbeddingModel):
             - default (mean): (768,) for `omnigenome-186m`
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
 
         embeddings = []
         for sequence in sequences:
@@ -216,18 +185,9 @@ class OmniGenome(EmbeddingModel):
             (hidden_states, scores); see EmbeddingModel.extract().
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
 
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length - 2,
             layers=layers,
             return_attentions=return_attentions,

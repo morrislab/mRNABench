@@ -108,30 +108,22 @@ class DNABERT(EmbeddingModel):
         self.max_chunk_length = self.max_kmer_tokens + self.k - 1
         self.sequence_score_chunk_length = self.max_chunk_length
 
-    def _seq_to_kmers(self, seq: str) -> str:
-        """Convert a DNA sequence to overlapping space-delimited k-mers."""
-        if len(seq) < self.k:
+    def _tokenizer_text(self, sequence: str) -> str:
+        """Write a sequence as overlapping space-delimited k-mers.
+
+        Args:
+            sequence: DNA sequence of at least k nucleotides.
+
+        Returns:
+            Space-delimited k-mers.
+        """
+        if len(sequence) < self.k:
             raise ValueError(
                 f"DNABERT-{self.k}mer requires at least {self.k} nucleotides."
             )
         return " ".join(
-            seq[i:i + self.k]
-            for i in range(len(seq) - self.k + 1)
-        )
-
-    def _tokenize_for_logits(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        add_special_tokens: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        """Tokenize overlapping k-mers for masked scoring."""
-        _ = cds, splice
-        return self.tokenizer(  # type: ignore[no-any-return]
-            self._seq_to_kmers(sequence),
-            return_tensors="pt",
-            add_special_tokens=add_special_tokens,
+            sequence[i:i + self.k]
+            for i in range(len(sequence) - self.k + 1)
         )
 
     def _chunk_sequence_for_kmers(self, sequence: str) -> list[str]:
@@ -169,36 +161,6 @@ class DNABERT(EmbeddingModel):
             )
             for start, chunk in zip(starts, chunks)
         ]
-
-    def _forward_chunks(
-        self,
-        chunks: list[str],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Run forward pass on sequence chunks.
-
-        Args:
-            chunks: List of sequence chunks to embed.
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask) tensors.
-        """
-        kmer_chunks = [self._seq_to_kmers(chunk) for chunk in chunks]
-
-        toks = self.tokenizer(
-            kmer_chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-
-        pooling_mask = toks["attention_mask"].clone()
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        return hidden_states, pooling_mask
 
     def embed(
         self,
@@ -273,17 +235,8 @@ class DNABERT(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            kmer_seqs = [self._seq_to_kmers(seq) for seq in seqs]
-            return self.tokenizer(  # type: ignore[return-value]
-                kmer_seqs,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,

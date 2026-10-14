@@ -1,7 +1,6 @@
 import math
 import pytest
 
-from unittest.mock import patch
 
 import numpy as np
 
@@ -54,31 +53,26 @@ def test_mrnabert_attention_implementation(model):
 
 def test_mrnabert_uses_separate_attention_and_pooling_masks(model):
     """Special tokens attend normally but are excluded from pooling."""
-    transformed = ["ATG ATG", "GCG CGC GCG CGC"]
+    sequences = ["ATGATG", "GCGCGCGCGCGC"]
+    cds = [np.tile([1, 0, 0], len(seq) // 3) for seq in sequences]
     toks = model.tokenizer.batch_encode_plus(
-        transformed,
+        ["ATG ATG", "GCG CGC GCG CGC"],
         add_special_tokens=True,
         padding="longest",
         return_tensors="pt",
         return_special_tokens_mask=True,
     ).to(model.device)
 
-    with patch.object(model, "model") as mock_model:
-        mock_model.return_value.last_hidden_state = torch.ones(
-            (*toks["input_ids"].shape, 768),
-            device=model.device,
-        )
+    tokens = model.tokenize(sequences, cds)
 
-        _, pooling_mask = model._forward_chunks_cds(transformed)
-
-    assert torch.equal(
-        mock_model.call_args.kwargs["attention_mask"],
-        toks["attention_mask"],
-    )
+    assert torch.equal(tokens["input_ids"], toks["input_ids"])
+    assert torch.equal(tokens["attention_mask"], toks["attention_mask"])
     expected_pooling_mask = (
         toks["attention_mask"] * (1 - toks["special_tokens_mask"])
     )
-    assert torch.equal(pooling_mask, expected_pooling_mask)
+    assert torch.equal(
+        model.pooling_mask(tokens).long(), expected_pooling_mask
+    )
 
 
 def test_mrnabert_separate_utr_cds_single_codon(model):

@@ -5,6 +5,7 @@ import numpy as np
 
 pytest.importorskip("torch")
 import torch
+from transformers import BatchEncoding
 
 from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
 from mrna_bench.models.pooling import MeanPool
@@ -379,9 +380,9 @@ def test_invalid_version_raises_value_error(device):
 
 def test_causal_sequence_score(device):
     class Tokenizer:
-        def __call__(self, sequence, **kwargs):
-            ids = [{"A": 0, "C": 1}[base] for base in sequence]
-            return {"input_ids": torch.tensor([ids])}
+        def __call__(self, sequences, **kwargs):
+            ids = [[{"A": 0, "C": 1}[base] for base in s] for s in sequences]
+            return BatchEncoding({"input_ids": torch.tensor(ids)})
 
     class Model(torch.nn.Module):
         def forward(self, input_ids, **kwargs):
@@ -444,9 +445,9 @@ def test_pseudo_log_likelihood(device):
     class Tokenizer:
         mask_token_id = 2
 
-        def __call__(self, sequence, **kwargs):
-            ids = [{"A": 0, "C": 1}[base] for base in sequence]
-            return {"input_ids": torch.tensor([ids])}
+        def __call__(self, sequences, **kwargs):
+            ids = [[{"A": 0, "C": 1}[base] for base in s] for s in sequences]
+            return BatchEncoding({"input_ids": torch.tensor(ids)})
 
         def get_special_tokens_mask(self, ids, **kwargs):
             return [0] * len(ids)
@@ -490,12 +491,12 @@ def test_masked_marginal_llr_handles_kmer_tokens(device):
         mask_token_id = 4
         vocab = {"AA": 0, "AC": 1, "CA": 2}
 
-        def __call__(self, sequence, **kwargs):
+        def __call__(self, sequences, **kwargs):
             ids = [
-                self.vocab[sequence[idx:idx + 2]]
-                for idx in range(len(sequence) - 1)
+                [self.vocab[s[idx:idx + 2]] for idx in range(len(s) - 1)]
+                for s in sequences
             ]
-            return {"input_ids": torch.tensor([ids])}
+            return BatchEncoding({"input_ids": torch.tensor(ids)})
 
         def get_special_tokens_mask(self, ids, **kwargs):
             return [0] * len(ids)

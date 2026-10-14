@@ -118,7 +118,6 @@ class UTRBERT(EmbeddingModel):
         cds: np.ndarray | None,
         splice: np.ndarray | None,
     ) -> list[tuple[str, np.ndarray | None, np.ndarray | None]]:
-        sequence = sequence.replace("T", "U")
         chunks = self._chunk_sequence_for_kmers(sequence)
         starts = range(
             0,
@@ -133,34 +132,6 @@ class UTRBERT(EmbeddingModel):
             )
             for start, chunk in zip(starts, chunks)
         ]
-
-    def _forward_chunks(
-        self,
-        chunks: list[str],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Run forward pass on sequence chunks.
-
-        Args:
-            chunks: List of sequence chunks to embed.
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask) tensors.
-        """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-
-        pooling_mask = toks["attention_mask"].clone()
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        return hidden_states, pooling_mask
 
     def embed(
         self,
@@ -182,7 +153,6 @@ class UTRBERT(EmbeddingModel):
             - default (mean): (768,)
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
 
         all_chunks = []
         chunk_counts = []
@@ -231,16 +201,9 @@ class UTRBERT(EmbeddingModel):
             (hidden_states, scores); see EmbeddingModel.extract().
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs, return_tensors="pt", padding=False
-            ).to(self.device)
 
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,

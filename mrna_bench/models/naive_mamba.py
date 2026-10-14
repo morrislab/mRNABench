@@ -7,6 +7,7 @@ import numpy as np
 
 import torch
 import torch.nn as nn
+from torch.nn.utils.rnn import pad_sequence
 
 from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
 from mrna_bench.models.pooling import MeanPool
@@ -152,6 +153,41 @@ class NaiveMamba(EmbeddingModel):
             input_dim=6,
         ).to(device)
 
+    def tokenize(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """One-hot encode sequences with their cds and splice tracks.
+
+        Args:
+            sequences: Nucleotide sequences.
+            cds: CDS tracks (required).
+            splice: Splice site tracks (required).
+            add_special_tokens: Unused; NaiveMamba has no special tokens.
+
+        Returns:
+            "one_hot" model input and its "attention_mask".
+        """
+        _ = add_special_tokens
+        if cds is None or splice is None:
+            raise ValueError("NaiveMamba requires cds and splice tracks.")
+        one_hot = [
+            torch.as_tensor(
+                str_to_ohe(sequence, cds=seq_cds, splice=seq_splice),
+                dtype=torch.float32,
+            )
+            for sequence, seq_cds, seq_splice in zip(sequences, cds, splice)
+        ]
+        lengths = torch.tensor([len(x) for x in one_hot])
+        attention_mask = torch.arange(int(lengths.max())) < lengths[:, None]
+        return {
+            "one_hot": pad_sequence(one_hot, batch_first=True).to(self.device),
+            "attention_mask": attention_mask.long().to(self.device),
+        }
+
     def embed(
         self,
         sequences: list[str],
@@ -173,43 +209,12 @@ class NaiveMamba(EmbeddingModel):
             Embeddings with item shape depending on agg_fn.
              - default (mean): (64,)
         """
-        if cds is None or splice is None:
-            raise ValueError("NaiveMamba requires cds and splice tracks.")
-
-        batch_inputs = []
-        lengths = []
-        for seq, c, s in zip(sequences, cds, splice):
-            ohe_sequence = str_to_ohe(seq)
-            model_input = np.hstack((
-                ohe_sequence,
-                c.reshape(-1, 1),
-                s.reshape(-1, 1)
-            ))
-            batch_inputs.append(model_input)
-            lengths.append(len(seq))
-
-        max_len = max(lengths)
-        padded_inputs = []
-        for inp in batch_inputs:
-            if inp.shape[0] < max_len:
-                padding = np.zeros((max_len - inp.shape[0], 6))
-                inp = np.vstack((inp, padding))
-            padded_inputs.append(inp)
-
-        batch_tensor = torch.tensor(
-            np.stack(padded_inputs),
-            dtype=torch.float32,
-            device=self.device
-        ).transpose(1, 2)
-
-        hidden_states = self.model(batch_tensor)
-
-        embeddings = []
-        for i, length in enumerate(lengths):
-            seq_hidden = hidden_states[i, :length, :]
-            embeddings.append(agg_fn(seq_hidden))
-
-        return embeddings
+        tokens = self.tokenize(sequences, cds, splice)
+        hidden_states = self.model(tokens["one_hot"], channel_last=True)
+        return [
+            agg_fn(hidden[mask])
+            for hidden, mask in zip(hidden_states, self.pooling_mask(tokens))
+        ]
 
     def extract(
         self,
@@ -241,7 +246,6 @@ class NaiveMamba(EmbeddingModel):
         """
         if cds is None or splice is None:
             raise ValueError("NaiveMamba requires cds and splice tracks.")
-
         resolved = self._resolve_layer_paths(layers)
         hidden_out: dict[str, list[list[torch.Tensor]]] = {
             p: [] for p in resolved
@@ -249,37 +253,16 @@ class NaiveMamba(EmbeddingModel):
         score_out: dict[str, list[list[torch.Tensor]] | None] = {
             p: None for p in resolved
         }
-
-        for i, seq in enumerate(sequences):
-            ohe_sequence = str_to_ohe(seq)
-            model_input = np.hstack((
-                ohe_sequence,
-                cds[i].reshape(-1, 1),
-                splice[i].reshape(-1, 1),
-            ))
-            inp = torch.tensor(
-                model_input,
-                dtype=torch.float32,
-                device=self.device,
-            ).transpose(0, 1).unsqueeze(0)  # (1, 6, T)
-
-            seq_hidden: dict[str, list[torch.Tensor]] = {
-                p: [] for p in resolved
-            }
-
-            handles, activations = self._register_hooks(resolved)
-            try:
-                self.model(inp)
-            finally:
-                self._remove_hooks(handles)
-
+        for seq, seq_cds, seq_splice in zip(sequences, cds, splice):
+            tokens = self._tokenize_one(seq, seq_cds, seq_splice)
+            _, activations = self._run_with_layer_capture(
+                resolved,
+                lambda: self.model(tokens["one_hot"], channel_last=True),
+            )
             for path in resolved:
                 h = activations[path][0]
                 if h.dim() == 3:
                     h = h[0]  # (T, D)
-                seq_hidden[path].append(h.cpu() if offload_to_cpu else h)
-
-            for path in resolved:
-                hidden_out[path].append(seq_hidden[path])
+                hidden_out[path].append([h.cpu() if offload_to_cpu else h])
 
         return hidden_out, score_out

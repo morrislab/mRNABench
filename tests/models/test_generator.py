@@ -2,7 +2,7 @@ import math
 
 import pytest
 
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 pytest.importorskip("torch")
 import torch
@@ -39,15 +39,9 @@ def test_generator_likelihood_tokenization_pads_trailing_bases():
     """Likelihood scoring preserves a final partial k-mer."""
     model = GENERator.__new__(GENERator)
     model.k = 3
-    model.tokenizer = Mock(return_value={"input_ids": torch.tensor([[1]])})
 
-    model._tokenize_for_logits("ATGA")
-
-    model.tokenizer.assert_called_once_with(
-        "ATGAAA",
-        return_tensors="pt",
-        add_special_tokens=True,
-    )
+    assert model._tokenizer_text("ATGA") == "ATGAAA"
+    assert model._tokenizer_text("ATGAAA") == "ATGAAA"
 
 
 def test_generator_causal_likelihood(model):

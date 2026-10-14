@@ -105,23 +105,36 @@ class mRNABERT(EmbeddingModel):
         # the chunk size to avoid quadratic-memory OOM.
         self.max_length = self.tokenizer.model_max_length
 
-    def _tokenize_for_logits(
+    def tokenize(
         self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
         add_special_tokens: bool = True,
     ) -> dict[str, torch.Tensor]:
-        """Tokenize UTR nucleotides and CDS codons for masked scoring."""
+        """Tokenize UTR nucleotides and CDS codons.
+
+        Args:
+            sequences: Nucleotide sequences, or chunks of them.
+            cds: CDS tracks aligned to sequences (required).
+            splice: Unused.
+            add_special_tokens: Whether to add CLS and SEP.
+
+        Returns:
+            Tokenizer inputs on the model's device.
+        """
         _ = splice
         if cds is None:
-            raise ValueError("mRNABERT scoring requires cds tracks.")
-        transformed = self.separate_utr_cds(list(sequence), cds)[0]
+            raise ValueError("mRNABERT requires cds tracks.")
         return self.tokenizer(  # type: ignore[no-any-return]
-            transformed,
+            [
+                self.separate_utr_cds(list(sequence), track)[0]
+                for sequence, track in zip(sequences, cds)
+            ],
             add_special_tokens=add_special_tokens,
+            padding=True,
             return_tensors="pt",
-        )
+        ).to(self.device)
 
     def _score_chunks(
         self,
@@ -182,19 +195,25 @@ class mRNABERT(EmbeddingModel):
 
         self._warn_batch_size_reproducibility(len(sequences))
 
-        all_chunks = []
+        chunks = []
+        chunk_cds = []
         chunk_counts = []
         for sequence, cds_track in zip(sequences, cds):
-            chunks = self.chunk_sequence_cds_aware(
+            seq_chunks = self.chunk_sequence_cds_aware(
                 sequence, cds_track, self.max_length - 2
             )
-            for chunk_sequence, chunk_cds in chunks:
-                all_chunks.append(
-                    self.separate_utr_cds(chunk_sequence, chunk_cds)[0]
-                )
-            chunk_counts.append(len(chunks))
+            for chunk_tokens, chunk_track in seq_chunks:
+                chunks.append("".join(chunk_tokens))
+                chunk_cds.append(chunk_track)
+            chunk_counts.append(len(seq_chunks))
 
-        hidden_states, pooling_mask = self._forward_chunks_cds(all_chunks)
+        tokens = self.tokenize(chunks, chunk_cds)
+        hidden_states = self.model(
+            input_ids=tokens["input_ids"],
+            attention_mask=tokens["attention_mask"],
+        ).last_hidden_state
+        pooling_mask = self.pooling_mask(tokens)
+
         embeddings = []
         chunk_start = 0
         for chunk_count in chunk_counts:
@@ -206,37 +225,6 @@ class mRNABERT(EmbeddingModel):
             embeddings.append(agg_fn(hidden[mask]))
             chunk_start = chunk_end
         return embeddings
-
-    def _forward_chunks_cds(
-        self,
-        transformed_chunks: list[str]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for batched transformed chunks.
-
-        Args:
-            transformed_chunks: List of transformed chunk strings
-                (already processed through separate_utr_cds).
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask).
-        """
-        toks = self.tokenizer.batch_encode_plus(
-            transformed_chunks,
-            add_special_tokens=True,
-            padding="longest",
-            return_tensors="pt",
-            return_special_tokens_mask=True,
-        ).to(self.device)
-
-        attention_mask = toks["attention_mask"]
-        pooling_mask = attention_mask * (1 - toks["special_tokens_mask"])
-
-        hidden_states = self.model(
-            input_ids=toks["input_ids"],
-            attention_mask=attention_mask,
-        ).last_hidden_state
-
-        return hidden_states, pooling_mask
 
     def chunk_sequence_cds_aware(
         self,
@@ -367,23 +355,11 @@ class mRNABERT(EmbeddingModel):
                 seq_cds[0], seq_cds[1], self.max_length - 2
             )
 
-        def _tokenize(items: list[tuple]) -> dict[str, torch.Tensor]:
-            chunk_seq, chunk_cds = items[0]
-            transformed = self.separate_utr_cds(chunk_seq, chunk_cds)
-            raw = self.tokenizer.batch_encode_plus(
-                transformed,
-                add_special_tokens=True,
-                padding=False,
-                return_tensors="pt",
-            )
-            return {
-                "input_ids": raw["input_ids"].to(self.device),
-                "attention_mask": raw["attention_mask"].to(self.device),
-            }
-
         return self._standard_hf_extract(
             sequences=list(zip(sequences, cds)),
-            tokenize_fn=_tokenize,
+            tokenize_fn=lambda items: self.tokenize(
+                ["".join(items[0][0])], [items[0][1]]
+            ),
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,

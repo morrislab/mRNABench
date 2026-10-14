@@ -28,6 +28,7 @@ class GLM2(EmbeddingModel):
         "flash_attention_2",
     ]
     hookable_layer_patterns = [r"encoder\.layers\.\d+"]
+    unk_is_special = True
     lora_target_modules = ["wqkv", "wo", "w1", "w2", "w3"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
@@ -81,38 +82,6 @@ class GLM2(EmbeddingModel):
         # One strand-marker token is prepended to every chunk.
         self.sequence_score_chunk_length = self.max_length - 1
 
-    def _tokenize_for_logits(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        add_special_tokens: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        _ = cds, splice
-        return self.tokenizer(  # type: ignore[no-any-return]
-            sequence,
-            return_tensors="pt",
-            add_special_tokens=add_special_tokens,
-        )
-
-    def _forward_chunks(
-        self,
-        chunks: list[str],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        tokens = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-        hidden = self.model(**tokens).last_hidden_state
-        special_ids = torch.tensor(
-            self.tokenizer.all_special_ids,
-            device=self.device,
-        )
-        special = torch.isin(tokens["input_ids"], special_ids)
-        pooling_mask = tokens["attention_mask"].bool() & ~special
-        return hidden, pooling_mask
-
     def embed(
         self,
         sequences: list[str],
@@ -144,16 +113,8 @@ class GLM2(EmbeddingModel):
         """Extract per-layer representations from gLM2."""
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length - 1,
             layers=layers,
             return_attentions=return_attentions,

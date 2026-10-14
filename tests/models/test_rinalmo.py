@@ -89,6 +89,7 @@ def test_rinalmo_converts_t_to_u(rinalmo):
             ["ACUUUGGCCA"],
             return_tensors="pt",
             padding=True,
+            add_special_tokens=True,
         )
 
 

@@ -115,10 +115,7 @@ def test_codonbert_excludes_special_tokens(model):
     """Test that CLS and SEP tokens are excluded from pooling."""
     text = "AUG" * 20  # 20 codons in RNA notation
 
-    # Tokenize using the same codon-format that _forward_chunks uses
-    codon_text = model._nt_to_codons(text)
-    toks = model.tokenizer([codon_text], return_tensors="pt", padding=True)
-    toks = toks.to(model.device)
+    toks = model.tokenize([text])
     hidden_states = model.model(**toks).last_hidden_state
 
     mean_all = hidden_states.mean(dim=1).cpu()
@@ -159,8 +156,8 @@ def test_codonbert_cds_slice(model):
         )
         model.embed([input_seq], cds=[cds])
         chunks = mock.call_args[0][0]
-        # CDS region is 30 U's (converted from T's)
-        assert chunks[0] == "U" * 30
+        # T->U happens at tokenization, after chunking
+        assert chunks[0] == "T" * 30
 
 
 @torch.no_grad()

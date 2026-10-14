@@ -28,6 +28,7 @@ class RNABERT(EmbeddingModel):
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
     uses_rna_alphabet = True
+    unk_is_special = True
     lora_target_modules = ["query", "key", "value", "dense"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
@@ -87,39 +88,6 @@ class RNABERT(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = self.max_length
 
-    def _forward_chunks(
-        self,
-        chunks: list[str]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for a batch of sequence chunks.
-
-        Args:
-            chunks: List of sequence chunks to embed.
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
-            padding and special tokens (CLS/SEP).
-        """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-
-        # RNABERT's tokenizer adds no CLS/EOS, so all non-pad positions are
-        # real content. Exclude only genuine special tokens (robust if the
-        # tokenizer is later updated to add CLS/EOS).
-        pooling_mask = toks["attention_mask"].clone()
-        special_ids = torch.tensor(
-            self.tokenizer.all_special_ids, device=self.device
-        )
-        is_special = torch.isin(toks["input_ids"], special_ids)
-        pooling_mask[is_special] = 0
-
-        return hidden_states, pooling_mask
-
     def embed(
         self,
         sequences: list[str],
@@ -140,7 +108,6 @@ class RNABERT(EmbeddingModel):
             - default (mean): (120,)
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
 
         return self._embed_with_chunking(
             sequences=sequences,
@@ -175,16 +142,9 @@ class RNABERT(EmbeddingModel):
             (hidden_states, scores); see EmbeddingModel.extract().
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs, return_tensors="pt", padding=False
-            ).to(self.device)
 
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length,
             layers=layers,
             return_attentions=return_attentions,

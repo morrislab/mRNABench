@@ -115,50 +115,16 @@ class AIDORNA(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = self.max_length - 2
 
-    def _forward_chunks(
-        self,
-        chunks: list[str]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for a batch of sequence chunks.
+    def _tokenizer_text(self, sequence: str) -> str:
+        """Write RNA bases in the DNA alphabet the AIDO.RNA tokenizer reads.
 
         Args:
-            chunks: List of sequence chunks to embed.
+            sequence: Nucleotide sequence.
 
         Returns:
-            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
-            padding and special tokens (CLS/SEP).
+            Sequence in DNA bases.
         """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            add_special_tokens=True,
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-        pooling_mask = toks["attention_mask"].clone()
-
-        # Exclude special tokens (CLS at pos 0, SEP at last real pos)
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        return hidden_states, pooling_mask
-
-    def _tokenize_for_logits(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        add_special_tokens: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        _ = cds, splice
-        return self.tokenizer(  # type: ignore[no-any-return]
-            sequence.replace("U", "T"),
-            return_tensors="pt",
-            add_special_tokens=add_special_tokens,
-        )
+        return sequence.replace("U", "T")
 
     def embed(
         self,
@@ -181,7 +147,6 @@ class AIDORNA(EmbeddingModel):
             - default (mean): (2048,) for 1.6B model
         """
         _, _ = cds, splice
-        sequences = [s.replace("U", "T") for s in sequences]
 
         return self._embed_with_chunking(
             sequences=sequences,
@@ -216,19 +181,9 @@ class AIDORNA(EmbeddingModel):
             (hidden_states, scores); see EmbeddingModel.extract().
         """
         _, _ = cds, splice
-        sequences = [s.replace("U", "T") for s in sequences]
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                return_tensors="pt",
-                add_special_tokens=True,
-                padding=False,
-            ).to(self.device)
 
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length - 2,
             layers=layers,
             return_attentions=return_attentions,

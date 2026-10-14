@@ -106,34 +106,6 @@ class MRNAFM(EmbeddingModel):
         coding_sequence = self.get_cds(sequence, cds).replace("T", "U")
         return coding_sequence, None, None
 
-    def _forward_chunks(
-        self,
-        chunks: list[str],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Run forward pass on sequence chunks.
-
-        Args:
-            chunks: List of sequence chunks to embed.
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
-            padding and special tokens (CLS/EOS).
-        """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-        pooling_mask = toks["attention_mask"].clone()
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        return hidden_states, pooling_mask
-
     def get_cds(self, sequence: str, cds: np.ndarray) -> str:
         """Get CDS region of sequence.
 
@@ -193,9 +165,7 @@ class MRNAFM(EmbeddingModel):
 
         processed_sequences = []
         for i, seq in enumerate(sequences):
-            seq = seq.replace("T", "U")
-            seq = self.get_cds(seq, cds[i])
-            processed_sequences.append(seq)
+            processed_sequences.append(self.get_cds(seq, cds[i]))
 
         return self._embed_with_chunking(
             sequences=processed_sequences,
@@ -239,20 +209,10 @@ class MRNAFM(EmbeddingModel):
 
         processed_sequences = []
         for i, seq in enumerate(sequences):
-            seq = seq.replace("T", "U")
-            seq = self.get_cds(seq, cds[i])
-            processed_sequences.append(seq)
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
+            processed_sequences.append(self.get_cds(seq, cds[i]))
 
         return self._standard_hf_extract(
             sequences=processed_sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=(self.max_length - 2) * 3,
             layers=layers,
             return_attentions=return_attentions,

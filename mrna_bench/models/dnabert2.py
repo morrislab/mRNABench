@@ -124,29 +124,11 @@ class DNABERT2(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        toks = self.tokenizer(
-            sequences,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-
-        # Build pooling mask excluding CLS (pos 0) and SEP (last real pos)
-        pooling_mask = toks["attention_mask"].clone()
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        # Apply masked aggregation per sequence
-        embeddings = []
-        for i in range(hidden_states.size(0)):
-            mask = pooling_mask[i].bool()
-            masked_hidden = hidden_states[i][mask]
-            embeddings.append(agg_fn(masked_hidden))
-
-        return embeddings
+        hidden_states, pooling_mask = self._forward_chunks(sequences)
+        return [
+            agg_fn(hidden[mask])
+            for hidden, mask in zip(hidden_states, pooling_mask)
+        ]
 
     def extract(
         self,
@@ -180,14 +162,8 @@ class DNABERT2(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs, return_tensors="pt", padding=False
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length,
             layers=layers,
             return_attentions=return_attentions,

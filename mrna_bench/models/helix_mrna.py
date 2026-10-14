@@ -85,6 +85,21 @@ class HelixmRNA(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = self.max_length
 
+    def _sequence_attention(
+        self,
+        tokens: dict[str, torch.Tensor],
+    ) -> dict[str, torch.Tensor]:
+        """Attend to sequence tokens only, not the appended [SEP].
+
+        Args:
+            tokens: Output of tokenize().
+
+        Returns:
+            Tokens with special tokens removed from the attention mask.
+        """
+        tokens["attention_mask"] = self.pooling_mask(tokens).long()
+        return tokens
+
     def _forward_chunks(
         self,
         chunks: list[str]
@@ -98,26 +113,9 @@ class HelixmRNA(EmbeddingModel):
             Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
             padding and special tokens (CLS/SEP).
         """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            truncation=True,
-            padding="longest",
-            max_length=self.max_length,
-            return_special_tokens_mask=True,
-        ).to(self.device)
-
-        special_tokens_mask = toks["special_tokens_mask"]
-        attention_mask = 1 - special_tokens_mask
-
-        hidden_states = self.model(
-            input_ids=toks["input_ids"],
-            attention_mask=attention_mask,
-        ).last_hidden_state
-
-        pooling_mask = attention_mask.clone()
-
-        return hidden_states, pooling_mask
+        tokens = self._sequence_attention(self.tokenize(chunks))
+        hidden_states = self.model(**tokens).last_hidden_state
+        return hidden_states, tokens["attention_mask"]
 
     def embed(
         self,
@@ -182,21 +180,11 @@ class HelixmRNA(EmbeddingModel):
             return_attentions.
         """
         _ = cds, splice
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            toks = self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                return_tensors="pt",
-                truncation=True,
-                max_length=self.max_length,
-                return_special_tokens_mask=True,
-            ).to(self.device)
-            toks["attention_mask"] = 1 - toks.pop("special_tokens_mask")
-            return toks
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
+            tokenize_fn=lambda seqs: self._sequence_attention(
+                self.tokenize(seqs)
+            ),
             max_chunk_length=self.max_length - 1,
             layers=layers,
             return_attentions=return_attentions,

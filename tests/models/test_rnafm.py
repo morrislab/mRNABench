@@ -45,19 +45,14 @@ def test_rnafm_embed_batch(model):
 
 
 def test_rnafm_converts_t_to_u(model):
-    """Test RNA-FM converts T->U before embedding."""
+    """Test RNA-FM converts T->U before tokenizing."""
     with patch.object(
         model,
-        "_forward_chunks",
-        wraps=model._forward_chunks
+        "tokenizer",
+        side_effect=model.tokenizer
     ) as mock:
-        mock.return_value = (
-            torch.zeros(1, 6, 640),
-            torch.ones(1, 6)
-        )
         model.embed(["ATGATG"])
-        chunks = mock.call_args[0][0]
-        assert chunks[0] == "AUGAUG"
+        assert mock.call_args[0][0] == ["AUGAUG"]
 
 
 def test_rnafm_mask_nucleotide_tokenization(model):

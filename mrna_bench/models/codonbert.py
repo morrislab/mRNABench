@@ -92,40 +92,24 @@ class CodonBERT(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = (self.max_length - 2) * 3
 
-    @staticmethod
-    def _nt_to_codons(sequence: str) -> str:
-        """Convert a nucleotide sequence to space-separated codons.
+    def _tokenizer_text(self, sequence: str) -> str:
+        """Write a sequence as space-separated RNA codons.
 
         Only complete codons are included; trailing 1-2 nucs are dropped.
-        Sequences should already be in RNA space (U not T).
 
         Args:
-            sequence: Nucleotide sequence (RNA, i.e. using U).
+            sequence: Nucleotide sequence.
 
         Returns:
             Space-separated codon string, e.g. "AUG UAA GCA".
         """
+        sequence = sequence.replace("T", "U")
         n = len(sequence) - len(sequence) % 3
         if n == 0:
             raise ValueError(
                 "CodonBERT requires at least one complete codon."
             )
         return " ".join(sequence[i:i + 3] for i in range(0, n, 3))
-
-    def _tokenize_for_logits(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        add_special_tokens: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        """Tokenize codons for masked scoring."""
-        _ = cds, splice
-        return self.tokenizer(  # type: ignore[no-any-return]
-            self._nt_to_codons(sequence.replace("T", "U")),
-            return_tensors="pt",
-            add_special_tokens=add_special_tokens,
-        )
 
     def _prepare_sequence_for_scoring(
         self,
@@ -139,38 +123,6 @@ class CodonBERT(EmbeddingModel):
             raise ValueError("CodonBERT scoring requires cds tracks.")
         return self.get_cds(sequence, cds), None, None
 
-    def _forward_chunks(
-        self,
-        chunks: list[str]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for a batch of sequence chunks.
-
-        Args:
-            chunks: List of nucleotide sequence chunks (RNA, i.e. using U).
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
-            padding and special tokens (CLS/SEP).
-        """
-        codon_chunks = [self._nt_to_codons(chunk) for chunk in chunks]
-
-        toks = self.tokenizer(
-            codon_chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-        pooling_mask = toks["attention_mask"].clone()
-
-        # Exclude special tokens (CLS at pos 0, SEP at last real pos)
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        return hidden_states, pooling_mask
-
     def get_cds(self, sequence: str, cds: np.ndarray) -> str:
         """Get CDS region of sequence.
 
@@ -178,7 +130,7 @@ class CodonBERT(EmbeddingModel):
         much of the CDS as possible that is still a multiple of three.
 
         Args:
-            sequence: Sequence to extract CDS region from (RNA, using U).
+            sequence: Sequence to extract CDS region from.
             cds: Binary encoding of first nucleotide of each codon in CDS.
 
         Returns:
@@ -247,9 +199,7 @@ class CodonBERT(EmbeddingModel):
 
         processed_sequences = []
         for i, seq in enumerate(sequences):
-            seq = seq.replace("T", "U")
-            seq = self.get_cds(seq, cds[i])
-            processed_sequences.append(seq)
+            processed_sequences.append(self.get_cds(seq, cds[i]))
 
         return self._embed_with_chunking(
             sequences=processed_sequences,
@@ -296,21 +246,10 @@ class CodonBERT(EmbeddingModel):
 
         processed_sequences = []
         for i, seq in enumerate(sequences):
-            seq = seq.replace("T", "U")
-            seq = self.get_cds(seq, cds[i])
-            processed_sequences.append(seq)
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            codon_seqs = [self._nt_to_codons(s) for s in seqs]
-            return self.tokenizer(  # type: ignore[return-value]
-                codon_seqs,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
+            processed_sequences.append(self.get_cds(seq, cds[i]))
 
         return self._standard_hf_extract(
             sequences=processed_sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=(self.max_length - 2) * 3,
             layers=layers,
             return_attentions=return_attentions,

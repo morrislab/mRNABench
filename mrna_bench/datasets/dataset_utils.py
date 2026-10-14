@@ -28,15 +28,19 @@ def ohe_to_str(
 def str_to_ohe(
     sequence: str,
     nucs: list[str] = ["A", "C", "G", "T"],
+    cds: np.ndarray | None = None,
+    splice: np.ndarray | None = None,
 ) -> np.ndarray:
     """Convert sequence to OHE. Represents "N" as all zeros.
 
     Args:
         sequence: Sequence to convert.
         nucs: Nucleotides corresponding to their one hot position.
+        cds: Optional CDS track, added as a column after the bases.
+        splice: Optional splice track, added as a column after the CDS.
 
     Returns:
-        One hot encoded sequence.
+        One hot encoded sequence, with any tracks as extra columns.
     """
     mapping = {nuc: i for i, nuc in enumerate(nucs)}
     num_classes = len(mapping)
@@ -54,7 +58,11 @@ def str_to_ohe(
             continue
         one_hot[i, indices[i]] = 1
 
-    return one_hot
+    tracks = [t.reshape(-1, 1) for t in (cds, splice) if t is not None]
+    if tracks:
+        return np.hstack([one_hot, *tracks])
+    else:
+        return one_hot
 
 
 def create_cds_track(transcript: "Transcript") -> np.ndarray:

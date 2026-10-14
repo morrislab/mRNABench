@@ -119,6 +119,30 @@ class NucleotideTransformer(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = (self.max_length - 2) * 6
 
+    def tokenize(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        add_special_tokens: bool = True,
+    ) -> dict[str, torch.Tensor]:
+        """Tokenize sequences, masking padding by its token id.
+
+        Args:
+            sequences: Nucleotide sequences, or chunks of them.
+            cds: Unused.
+            splice: Unused.
+            add_special_tokens: Whether to add the CLS token.
+
+        Returns:
+            Tokenizer inputs on the model's device.
+        """
+        tokens = super().tokenize(sequences, cds, splice, add_special_tokens)
+        tokens["attention_mask"] = (
+            tokens["input_ids"] != self.tokenizer.pad_token_id
+        ).long()
+        return tokens
+
     def _forward_chunks(
         self,
         chunks: list[str]
@@ -130,30 +154,17 @@ class NucleotideTransformer(EmbeddingModel):
 
         Returns:
             Tuple of (hidden_states, pooling_mask). The pooling_mask
-            excludes padding and CLS. NT has no EOS/SEP token.
+            excludes padding and CLS.
         """
-        toks = self.tokenizer.batch_encode_plus(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        attention_mask = toks["input_ids"] != self.tokenizer.pad_token_id
-
+        tokens = self.tokenize(chunks)
         torch_outs = self.model(
-            toks["input_ids"],
-            attention_mask=attention_mask,
-            encoder_attention_mask=attention_mask,
+            tokens["input_ids"],
+            attention_mask=tokens["attention_mask"],
+            encoder_attention_mask=tokens["attention_mask"],
             output_hidden_states=True
         )
-
         hidden_states = torch_outs["hidden_states"][-1]
-
-        # NT has no EOS/SEP token — only CLS at position 0 is excluded.
-        pooling_mask = toks["attention_mask"].clone()
-        pooling_mask[:, 0] = 0
-
-        return hidden_states, pooling_mask
+        return hidden_states, self.pooling_mask(tokens)
 
     def embed(
         self,
@@ -218,20 +229,8 @@ class NucleotideTransformer(EmbeddingModel):
         _, _ = cds, splice
         max_chunk_length = (self.max_length - 2) * 6
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            toks = self.tokenizer.batch_encode_plus(
-                seqs,
-                return_tensors="pt",
-                padding=False,
-            )
-            toks["attention_mask"] = (
-                toks["input_ids"] != self.tokenizer.pad_token_id
-            ).long()
-            return toks.to(self.device)  # type: ignore[return-value]
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=max_chunk_length,
             layers=layers,
             return_attentions=return_attentions,

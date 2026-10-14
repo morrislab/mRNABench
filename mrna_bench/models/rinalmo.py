@@ -100,36 +100,6 @@ class RiNALMo(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = self.max_length - 2
 
-    def _forward_chunks(
-        self,
-        chunks: list[str]
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Forward pass for a batch of sequence chunks.
-
-        Args:
-            chunks: List of sequence chunks to embed.
-
-        Returns:
-            Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
-            padding and special tokens (CLS/EOS).
-        """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-        pooling_mask = toks["attention_mask"].clone()
-
-        # Exclude special tokens (CLS at pos 0, EOS at last real pos)
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        return hidden_states, pooling_mask
-
     def embed(
         self,
         sequences: list[str],
@@ -150,7 +120,6 @@ class RiNALMo(EmbeddingModel):
             - default (mean): (hidden_dim,)
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
         effective_max = self.max_length - 2
 
         return self._embed_with_chunking(
@@ -191,16 +160,8 @@ class RiNALMo(EmbeddingModel):
             (hidden_states, scores); see EmbeddingModel.extract().
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
-
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs, return_tensors="pt", padding=False
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length - 2,
             layers=layers,
             return_attentions=return_attentions,

@@ -116,31 +116,37 @@ class Carbon(EmbeddingModel):
         self.sequence_score_chunk_length = self.max_length
         self.causal_score_context_length = self.tokenizer.k
 
-    def _wrap_dna(self, chunks: list[str]) -> list[str]:
-        """Wrap raw nucleotide chunks in <dna>...</dna> for 6-mer tokenization.
+    def _tokenizer_text(self, sequence: str) -> str:
+        """Wrap a sequence in the <dna> tags that select 6-mer tokenization.
+
+        The tags are part of the sequence's format, so they are added even
+        without special tokens.
 
         Args:
-            chunks: Raw nucleotide sequence chunks.
+            sequence: DNA sequence.
 
         Returns:
-            Chunks delimited by the DNA tags expected by the tokenizer.
+            Sequence delimited by <dna> and </dna>.
         """
-        return ["<dna>{}</dna>".format(chunk) for chunk in chunks]
+        return "<dna>{}</dna>".format(sequence)
 
-    def _tokenize_for_logits(
+    def special_tokens_mask(
         self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        add_special_tokens: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        """Tokenize with Carbon's required DNA delimiters."""
-        _ = cds, splice
-        return self.tokenizer(  # type: ignore[no-any-return]
-            self._wrap_dna([sequence]),
-            add_special_tokens=False,
-            return_tensors="pt",
+        tokens: dict[str, torch.Tensor],
+    ) -> torch.Tensor:
+        """Mark the <dna> and </dna> tags around the 6-mers.
+
+        Args:
+            tokens: Output of tokenize().
+
+        Returns:
+            Boolean tensor shaped like the input ids, True at the tags.
+        """
+        input_ids = tokens["input_ids"]
+        tag_ids = torch.tensor(
+            sorted(self.dna_tag_ids), device=input_ids.device
         )
+        return torch.isin(input_ids, tag_ids)
 
     def _forward_chunks(
         self,
@@ -155,26 +161,12 @@ class Carbon(EmbeddingModel):
             Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
             padding and the <dna>/</dna> delimiter tokens.
         """
-        toks = self.tokenizer(
-            self._wrap_dna(chunks),
-            add_special_tokens=False,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=self.context_length,
-        ).to(self.device)
-
+        tokens = self.tokenize(chunks)
         hidden_states = self.model(
-            **toks,
+            **tokens,
             output_hidden_states=True
         ).hidden_states[-1].float()
-
-        is_dna_tag = torch.zeros_like(toks["input_ids"], dtype=torch.bool)
-        for tag_id in self.dna_tag_ids:
-            is_dna_tag |= toks["input_ids"] == tag_id
-        pooling_mask = toks["attention_mask"] * (~is_dna_tag)
-
-        return hidden_states, pooling_mask
+        return hidden_states, self.pooling_mask(tokens)
 
     def embed(
         self,
@@ -231,19 +223,8 @@ class Carbon(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                self._wrap_dna(seqs),
-                add_special_tokens=False,
-                return_tensors="pt",
-                padding=False,
-                truncation=True,
-                max_length=self.context_length,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length,
             layers=layers,
             return_attentions=return_attentions,

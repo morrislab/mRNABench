@@ -202,11 +202,7 @@ class Evo2(EmbeddingModel):
             [] for _ in sequences
         ]
         for records in buckets.values():
-            toks = self.tokenizer(
-                [chunk for _, _, chunk in records],
-                padding=True,
-                return_tensors="pt",
-            ).to(self.device)
+            toks = self.tokenize([chunk for _, _, chunk in records])
             outputs, captured = self._run_with_layer_capture(
                 [self.middle_layer_path],
                 lambda: self.model(
@@ -271,16 +267,8 @@ class Evo2(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length,
             layers=layers,
             return_attentions=return_attentions,

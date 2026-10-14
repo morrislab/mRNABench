@@ -94,7 +94,7 @@ def test_dnabert_kmer_embed_batch_ragged(dnabert):
 def test_dnabert_kmer_excludes_special_tokens(dnabert):
     """Test that CLS and SEP tokens are excluded from pooling."""
     text = "ATGATG" * 20
-    kmer = dnabert._seq_to_kmers(text)
+    kmer = dnabert._tokenizer_text(text)
 
     toks = dnabert.tokenizer([kmer], return_tensors="pt", padding=True)
     toks = toks.to(dnabert.device)

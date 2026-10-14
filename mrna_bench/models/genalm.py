@@ -37,6 +37,7 @@ class GenaLM(EmbeddingModel):
     ]
     hookable_layer_patterns = [r"encoder\.layer\.\d+"]
     final_layer_pattern = r"encoder\.last_layer_ln"
+    unk_is_special = True
     lora_target_modules = ["query", "key", "value", "dense"]
     supported_behaviors = frozenset({
         ModelBehavior.EMBEDDING,
@@ -88,29 +89,6 @@ class GenaLM(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = self.max_length - 2
 
-    def _forward_chunks(
-        self,
-        chunks: list[str],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        tokens = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-        hidden = self.model(**tokens).last_hidden_state
-        pooling_mask = tokens["attention_mask"].bool()
-        for row, token_ids in enumerate(tokens["input_ids"]):
-            special = self.tokenizer.get_special_tokens_mask(
-                token_ids.tolist(),
-                already_has_special_tokens=True,
-            )
-            pooling_mask[row] &= ~torch.tensor(
-                special,
-                dtype=torch.bool,
-                device=self.device,
-            )
-        return hidden, pooling_mask
-
     def embed(
         self,
         sequences: list[str],
@@ -142,16 +120,8 @@ class GenaLM(EmbeddingModel):
         """Extract per-layer representations from GENA-LM."""
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length - 2,
             layers=layers,
             return_attentions=return_attentions,

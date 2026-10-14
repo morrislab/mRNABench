@@ -126,41 +126,24 @@ class GENERator(EmbeddingModel):
         self.sequence_score_chunk_length = self.max_chunk_length
         self.causal_score_context_length = self.k
 
-    def _pad_to_kmer(self, chunks: list[str]) -> list[str]:
-        """Right-pad each chunk with 'A' so its length is a multiple of k.
+    def _tokenizer_text(self, sequence: str) -> str:
+        """Right-pad a sequence with 'A' so its length is a multiple of k.
 
         GENERator's tokenizer maps any trailing sub-k-mer remainder to a
         single uninformative <oov> token (and discards its bases). Padding the
         remainder up to a full k-mer with 'A' preserves the leading bases.
 
         Args:
-            chunks: Raw nucleotide chunks.
+            sequence: DNA sequence.
 
         Returns:
-            Chunks right-padded with 'A' to the next multiple of k.
+            Sequence right-padded with 'A' to the next multiple of k.
         """
-        padded = []
-        for chunk in chunks:
-            remainder = len(chunk) % self.k
-            if remainder:
-                chunk = chunk + "A" * (self.k - remainder)
-            padded.append(chunk)
-        return padded
-
-    def _tokenize_for_logits(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        add_special_tokens: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        """Pad trailing bases before tokenizing for likelihood scoring."""
-        _ = cds, splice
-        return self.tokenizer(  # type: ignore[no-any-return]
-            self._pad_to_kmer([sequence])[0],
-            return_tensors="pt",
-            add_special_tokens=add_special_tokens,
-        )
+        remainder = len(sequence) % self.k
+        if remainder:
+            return sequence + "A" * (self.k - remainder)
+        else:
+            return sequence
 
     def _forward_chunks(
         self,
@@ -175,26 +158,12 @@ class GENERator(EmbeddingModel):
             Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
             padding and special tokens (CLS/SEP).
         """
-        toks = self.tokenizer(
-            self._pad_to_kmer(chunks),
-            add_special_tokens=True,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=self.max_length,
-            return_special_tokens_mask=True
-        ).to(self.device)
-
-        special_tokens_mask = toks.pop("special_tokens_mask")
-
+        tokens = self.tokenize(chunks)
         hidden_states = self.model(
-            **toks,
+            **tokens,
             output_hidden_states=True
         ).hidden_states[-1]
-
-        pooling_mask = 1 - special_tokens_mask
-
-        return hidden_states, pooling_mask
+        return hidden_states, self.pooling_mask(tokens)
 
     def embed(
         self,
@@ -252,19 +221,8 @@ class GENERator(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                self._pad_to_kmer(seqs),
-                add_special_tokens=True,
-                return_tensors="pt",
-                padding=False,
-                truncation=True,
-                max_length=self.max_length,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_chunk_length,
             layers=layers,
             return_attentions=return_attentions,

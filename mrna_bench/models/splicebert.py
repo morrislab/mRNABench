@@ -101,50 +101,16 @@ class SpliceBERT(EmbeddingModel):
         self.max_length = self.model_max_length - 2
         self.sequence_score_chunk_length = self.max_length
 
-    def _tokenize_for_logits(
-        self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
-        add_special_tokens: bool = True,
-    ) -> dict[str, torch.Tensor]:
-        """Tokenize spaced nucleotides for masked scoring."""
-        _ = cds, splice
-        return self.tokenizer(  # type: ignore[no-any-return]
-            " ".join(sequence),
-            return_tensors="pt",
-            add_special_tokens=add_special_tokens,
-        )
-
-    def _forward_chunks(
-        self,
-        chunks: list[str],
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        """Run forward pass on sequence chunks.
+    def _tokenizer_text(self, sequence: str) -> str:
+        """Write a sequence as space-delimited nucleotides.
 
         Args:
-            chunks: List of sequence chunks to embed.
+            sequence: Nucleotide sequence.
 
         Returns:
-            Tuple of (hidden_states, pooling_mask) tensors.
+            Space-delimited nucleotides.
         """
-        spaced_chunks = [" ".join(list(chunk)) for chunk in chunks]
-
-        toks = self.tokenizer(
-            spaced_chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
-
-        pooling_mask = toks["attention_mask"].clone()
-        pooling_mask[:, 0] = 0
-        seq_lengths = toks["attention_mask"].sum(dim=1).long()
-        for idx in range(pooling_mask.size(0)):
-            pooling_mask[idx, seq_lengths[idx] - 1] = 0
-
-        return hidden_states, pooling_mask
+        return " ".join(sequence)
 
     def _embed_1024(
         self,
@@ -269,17 +235,8 @@ class SpliceBERT(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            spaced = [" ".join(list(s)) for s in seqs]
-            return self.tokenizer(  # type: ignore[return-value]
-                spaced,
-                return_tensors="pt",
-                padding=False,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length,
             layers=layers,
             return_attentions=return_attentions,

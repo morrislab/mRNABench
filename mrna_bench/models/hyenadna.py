@@ -153,11 +153,7 @@ class HyenaDNA(EmbeddingModel):
             [] for _ in sequences
         ]
         for records in buckets.values():
-            toks = self.tokenizer(
-                [chunk for _, _, chunk in records],
-                padding=True,
-                return_tensors="pt",
-            ).to(self.device)
+            toks = self.tokenize([chunk for _, _, chunk in records])
             hidden_states = self.model(
                 toks["input_ids"],
                 output_hidden_states=True,
@@ -228,16 +224,11 @@ class HyenaDNA(EmbeddingModel):
             }
 
             for chunk in chunks:
-                toks = self.tokenizer(
-                    chunk,
-                    return_tensors="pt",
-                ).to(self.device)
+                toks = self.tokenize([chunk])
 
-                handles, activations = self._register_hooks(resolved)
-                try:
-                    self.model(toks["input_ids"])
-                finally:
-                    self._remove_hooks(handles)
+                _, activations = self._run_with_layer_capture(
+                    resolved, lambda: self.model(toks["input_ids"])
+                )
 
                 for path in resolved:
                     h = activations[path][0]

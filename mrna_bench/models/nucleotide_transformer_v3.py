@@ -169,36 +169,39 @@ class NucleotideTransformerV3(EmbeddingModel):
             self._set_logits_model(language_model)
             self.sequence_score_chunk_length = self.max_length
 
-    def _tokenize_for_logits(
+    def tokenize(
         self,
-        sequence: str,
-        cds: np.ndarray | None = None,
-        splice: np.ndarray | None = None,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
         add_special_tokens: bool = True,
     ) -> dict[str, torch.Tensor]:
-        """Pad scoring inputs to NTV3's required 128-token multiple.
+        """Tokenize sequences, padded to NTV3's required 128-token multiple.
+
+        NTV3's tokenizer adds no special tokens.
 
         Args:
-            sequence: Nucleotide sequence to tokenize.
+            sequences: Nucleotide sequences, or chunks of them.
             cds: Unused.
             splice: Unused.
-            add_special_tokens: Unused; NTV3 scoring omits special tokens.
+            add_special_tokens: Passed to the tokenizer.
 
         Returns:
-            Tokenizer inputs padded to a multiple of 128 tokens.
+            Tokenizer inputs padded to a multiple of 128 tokens, on the
+            model's device.
         """
-        _ = cds, splice, add_special_tokens
-        tokenized = self.tokenizer(
-            sequence,
-            add_special_tokens=False,
+        _ = cds, splice
+        tokens = self.tokenizer(
+            sequences,
+            add_special_tokens=add_special_tokens,
             padding=True,
             pad_to_multiple_of=128,
             return_tensors="pt",
         )
-        tokenized["attention_mask"] = tokenized["input_ids"].ne(
+        tokens["attention_mask"] = tokens["input_ids"].ne(
             self.tokenizer.pad_token_id
         ).long()
-        return tokenized  # type: ignore[no-any-return]
+        return tokens.to(self.device)  # type: ignore[no-any-return]
 
     def set_species(self, species: str):
         """Set species for post-trained NucleotideTransformerV3 model.
@@ -239,37 +242,23 @@ class NucleotideTransformerV3(EmbeddingModel):
             Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
             padding tokens. NTV3 does not use special tokens like CLS/SEP.
         """
-        toks = self.tokenizer(
-            chunks,
-            add_special_tokens=False,
-            padding=True,
-            pad_to_multiple_of=128,
-            return_tensors="pt",
-            return_special_tokens_mask=True
-        ).to(self.device)
-
+        tokens = self.tokenize(chunks)
         if self.post_trained:
-
             assert self.species_id is not None
-
             s_ids = self.species_id.expand(
                 len(chunks)
             )
-
             hidden_states = self.model(
                 species_ids=s_ids,
-                input_ids=toks["input_ids"],
+                input_ids=tokens["input_ids"],
                 output_hidden_states=True
             ).hidden_states[-1]
         else:
             hidden_states = self.model(
-                input_ids=toks["input_ids"],
+                input_ids=tokens["input_ids"],
                 output_hidden_states=True
             ).hidden_states[-1]
-
-        pooling_mask = 1 - toks["special_tokens_mask"]
-
-        return hidden_states, pooling_mask
+        return hidden_states, self.pooling_mask(tokens)
 
     def embed(
         self,
@@ -474,19 +463,10 @@ class NucleotideTransformerV3(EmbeddingModel):
             }
 
             for chunk in chunks:
-                toks = self.tokenizer(
-                    [chunk],
-                    add_special_tokens=False,
-                    padding=True,
-                    pad_to_multiple_of=128,
-                    return_tensors="pt",
-                    return_special_tokens_mask=False,
-                )
+                toks = self.tokenize([chunk])
                 if self.post_trained:
                     assert self.species_id is not None
-                    toks["species_ids"] = self.species_id.expand(
-                        1)  # type: ignore[assignment]
-                toks = toks.to(self.device)  # type: ignore[assignment]
+                    toks["species_ids"] = self.species_id.expand(1)
 
                 with torch.inference_mode():
                     outputs = self.model(

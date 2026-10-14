@@ -26,6 +26,7 @@ class RNAMSM(EmbeddingModel):
     hookable_layer_patterns = [r"layers\.\d+"]
     final_layer_pattern = r"emb_layer_norm_after"
     uses_rna_alphabet = True
+    unk_is_special = True
     lora_target_modules = [
         "q_proj", "k_proj", "v_proj", "out_proj", "fc1", "fc2",
     ]
@@ -97,34 +98,15 @@ class RNAMSM(EmbeddingModel):
         Returns:
             Tuple of (hidden_states, pooling_mask) tensors.
         """
-        toks = self.tokenizer(
-            chunks,
-            return_tensors="pt",
-            padding=True,
-        ).to(self.device)
-
-        hidden_states = self.model(**toks).last_hidden_state
+        tokens = self.tokenize(chunks)
         # RNA-MSM returns (B, num_msa, T, D); single sequences have num_msa=1.
-        hidden_states = hidden_states[:, 0]
-
-        # input_ids / attention_mask are also (B, num_msa, T); squeeze MSA dim.
-        input_ids = toks["input_ids"]
-        if input_ids.dim() == 3:
-            input_ids = input_ids[:, 0]
-        attention_mask = toks["attention_mask"]
-        if attention_mask.dim() == 3:
-            attention_mask = attention_mask[:, 0]
-
-        # RNA-MSM's tokenizer prepends CLS but appends no EOS. Exclude only
-        # genuine special tokens (robust if the tokenizer later adds EOS).
-        pooling_mask = attention_mask.clone()
-        special_ids = torch.tensor(
-            self.tokenizer.all_special_ids, device=self.device
-        )
-        is_special = torch.isin(input_ids, special_ids)
-        pooling_mask[is_special] = 0
-
-        return hidden_states, pooling_mask
+        hidden_states = self.model(**tokens).last_hidden_state[:, 0]
+        # input_ids / attention_mask may also be (B, num_msa, T).
+        tokens = {
+            key: value[:, 0] if value.dim() == 3 else value
+            for key, value in tokens.items()
+        }
+        return hidden_states, self.pooling_mask(tokens)
 
     def embed(
         self,
@@ -146,7 +128,6 @@ class RNAMSM(EmbeddingModel):
             - default (mean): (768,)
         """
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
 
         return self._embed_with_chunking(
             sequences=sequences,
@@ -184,7 +165,6 @@ class RNAMSM(EmbeddingModel):
         # (batch, num_msa, T, D) instead of the standard (batch, T, D).
         # We process single sequences and squeeze both extra dims.
         _, _ = cds, splice
-        sequences = [s.replace("T", "U") for s in sequences]
 
         resolved = self._resolve_layer_paths(layers)
         hookable = self.hookable_layers
@@ -207,9 +187,7 @@ class RNAMSM(EmbeddingModel):
             }
 
             for chunk in chunks:
-                toks = self.tokenizer(
-                    [chunk], return_tensors="pt", padding=False
-                ).to(self.device)
+                toks = self.tokenize([chunk])
 
                 # Hooks rather than hidden_states: the model replaces the
                 # last layer's hidden state with the final norm output.

@@ -73,20 +73,15 @@ def test_mrnafm_embed_batch(model):
 
 
 def test_mrnafm_converts_t_to_u(model):
-    """Test mRNA-FM converts T->U before embedding."""
+    """Test mRNA-FM converts T->U before tokenizing."""
     seq = "ATGATG"
     with patch.object(
         model,
-        "_forward_chunks",
-        wraps=model._forward_chunks
+        "tokenizer",
+        side_effect=model.tokenizer
     ) as mock:
-        mock.return_value = (
-            torch.zeros(1, 6, 1280),
-            torch.ones(1, 6)
-        )
         model.embed([seq], cds=[make_cds(seq)])
-        chunks = mock.call_args[0][0]
-        assert chunks[0] == "AUGAUG"
+        assert mock.call_args[0][0] == ["AUGAUG"]
 
 
 def test_mrnafm_cds_slice(model):
@@ -105,8 +100,8 @@ def test_mrnafm_cds_slice(model):
         )
         model.embed([input_seq], cds=[cds])
         chunks = mock.call_args[0][0]
-        # CDS region is 30 U's (converted from T's)
-        assert chunks[0] == "U" * 30
+        # T->U happens at tokenization, after chunking
+        assert chunks[0] == "T" * 30
 
 
 def test_mrnafm_get_cds_full(model):

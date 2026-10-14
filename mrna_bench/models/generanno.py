@@ -155,26 +155,12 @@ class GENERanno(EmbeddingModel):
             Tuple of (hidden_states, pooling_mask). The pooling_mask excludes
             padding and special tokens (CLS/SEP).
         """
-        toks = self.tokenizer(
-            chunks,
-            add_special_tokens=True,
-            return_tensors="pt",
-            padding=True,
-            truncation=True,
-            max_length=self.max_length,
-            return_special_tokens_mask=True
-        ).to(self.device)
-
-        special_tokens_mask = toks.pop("special_tokens_mask")
-
+        tokens = self.tokenize(chunks)
         hidden_states = self.model(
-            **toks,
+            **tokens,
             output_hidden_states=True
         ).hidden_states[-1]
-
-        pooling_mask = 1 - special_tokens_mask
-
-        return hidden_states, pooling_mask
+        return hidden_states, self.pooling_mask(tokens)
 
     def embed(
         self,
@@ -232,19 +218,8 @@ class GENERanno(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        def tokenize(seqs: list[str]) -> dict[str, torch.Tensor]:
-            return self.tokenizer(  # type: ignore[return-value]
-                seqs,
-                add_special_tokens=True,
-                return_tensors="pt",
-                padding=False,
-                truncation=True,
-                max_length=self.max_length,
-            ).to(self.device)
-
         return self._standard_hf_extract(
             sequences=sequences,
-            tokenize_fn=tokenize,
             max_chunk_length=self.max_length - 2,
             layers=layers,
             return_attentions=return_attentions,
