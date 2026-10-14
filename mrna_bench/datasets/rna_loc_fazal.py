@@ -1,4 +1,3 @@
-import numpy as np
 import pandas as pd
 
 from mrna_bench.datasets.benchmark_dataset import (
@@ -14,18 +13,45 @@ from mrna_bench.datasets.dataset_utils import (
 
 
 RNA_LOC_FAZAL_URL = (
-    "https://ars.els-cdn.com/content/image/1-s2.0-S0092867419305550-mmc3.xlsx"
+    "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE116nnn/GSE116008/suppl/"
+    "GSE116008_APEX_seq_deseq2_all_data_polyA_hek293t.txt.gz"
 )
+
+# APEX-seq construct names in the GEO DESeq2 table, mapped to compartments.
+# Order defines the order of the multilabel target vector.
+LABEL_LOCATIONS = {
+    "NLS": "nucleus",
+    "NIK": "nucleolus",
+    "LMA": "nuclear_lamina",
+    "NUCP": "nuclear_pore",
+    "NES": "cytosol",
+    "ERM": "er_membrane",
+    "OMM": "outer_mitochondrial_membrane",
+}
+
+# ER lumen (KDEL) has no significantly enriched transcripts (Fazal et al.),
+# so it is not a label, but it is still part of the completeness filter.
+# MITO is excluded from the integrated analysis, as in the paper.
+FILTER_LOCATIONS = list(LABEL_LOCATIONS) + ["KDEL"]
+
+# Enrichment criteria from Fazal et al. 2019, applied to all compartments.
+LOG2FC_THRESHOLD = 0.75
+PADJ_THRESHOLD = 0.05
 
 
 class RNALocalizationFazal(BenchmarkDataset):
-    """RNA Subcellular Localization Dataset.
+    """RNA Subcellular Localization Dataset (APEX-seq, Fazal et al. 2019).
 
-    Note: This dataset is not available on Hugging Face Hub as
-    it is under an Elsevier User License which prohibits redistribution.
-    We cannot redistribute the data, and nor should you. However, we do
-    provide functionality to download the data from the original source
-    and process it into a format compatible with the rest of mRNAbench.
+    Labels follow the paper's enrichment definition, applied uniformly to
+    every compartment: a gene is enriched in a compartment if its DESeq2
+    log2 fold-change over the 18 unlabeled controls is > 0.75 and its
+    FDR-adjusted p-value is < 0.05. DESeq2 results are taken from GEO
+    (GSE116008); their fold-changes are identical to Table S3 of the paper.
+
+    Genes are kept if they have fold-change and adjusted p-value estimates
+    in all eight non-matrix locations and are enriched in at least one
+    labelled compartment. The ER lumen is not a label as it has no enriched
+    transcripts.
     """
 
     METADATA = DatasetMetadata(
@@ -77,23 +103,25 @@ class RNALocalizationFazal(BenchmarkDataset):
             self.raw_data_dir,
         )
 
-        data = pd.read_excel(
-            self.raw_data_path,
-            sheet_name="Gene lists and orphans",
+        data = pd.read_csv(self.raw_data_path, sep="\t")
+
+        lfc_cols = [f"{loc}.18C" for loc in FILTER_LOCATIONS]
+        padj_cols = [f"{loc}.18C.P" for loc in FILTER_LOCATIONS]
+        data = data.dropna(subset=lfc_cols + padj_cols)
+
+        enriched = pd.DataFrame(
+            {
+                loc: (data[f"{loc}.18C"] > LOG2FC_THRESHOLD)
+                & (data[f"{loc}.18C.P"] < PADJ_THRESHOLD)
+                for loc in LABEL_LOCATIONS
+            }
         )
 
-        data_cols = [col for col in data.columns if "log2FC" in col]
+        data = data[enriched.any(axis=1)]
+        enriched = enriched.loc[data.index]
 
-        data = data[["Ensembl_Gene", "Common_Gene"] + data_cols]
-
-        # reverse log2FC and get proportion in compartments
-        data[data_cols] = data[data_cols].apply(np.exp2)
-        data[data_cols] = data[data_cols].apply(lambda x: x / x.sum(), axis=1)
-
-        # create target array
-        data["target"] = data[data_cols].apply(lambda x: np.array(x), axis=1)
-
-        data.drop(columns=data_cols, inplace=True)
+        data = data.assign(target=list(enriched.to_numpy(dtype=int)))
+        data = data.sort_values("Ensembl_Gene")
 
         id_to_gene = {g.id.split(".")[0]: g for g in genome.genes}
 
@@ -124,7 +152,7 @@ class RNALocalizationFazal(BenchmarkDataset):
                     "sequence": seq,
                     "cds": cds,
                     "splice": splice,
-                    "target": (row["target"] >= 0.125).astype(int),
+                    "target": row["target"],
                 }
             )
 
