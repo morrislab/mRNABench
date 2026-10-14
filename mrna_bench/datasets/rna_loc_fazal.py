@@ -111,8 +111,9 @@ class RNALocalizationFazal(BenchmarkDataset):
 
         enriched = pd.DataFrame(
             {
-                loc: (data[f"{loc}.18C"] > LOG2FC_THRESHOLD)
-                & (data[f"{loc}.18C.P"] < PADJ_THRESHOLD)
+                loc: (data[f"{loc}.18C"] > LOG2FC_THRESHOLD) & (
+                    data[f"{loc}.18C.P"] < PADJ_THRESHOLD
+                )
                 for loc in LABEL_LOCATIONS
             }
         )
