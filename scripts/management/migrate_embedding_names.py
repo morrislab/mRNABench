@@ -5,9 +5,8 @@ Renames::
     {data_dir}/{dataset}/embeddings/{dataset}_{model}[_{i}-{n}].{npz|h5}
 
 to ``{dataset}_{model}_{config_hash}[_{i}-{n}].{npz|h5}`` and stores the
-config in the file. Old files used mean pooling of the final layer, except
-positional probe files named ``{model}-w{window}s{stride}``, which used
-position pooling. Naive baselines named ``{model}-k{kmers}`` counted only
+config in the file. Old files used mean pooling of the final layer. Naive
+baselines named ``{model}-k{kmers}`` counted only
 those k-mer lengths. The attention implementation is the model's current
 default.
 
@@ -30,7 +29,7 @@ import numpy as np
 
 from mrna_bench.embedder import get_config_hash, get_embedding_config
 from mrna_bench.models import MODEL_CATALOG
-from mrna_bench.models.pooling import MeanPool, PositionPool
+from mrna_bench.models.pooling import MeanPool
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, required=True)
@@ -43,7 +42,6 @@ parser.add_argument(
 parser.add_argument("--dry-run", action="store_true")
 args = parser.parse_args()
 
-POSITION_SUFFIX = re.compile(r"^(.*)-w(\d+)s(\d+)$")
 KMER_SUFFIX = re.compile(r"^(naive-\d)-k(\d+)$")
 
 
@@ -78,10 +76,6 @@ if __name__ == "__main__":
 
         dataset_name, model_name = parts[:2]
         pooling = MeanPool()
-        match = POSITION_SUFFIX.match(model_name)
-        if match:
-            model_name = match.group(1)
-            pooling = PositionPool(int(match.group(2)), int(match.group(3)))
 
         kmer_match = KMER_SUFFIX.match(model_name)
         if kmer_match:

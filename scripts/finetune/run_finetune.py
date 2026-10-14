@@ -19,7 +19,6 @@ from mrna_bench.fine_tune import (
 )
 from mrna_bench.embedder import get_embedding_config
 from mrna_bench.models import MODEL_CATALOG
-from mrna_bench.models.pooling import MeanPool, NoPool, Pooling, PositionPool
 from mrna_bench.persister import ResultsPersister
 
 default_seeds = "[0]"

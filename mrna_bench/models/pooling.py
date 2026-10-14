@@ -60,33 +60,3 @@ class NoPool(Pooling):
         """Return token states unpooled, in FP32."""
         _ = dim
         return hidden_states.float()
-
-
-@dataclass(frozen=True)
-class PositionPool(Pooling):
-    """Mean of the token states in sliding windows.
-
-    Assumes one token per nucleotide. Window ``k`` covers positions
-    ``[k * stride, k * stride + window_size)``; the last window may be
-    shorter.
-    """
-
-    window_size: int
-    stride: int
-
-    def __call__(
-        self,
-        hidden_states: torch.Tensor,
-        dim: int = 0,
-    ) -> torch.Tensor:
-        """Map (seq_len, H) token states to (n_windows, H)."""
-        _ = dim
-        seq_len = hidden_states.shape[0]
-        n_windows = 1 + max(
-            0, -(-(seq_len - self.window_size) // self.stride)
-        )
-        return torch.stack([
-            hidden_states[k * self.stride:k * self.stride + self.window_size]
-            .float().mean(0)
-            for k in range(n_windows)
-        ])

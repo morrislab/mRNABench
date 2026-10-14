@@ -38,7 +38,7 @@ Key flags: `--dataset`, `--model`, `--evaluation`, `--task`, `--target-col`,
 `--expected-seeds`.
 
 Each row of `runs` is one seed of one configuration: `model`, `evaluation`
-(`linear_probe`, `positional_probe`, `fine_tune`, `embedding_vep`,
+(`linear_probe`, `fine_tune`, `embedding_vep`,
 `likelihood_vep`), `task`, `target_col`, `split_type`, `seed`, plus
 `embedding_config` (pooling, layer, attention implementation, as stored in
 the embedding file) and `probe_config` (estimator, probe or training

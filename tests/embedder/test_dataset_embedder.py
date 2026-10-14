@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from unittest.mock import Mock
 
 import h5py
@@ -13,7 +14,18 @@ from mrna_bench.embedder import (
     find_embedding_file,
     read_embedding_config,
 )
-from mrna_bench.models.pooling import PositionPool
+from mrna_bench.models.pooling import Pooling
+
+
+@dataclass(frozen=True)
+class _WindowPool(Pooling):
+    """Non-default pooling for config tests: mean over `window`-long chunks."""
+
+    window: int
+
+    def __call__(self, hidden_states, dim=0):
+        _ = dim
+        return hidden_states.float().reshape(-1, self.window, hidden_states.shape[-1]).mean(1)
 
 
 def mock_model(**model_options) -> Mock:
@@ -97,7 +109,7 @@ def test_persisted_config_finds_file(embedder, tmp_path):
     with pytest.raises(FileNotFoundError):
         find_embedding_file(
             str(tmp_path), "mockmodel", "mockdata",
-            pooling=PositionPool(64, 64),
+            pooling=_WindowPool(64),
         )
 
 
@@ -122,7 +134,7 @@ def test_merged_chunks_keep_config(tmp_path):
     """Merging chunk files writes the config into the merged file."""
     dataset = Mock(dataset_name="mockdata", embedding_dir=str(tmp_path))
     dataset.data_df = list(range(4))
-    pooling = PositionPool(2, 2)
+    pooling = _WindowPool(2)
     for i in range(2):
         chunk = DatasetEmbedder(
             mock_model(), dataset, d_chunk_ind=i, d_num_chunks=2,

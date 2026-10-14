@@ -19,9 +19,8 @@ class FineTuneWrapper(nn.Module):
     is frozen except for ``trainable_layers``, and LoRA adapters can be
     added with apply_lora(); the existing embed() path flows through both.
 
-    Heads with ``per_position`` set (e.g. AttentionPoolHead) receive the
-    list of per-sequence (n, H) embeddings, so ``agg_fn`` should not pool
-    (e.g. ``NoPool`` or ``PositionPool``).
+    Heads with ``per_position`` set receive the list of per-sequence (n, H)
+    embeddings, so ``agg_fn`` should not pool (``NoPool``).
 
     The task head can be any nn.Module that also exposes:
         - task_type: str

@@ -61,7 +61,7 @@ class DatasetEmbedder:
 
         if not isinstance(agg_fn, Pooling):
             raise TypeError(
-                "agg_fn must be a Pooling, e.g. MeanPool() or PositionPool()."
+                "agg_fn must be a Pooling, e.g. MeanPool() or NoPool()."
             )
         self.agg_fn = agg_fn
         self.ragged_out = ragged_out
