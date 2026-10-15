@@ -45,7 +45,8 @@ conda create --name mrna_bench python=3.10
 conda activate mrna_bench
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install mrna-bench[base_models]
+pip install psutil
+pip install --no-build-isolation mrna-bench[base_models]
 ```
 Inference with other models will require the installation of the model's
 dependencies first, which are usually listed on the model's GitHub page (see below).
@@ -258,5 +259,6 @@ conda create --name mrna_bench_dev python=3.10
 conda activate mrna_bench_dev
 
 pip install torch==2.2.2 --index-url https://download.pytorch.org/whl/cu121
-pip install mrna-bench[base_models, dev]
+pip install psutil
+pip install --no-build-isolation "mrna-bench[base_models,dev]"
 ```

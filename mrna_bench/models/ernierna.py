@@ -40,7 +40,9 @@ class ERNIERNA(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
+            from huggingface_hub import hf_hub_download
             from multimolecule import ErnieRnaModel, RnaTokenizer
+            from safetensors.torch import load_file
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use ERNIE-RNA."
@@ -51,10 +53,36 @@ class ERNIERNA(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
+        # The default tokenizer's vocab no longer matches the checkpoint.
         self.model = ErnieRnaModel.from_pretrained(
             "multimolecule/{}".format(model_version),
-            cache_dir=get_model_weights_path()
+            cache_dir=get_model_weights_path(),
+            tokenizer=self.tokenizer,
         ).to(device)
+
+        # Checkpoint keys use "model.", not the "ernierna." 0.0.7 expects,
+        # and dense1/dense2 where 0.0.7 uses nn.Sequential indices.
+        checkpoint_file = hf_hub_download(
+            "multimolecule/{}".format(model_version),
+            "model.safetensors",
+            cache_dir=get_model_weights_path(),
+        )
+        checkpoint = load_file(checkpoint_file)
+        renames = {
+            "pairwise_bias_proj.dense1.": "pairwise_bias_proj.0.",
+            "pairwise_bias_proj.dense2.": "pairwise_bias_proj.2.",
+        }
+        weights = {}
+        for key, value in checkpoint.items():
+            key = key.removeprefix("model.")
+            for old, new in renames.items():
+                key = key.replace(old, new)
+            weights[key] = value
+        missing, _ = self.model.load_state_dict(weights, strict=False)
+        if missing:
+            raise RuntimeError(
+                "Parameters absent from checkpoint: {}".format(missing)
+            )
 
         self.is_sixtrack = False
 
