@@ -63,7 +63,7 @@ class UTRLM(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device)
 
-        # Checkpoint keys use "model.", not the "utrlm." 0.0.7 expects.
+        # multimolecule expects "utrlm." keys; the checkpoint uses "model.".
         checkpoint_file = hf_hub_download(
             "multimolecule/{}".format(model_version),
             "model.safetensors",

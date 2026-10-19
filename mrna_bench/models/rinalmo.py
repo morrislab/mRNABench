@@ -65,7 +65,7 @@ class RiNALMo(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device)
 
-        # Checkpoint keys use "model.", not the "rinalmo." 0.0.7 expects.
+        # multimolecule expects "rinalmo." keys; the checkpoint uses "model.".
         checkpoint_file = hf_hub_download(
             model_path,
             "model.safetensors",

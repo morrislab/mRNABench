@@ -56,7 +56,7 @@ class RNAErnie(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device)
 
-        # Checkpoint keys use "model.", not the "rnaernie." 0.0.7 expects.
+        # multimolecule expects "rnaernie." keys; the checkpoint uses "model.".
         checkpoint_file = hf_hub_download(
             "multimolecule/{}".format(model_version),
             "model.safetensors",

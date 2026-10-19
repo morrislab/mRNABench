@@ -62,8 +62,8 @@ class ERNIERNA(EmbeddingModel):
             tokenizer=self.tokenizer,
         ).to(device)
 
-        # Checkpoint keys use "model.", not the "ernierna." 0.0.7 expects,
-        # and dense1/dense2 where 0.0.7 uses nn.Sequential indices.
+        # multimolecule expects "ernierna." keys and nn.Sequential indices;
+        # the checkpoint uses "model." and dense1/dense2.
         checkpoint_file = hf_hub_download(
             "multimolecule/{}".format(model_version),
             "model.safetensors",

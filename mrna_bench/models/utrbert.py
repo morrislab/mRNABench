@@ -74,7 +74,7 @@ class UTRBERT(EmbeddingModel):
             cache_dir=get_model_weights_path()
         ).to(device)
 
-        # Checkpoint keys use "model.", not the "utrbert." 0.0.7 expects.
+        # multimolecule expects "utrbert." keys; the checkpoint uses "model.".
         checkpoint_file = hf_hub_download(
             "multimolecule/{}".format(model_version),
             "model.safetensors",
