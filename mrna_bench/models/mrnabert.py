@@ -29,6 +29,9 @@ class mRNABERT(EmbeddingModel):
     # quadratic memory usage with respect to sequence length
     max_length = 10_000
 
+    repo_id = "Taykhoom/mRNABERT"
+    revision = "9e8e1445a9f7b6437a84d17a432831ef4a22520f"
+
     def __init__(self, model_version: str, device: torch.device):
         """Initialize mRNABERT inference wrapper.
 
@@ -40,30 +43,45 @@ class mRNABERT(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            from transformers import AutoModel, AutoTokenizer
-            from transformers.models.bert.configuration_bert import BertConfig
+            from huggingface_hub import hf_hub_download
+            from safetensors.torch import load_file
+            from transformers import AutoConfig, AutoModel, AutoTokenizer
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use mRNABERT."
             )
 
-        config = BertConfig.from_pretrained(
-            "Taykhoom/mRNABERT-no-flashattention",
-            cache_dir=get_model_weights_path()
+        hub_kwargs = {
+            "revision": self.revision,
+            "cache_dir": get_model_weights_path(),
+        }
+
+        config = AutoConfig.from_pretrained(
+            self.repo_id, trust_remote_code=True, **hub_kwargs
         )
 
         self.tokenizer = AutoTokenizer.from_pretrained(
-            "Taykhoom/mRNABERT-no-flashattention",
-            trust_remote_code=True,
-            cache_dir=get_model_weights_path()
+            self.repo_id, trust_remote_code=True, **hub_kwargs
         )
 
-        self.model = AutoModel.from_pretrained(
-            "Taykhoom/mRNABERT-no-flashattention",
-            trust_remote_code=True,
-            config=config,
-            cache_dir=get_model_weights_path()
-        ).to(device)
+        # The checkpoint lacks the safetensors "format" metadata that
+        # from_pretrained requires in the pinned transformers, so load the
+        # weights explicitly.
+        self.model = AutoModel.from_config(config, trust_remote_code=True)
+        checkpoint_file = hf_hub_download(
+            self.repo_id, "model.safetensors", **hub_kwargs
+        )
+        checkpoint = load_file(checkpoint_file)
+        weights = {
+            key.removeprefix("bert."): value
+            for key, value in checkpoint.items()
+        }
+        missing, _ = self.model.load_state_dict(weights, strict=False)
+        if missing:
+            raise RuntimeError(
+                "Parameters absent from checkpoint: {}".format(missing)
+            )
+        self.model = self.model.to(device)
 
     def embed(
         self,
@@ -72,10 +90,21 @@ class mRNABERT(EmbeddingModel):
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Not supported for mRNABERT without CDS track."""
-        raise NotImplementedError(
-            "mRNABERT requires CDS track. Use embed_sixtrack() instead."
-        )
+        """Embed sequences using mRNABERT, which requires the CDS track.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: List of CDS tracks for sequences.
+            splice: Unused.
+            agg_fn: Method used to aggregate across sequence dimension.
+
+        Returns:
+            mRNABERT embeddings with shape (batch_size, 768).
+        """
+        if cds is None:
+            raise ValueError("mRNABERT requires cds to separate UTRs and CDS.")
+
+        return self.embed_sixtrack(sequences, cds, splice, agg_fn)
 
     def _forward_chunks_sixtrack(
         self,
