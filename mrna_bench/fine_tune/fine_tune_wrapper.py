@@ -10,11 +10,15 @@ from mrna_bench.models.embedding_model import EmbeddingModel
 
 
 class FineTuneWrapper(nn.Module):
-    """Wraps any EmbeddingModel for LoRA fine-tuning with a task head.
+    """Wraps any EmbeddingModel for fine-tuning with a task head.
 
-    Holds a backbone EmbeddingModel and a task head nn.Module.
-    LoRA adapters are applied to the backbone's internal model,
-    and the existing embed() path naturally flows through them.
+    Holds a backbone EmbeddingModel and a task head nn.Module. Supports
+    two mutually exclusive training regimes:
+
+    - apply_lora(): LoRA adapters are applied to the backbone's internal
+      model, and the existing embed() path flows through them.
+    - freeze_backbone(): the backbone is left untouched and only the
+      pooler and head train, i.e. probing with a learned readout.
 
     The task head can be any nn.Module that also exposes:
         - task_type: str
@@ -27,18 +31,29 @@ class FineTuneWrapper(nn.Module):
         "Wqkv", "out_proj",
     ]
 
-    def __init__(self, model: EmbeddingModel, task_head: nn.Module):
+    def __init__(
+        self,
+        model: EmbeddingModel,
+        task_head: nn.Module,
+        pooler: nn.Module | None = None,
+    ):
         """Initialize FineTuneWrapper.
 
         Args:
             model: EmbeddingModel instance to use as backbone.
             task_head: Task head module. Must have task_type and
                 get_loss_fn() attributes.
+            pooler: Module pooling token embeddings over the sequence
+                axis, called as pooler(x, dim=k). None uses torch.mean.
         """
         super().__init__()
         self.backbone = model
         self.task_head = task_head.to(model.device)
+        self.pooler = None if pooler is None else pooler.to(model.device)
         self.device = model.device
+
+        self.backbone_frozen = False
+        self.lora_applied = False
 
     def apply_lora(
         self,
@@ -61,7 +76,16 @@ class FineTuneWrapper(nn.Module):
             alpha: LoRA scaling factor.
             dropout: Dropout probability for LoRA layers.
             target_modules: Module names to apply LoRA to.
+
+        Raises:
+            RuntimeError: If the backbone was already frozen.
         """
+        if self.backbone_frozen:
+            raise RuntimeError(
+                "Backbone is frozen; LoRA adapters would receive no "
+                "gradient. Use either freeze_backbone() or apply_lora()."
+            )
+
         try:
             from peft import LoraConfig, get_peft_model
         except ImportError:
@@ -102,7 +126,31 @@ class FineTuneWrapper(nn.Module):
                 f"layers in {type(self.backbone).__name__}."
             )
 
+        self.lora_applied = True
         self._disable_fast_attention()
+
+    def freeze_backbone(self):
+        """Freeze all backbone parameters, training only pooler and head.
+
+        The backbone stays in eval mode and its outputs carry no
+        grad_fn, so no backbone activations are stored for backward.
+        Gradients still reach the pooler and head, which are applied to
+        those outputs as leaf modules.
+
+        Raises:
+            RuntimeError: If LoRA adapters were already applied.
+        """
+        if self.lora_applied:
+            raise RuntimeError(
+                "LoRA adapters are applied; freezing would leave no "
+                "trainable backbone parameters. Use either "
+                "freeze_backbone() or apply_lora()."
+            )
+
+        for param in self.backbone.model.parameters():
+            param.requires_grad = False
+
+        self.backbone_frozen = True
 
     def _disable_fast_attention(self):
         """Disable fast attention paths that bypass LoRA adapters.
@@ -133,7 +181,7 @@ class FineTuneWrapper(nn.Module):
         sequences: list[str],
         cds: list[np.ndarray] | None = None,
         splice: list[np.ndarray] | None = None,
-        agg_fn: Callable = torch.mean,
+        agg_fn: Callable | None = None,
     ) -> torch.Tensor:
         """Forward pass through backbone and task head.
 
@@ -141,11 +189,15 @@ class FineTuneWrapper(nn.Module):
             sequences: List of input sequences.
             cds: CDS tracks for models that use them.
             splice: Splice tracks for models that use them.
-            agg_fn: Aggregation function for pooling.
+            agg_fn: Aggregation function for pooling. None uses the
+                pooler given at construction, falling back to torch.mean.
 
         Returns:
             Task head output tensor.
         """
+        if agg_fn is None:
+            agg_fn = torch.mean if self.pooler is None else self.pooler
+
         embeddings = self.backbone.embed(sequences, cds, splice, agg_fn)
         return self.task_head(embeddings)
 
@@ -153,12 +205,14 @@ class FineTuneWrapper(nn.Module):
         """Get all trainable parameters for optimizer.
 
         Returns:
-            List of trainable parameters (backbone LoRA + head).
+            List of trainable parameters (backbone LoRA + head + pooler).
         """
         params = [
             p for p in self.backbone.model.parameters() if p.requires_grad
         ]
         params.extend(self.task_head.parameters())
+        if self.pooler is not None:
+            params.extend(self.pooler.parameters())
         return params
 
     def get_parameter_count(self) -> dict[str, int]:
@@ -176,20 +230,39 @@ class FineTuneWrapper(nn.Module):
         head_params = sum(
             p.numel() for p in self.task_head.parameters()
         )
+        pooler_params = 0
+        if self.pooler is not None:
+            pooler_params = sum(p.numel() for p in self.pooler.parameters())
 
         return {
             "backbone_total": total,
             "backbone_trainable": backbone_trainable,
             "head": head_params,
-            "total_trainable": backbone_trainable + head_params,
+            "pooler": pooler_params,
+            "total_trainable": (
+                backbone_trainable + head_params + pooler_params
+            ),
         }
 
     def set_train_mode(self):
-        """Set backbone and head to training mode with gradients."""
-        self.backbone.set_train_mode()
+        """Set head and pooler to training mode with gradients enabled.
+
+        A frozen backbone stays in eval mode so its dropout and
+        normalization statistics keep their inference behaviour.
+        """
+        if self.backbone_frozen:
+            self.backbone.model.eval()
+            torch.set_grad_enabled(True)
+        else:
+            self.backbone.set_train_mode()
+
         self.task_head.train()
+        if self.pooler is not None:
+            self.pooler.train()
 
     def set_inference_mode(self):
-        """Set backbone and head to eval mode without gradients."""
+        """Set backbone, head and pooler to eval mode without gradients."""
         self.backbone.set_inference_mode()
         self.task_head.eval()
+        if self.pooler is not None:
+            self.pooler.eval()

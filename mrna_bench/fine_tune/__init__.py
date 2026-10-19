@@ -7,11 +7,14 @@ from mrna_bench.fine_tune.dataloader import (
     create_dataloaders,
 )
 from mrna_bench.fine_tune.persister import FineTunePersister
+from mrna_bench.fine_tune.poolers import AttentionPooler, DotProductPooler
 
 __all__ = [
     "FineTuneWrapper",
     "TaskHead",
     "TaskHeadProtocol",
+    "AttentionPooler",
+    "DotProductPooler",
     "FineTuneTrainer",
     "TrainerConfig",
     "SequenceDataset",

@@ -4,6 +4,9 @@ import numpy as np
 import torch
 
 from mrna_bench.models import EmbeddingModel
+from mrna_bench.models.multimolecule_loader import (
+    load_multimolecule_model,
+)
 from mrna_bench.utils import get_model_weights_path
 
 
@@ -46,9 +49,10 @@ class RNABERT(EmbeddingModel):
             cache_dir=get_model_weights_path()
         )
 
-        self.model = RnaBertModel.from_pretrained(
+        self.model = load_multimolecule_model(
+            RnaBertModel,
             "multimolecule/{}".format(model_version),
-            cache_dir=get_model_weights_path()
+            get_model_weights_path(),
         ).to(device)
 
     def _forward_chunks(

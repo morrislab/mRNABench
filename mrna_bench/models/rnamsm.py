@@ -5,6 +5,9 @@ import torch
 
 from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
+from mrna_bench.models.multimolecule_loader import (
+    load_multimolecule_model,
+)
 
 
 class RNAMSM(EmbeddingModel):
@@ -45,9 +48,10 @@ class RNAMSM(EmbeddingModel):
                 "Install base_models optional dependency to use RNA-MSM."
             )
 
-        self.model = RnaMsmModel.from_pretrained(
+        self.model = load_multimolecule_model(
+            RnaMsmModel,
             "multimolecule/{}".format(model_version),
-            cache_dir=get_model_weights_path()
+            get_model_weights_path(),
         ).to(device)
 
         self.tokenizer = RnaTokenizer.from_pretrained(

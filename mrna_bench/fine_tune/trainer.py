@@ -66,42 +66,40 @@ class FineTuneTrainer:
         )
 
     def _save_trainable_state(self) -> dict:
-        """Save only trainable (LoRA + head) state dicts.
+        """Save only trainable (LoRA + head + pooler) state dicts.
 
         Returns:
-            Dictionary with LoRA and head state dicts.
+            Dictionary with LoRA, head and pooler state dicts.
         """
-        try:
+        state = {"head": deepcopy(self.wrapper.task_head.state_dict())}
+
+        if self.wrapper.lora_applied:
             from peft import get_peft_model_state_dict
-            lora_state = deepcopy(
+            state["lora"] = deepcopy(
                 get_peft_model_state_dict(self.wrapper.backbone.model)
             )
-        except ImportError:
-            lora_state = deepcopy({
-                k: v for k, v in self.wrapper.backbone.model.state_dict().items()
-                if v.requires_grad
-            })
 
-        head_state = deepcopy(self.wrapper.task_head.state_dict())
-        return {"lora": lora_state, "head": head_state}
+        if self.wrapper.pooler is not None:
+            state["pooler"] = deepcopy(self.wrapper.pooler.state_dict())
+
+        return state
 
     def _restore_trainable_state(self, state: dict):
         """Restore trainable state dicts.
 
         Args:
-            state: Dictionary with LoRA and head state dicts.
+            state: Dictionary with LoRA, head and pooler state dicts.
         """
-        try:
+        if self.wrapper.lora_applied:
             from peft import set_peft_model_state_dict
             set_peft_model_state_dict(
                 self.wrapper.backbone.model, state["lora"]
             )
-        except ImportError:
-            self.wrapper.backbone.model.load_state_dict(
-                state["lora"], strict=False
-            )
 
         self.wrapper.task_head.load_state_dict(state["head"])
+
+        if self.wrapper.pooler is not None:
+            self.wrapper.pooler.load_state_dict(state["pooler"])
 
     def train_epoch(self, dataloader: DataLoader) -> float:
         """Train for one epoch.

@@ -8,6 +8,7 @@ import torch
 
 import mrna_bench as mb
 from mrna_bench.fine_tune import (
+    AttentionPooler,
     FineTunePersister,
     FineTuneTrainer,
     FineTuneWrapper,
@@ -34,6 +35,11 @@ parser.add_argument("--epochs", type=int, default=15)
 parser.add_argument("--batch_size", type=int, default=32)
 parser.add_argument("--accumulation_steps", type=int, default=1)
 parser.add_argument("--seeds", type=str, default=default_seeds)
+parser.add_argument(
+    "--pooler", type=str, default="mean", choices=["mean", "attention"]
+)
+parser.add_argument("--pooler_heads", type=int, default=8)
+parser.add_argument("--freeze_backbone", action="store_true")
 parser.add_argument("--eval_test", action="store_true")
 parser.add_argument("--force_recompute", action="store_true")
 args = parser.parse_args()
@@ -96,6 +102,9 @@ def run_finetune(
     random_seed,
     device,
     eval_test=False,
+    pooler_type="mean",
+    pooler_heads=8,
+    freeze_backbone=False,
 ):
     """Run fine-tuning for a single (lr, rank, seed) configuration.
 
@@ -107,13 +116,17 @@ def run_finetune(
         target_col: Target column name.
         split_type: Type of data split.
         learning_rate: Learning rate.
-        lora_rank: LoRA rank.
+        lora_rank: LoRA rank. Ignored when freeze_backbone is set.
         epochs: Maximum number of epochs.
         batch_size: Batch size.
         accumulation_steps: Gradient accumulation steps.
         random_seed: Random seed for split.
         device: PyTorch device.
         eval_test: Whether to also evaluate on test set.
+        pooler_type: Sequence pooling to use (mean or attention).
+        pooler_heads: Number of heads when pooler_type is attention.
+        freeze_backbone: Train only the pooler and head, leaving the
+            backbone frozen instead of applying LoRA adapters.
 
     Returns:
         Tuple of (val_metrics, test_metrics, history).
@@ -125,8 +138,17 @@ def run_finetune(
     output_dim = get_output_dim(dataset, task, target_col)
 
     head = TaskHead(input_dim=emb_dim, output_dim=output_dim, task_type=task)
-    wrapper = FineTuneWrapper(model, head)
-    wrapper.apply_lora(rank=lora_rank)
+
+    pooler = None
+    if pooler_type == "attention":
+        pooler = AttentionPooler(emb_dim, num_heads=pooler_heads)
+
+    wrapper = FineTuneWrapper(model, head, pooler=pooler)
+
+    if freeze_backbone:
+        wrapper.freeze_backbone()
+    else:
+        wrapper.apply_lora(rank=lora_rank)
 
     param_info = wrapper.get_parameter_count()
     print("  Parameters: {} trainable / {} total".format(
@@ -186,7 +208,15 @@ if __name__ == "__main__":
     print("Learning rates: {}".format(learning_rates))
     print("LoRA ranks: {}".format(lora_ranks))
     print("Seeds: {}".format(seeds))
+    print("Pooler: {}".format(args.pooler))
+    print("Backbone: {}".format(
+        "frozen" if args.freeze_backbone else "lora"
+    ))
     print("Eval test: {}".format(args.eval_test))
+
+    # A frozen backbone has no adapters, so the rank grid collapses.
+    if args.freeze_backbone:
+        lora_ranks = [None]
 
     for lr in learning_rates:
         for lora_rank in lora_ranks:
@@ -198,6 +228,8 @@ if __name__ == "__main__":
                 split_type=split_type,
                 learning_rate=lr,
                 lora_rank=lora_rank,
+                pooler_type=args.pooler,
+                tuning_mode="frozen" if args.freeze_backbone else "lora",
             )
 
             for seed in seeds:
@@ -227,6 +259,9 @@ if __name__ == "__main__":
                     random_seed=seed,
                     device=device,
                     eval_test=args.eval_test,
+                    pooler_type=args.pooler,
+                    pooler_heads=args.pooler_heads,
+                    freeze_backbone=args.freeze_backbone,
                 )
 
                 print("Val metrics:")

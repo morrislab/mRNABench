@@ -112,6 +112,26 @@ class NucleotideTransformer(EmbeddingModel):
 
         return hidden_states, pooling_mask
 
+    @staticmethod
+    def max_chunk_nucleotides(max_length: int) -> int:
+        """Largest chunk whose tokenization always fits max_length.
+
+        NT emits one token per complete 6-mer plus one token per
+        leftover nucleotide, so a chunk of length L costs
+        1 + L // 6 + L % 6 tokens. A sequence's final chunk carries an
+        arbitrary remainder, and charging that remainder per nucleotide
+        overruns the position embeddings, which surfaces as an
+        out-of-range lookup and a device-side assert. Reserve the
+        worst-case remainder of 5 alongside the CLS token.
+
+        Args:
+            max_length: Maximum tokens the model accepts.
+
+        Returns:
+            Maximum nucleotides per chunk.
+        """
+        return (max_length - 6) * 6
+
     def embed(
         self,
         sequences: list[str],
@@ -132,10 +152,7 @@ class NucleotideTransformer(EmbeddingModel):
         """
         _, _ = cds, splice
 
-        # NT uses 6-mer tokenization. max_length is in tokens.
-        # Each token covers ~6 nucleotides, so max nucleotides is approx
-        # (max_length - 2) * 6
-        max_chunk_length = (self.max_length - 2) * 6
+        max_chunk_length = self.max_chunk_nucleotides(self.max_length)
 
         return self._embed_with_chunking(
             sequences=sequences,

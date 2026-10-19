@@ -19,6 +19,8 @@ class FineTunePersister:
         learning_rate: float,
         lora_rank: int | None = None,
         head_type: str = "mlp",
+        pooler_type: str = "mean",
+        tuning_mode: str = "lora",
     ):
         """Initialize FineTunePersister.
 
@@ -29,8 +31,11 @@ class FineTunePersister:
             target_col: Target column evaluated.
             split_type: Type of data split used.
             learning_rate: Learning rate used for fine-tuning.
-            lora_rank: LoRA rank used (None if full fine-tune).
+            lora_rank: LoRA rank used (None unless tuning_mode is "lora").
             head_type: Type of task head used (e.g. "mlp", "cnn").
+            pooler_type: Sequence pooling used (e.g. "mean", "attention").
+            tuning_mode: What was trained in the backbone: "lora",
+                "frozen" (pooler and head only), or "full".
         """
         self.dataset = dataset
         self.model_short_name = model_short_name
@@ -40,6 +45,8 @@ class FineTunePersister:
         self.learning_rate = learning_rate
         self.lora_rank = lora_rank
         self.head_type = head_type
+        self.pooler_type = pooler_type
+        self.tuning_mode = tuning_mode
 
         self._result_dir = Path(dataset.dataset_path) / "ft_results"
 
@@ -64,6 +71,14 @@ class FineTunePersister:
             parts.append("lora-{}".format(self.lora_rank))
 
         parts.append("head-{}".format(self.head_type))
+
+        # Defaults omitted so existing result filenames stay resolvable.
+        if self.tuning_mode != "lora":
+            parts.append("tune-{}".format(self.tuning_mode))
+
+        if self.pooler_type != "mean":
+            parts.append("pool-{}".format(self.pooler_type))
+
         parts.append("rs-{}".format(random_seed))
 
         return self._result_dir / ("_".join(parts) + suffix)
@@ -86,6 +101,8 @@ class FineTunePersister:
             "learning_rate": self.learning_rate,
             "lora_rank": self.lora_rank,
             "head_type": self.head_type,
+            "pooler_type": self.pooler_type,
+            "tuning_mode": self.tuning_mode,
             "seed": random_seed,
         }
 

@@ -109,6 +109,10 @@ class Borzoi(EmbeddingModel):
 
             self.models.append(model_i)
 
+        # EmbeddingModel's train/inference mode helpers act on self.model,
+        # so expose the replicates as one module for them to reach.
+        self.model = torch.nn.ModuleList(self.models)
+
     def embed_sequence(
         self,
         sequence: str,
