@@ -64,7 +64,7 @@ class Orthrus(EmbeddingModel):
         """Embed sequences using Orthrus.
 
         Routes to 4-track or 6-track embedding based on model version.
-        - orthrus-base-4-track: Uses sequence only (ignores cds/splice)
+        - orthrus-large-4-track: Uses sequence only (ignores cds/splice)
         - orthrus-large-6-track: Requires cds and splice tracks
 
         Args:
@@ -113,7 +113,9 @@ class Orthrus(EmbeddingModel):
             padded_inputs.append(inp)
 
         batch_tensor = torch.stack(padded_inputs, dim=0).to(self.device)
-        lengths_tensor = torch.tensor(lengths, dtype=torch.float32).to(self.device)
+        lengths_tensor = torch.tensor(
+            lengths, dtype=torch.float32
+        ).to(self.device)
 
         embeddings = self.model.representation(
             batch_tensor,
@@ -165,7 +167,9 @@ class Orthrus(EmbeddingModel):
             dtype=torch.float32,
             device=self.device
         )
-        lengths_tensor = torch.tensor(lengths, dtype=torch.float32).to(self.device)
+        lengths_tensor = torch.tensor(
+            lengths, dtype=torch.float32
+        ).to(self.device)
 
         embeddings = self.model.representation(
             batch_tensor,
