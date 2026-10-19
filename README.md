@@ -154,7 +154,7 @@ The models supported by the `base_models` installation are catalogued below.
 
 | Model Name | Model Versions | Description | Citation |
 | :--------: | :------------- | ----------- | :------: |
-| **Orthrus** | `orthrus-large-6-track`<br>`orthrus-large-4-track` | Mamba-based RNA foundation model pre-trained using contrastive learning on 45M RNA transcripts to capture functional and evolutionary relationships. 6-track version incorporates CDS and splice site information. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
+| **Orthrus** | `orthrus-large-6-track`<br>`orthrus-large-4-track`<br>`orthrus-base-4-track` | Mamba-based RNA foundation model pre-trained using contrastive learning on 45M RNA transcripts to capture functional and evolutionary relationships. 6-track version incorporates CDS and splice site information. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
 | **RNA-FM** | `rna-fm` | Transformer-based RNA foundation model pre-trained using MLM on 23M ncRNA sequences. | [[Github]](https://github.com/ml4bio/RNA-FM) |
 | **mRNA-FM** | `mrna-fm` | RNA-FM variant pre-trained on mRNA CDS regions using a codon tokenizer. Accepts CDS input only (length a multiple of 3). | [[Github]](https://github.com/ml4bio/RNA-FM) |
 | **SpliceBERT** | `SpliceBERT.1024nt`<br>`SpliceBERT-human.510nt`<br>`SpliceBERT.510nt` | Transformer-based RNA foundation model trained on 2M vertebrate mRNA sequences using MLM. Specialized for splice site prediction with human-only and context-length variants. | [[Github]](https://github.com/chenkenbio/SpliceBERT) |

@@ -19,7 +19,11 @@ class Orthrus(EmbeddingModel):
     """
 
     default_version = "orthrus-large-6-track"
-    valid_versions = ["orthrus-large-6-track", "orthrus-large-4-track"]
+    valid_versions = [
+        "orthrus-base-4-track",
+        "orthrus-large-4-track",
+        "orthrus-large-6-track",
+    ]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -31,6 +35,7 @@ class Orthrus(EmbeddingModel):
 
         Args:
             model_version: Version of Orthrus to load. Valid values are: {
+                "orthrus-base-4-track",
                 "orthrus-large-4-track",
                 "orthrus-large-6-track"
             }
@@ -64,7 +69,8 @@ class Orthrus(EmbeddingModel):
         """Embed sequences using Orthrus.
 
         Routes to 4-track or 6-track embedding based on model version.
-        - orthrus-large-4-track: Uses sequence only (ignores cds/splice)
+        - orthrus-base-4-track, orthrus-large-4-track: Use sequence only
+          (ignore cds/splice)
         - orthrus-large-6-track: Requires cds and splice tracks
 
         Args:
