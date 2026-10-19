@@ -3,6 +3,7 @@ from collections.abc import Callable
 import os
 import tarfile
 
+import numpy as np
 import torch
 
 from mrna_bench.models.embedding_model import EmbeddingModel
@@ -24,6 +25,13 @@ class SpliceBERT(EmbeddingModel):
 
     Link: https://github.com/biomed-AI/SpliceBERT
     """
+
+    default_version = "SpliceBERT.1024nt"
+    valid_versions = [
+        "SpliceBERT.1024nt",
+        "SpliceBERT-human.510nt",
+        "SpliceBERT.510nt",
+    ]
 
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
@@ -55,8 +63,6 @@ class SpliceBERT(EmbeddingModel):
                 "Install base_models optional dependency to use SpliceBERT."
             )
 
-        self.is_sixtrack = False
-
         # Download all model weights
         weight_path = os.path.join(get_model_weights_path(), "splice-bert")
         os.makedirs(weight_path, exist_ok=True)
@@ -78,55 +84,127 @@ class SpliceBERT(EmbeddingModel):
 
         self.max_length = int(model_version.split(".")[1].replace("nt", ""))
 
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = torch.mean
-    ) -> torch.Tensor:
-        """Embed sequence using SpliceBERT.
-
-        SpliceBERT's 510nt models only work with a 510nt sequence length input.
-        Sequences that are not divisible by 510 will have an overlap between
-        the last and second last chunk.
+        chunks: list[str],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Run forward pass on sequence chunks.
 
         Args:
-            sequence: Sequence to embed.
-            agg_fn: Method used to aggregate across sequence dimension.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            SpliceBERT representation of sequence with shape (1 x 512).
+            Tuple of (hidden_states, pooling_mask) tensors.
         """
-        chunks = self.chunk_sequence(sequence, self.max_length)
+        spaced_chunks = [" ".join(list(chunk)) for chunk in chunks]
 
-        # Pad last chunk for 510 nt models
-        if self.max_length == 510:
+        toks = self.tokenizer(
+            spaced_chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
+
+        hidden_states = self.model(**toks).last_hidden_state
+
+        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
+
+        return hidden_states, pooling_mask
+
+    def _embed_1024(
+        self,
+        sequences: list[str],
+        agg_fn: Callable,
+    ) -> torch.Tensor:
+        """Embed sequences using 1024nt model.
+
+        Args:
+            sequences: List of sequences to embed.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            SpliceBERT embeddings with shape (batch_size, 512).
+        """
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )
+
+    def _embed_510(
+        self,
+        sequences: list[str],
+        agg_fn: Callable,
+    ) -> torch.Tensor:
+        """Embed sequences using 510nt model with overlap handling.
+
+        Args:
+            sequences: List of sequences to embed.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            SpliceBERT embeddings with shape (batch_size, 512).
+        """
+        all_chunks = []
+        chunk_counts = []
+
+        for seq in sequences:
+            chunks = self.chunk_sequence(seq, 510)
             if len(chunks) == 1 and len(chunks[0]) != 510:
                 print(
-                    "Warning: SpliceBERT-510nt input must be at least 510nts."
+                    "Warning: SpliceBERT-510nt input must be at least 510nts. "
                     "Embedding may not work correctly."
                 )
-            elif len(chunks[-1]) != 510:
+            elif len(chunks) > 1 and len(chunks[-1]) != 510:
                 overlap = 510 - len(chunks[-1])
                 chunks[-1] = chunks[-2][-overlap:] + chunks[-1]
-                assert len(chunks[-1]) == 510
+            all_chunks.extend(chunks)
+            chunk_counts.append(len(chunks))
 
-        embedding_chunks = []
+        hidden_states, pooling_mask = self._forward_chunks(all_chunks)
 
-        for chunk in chunks:
-            chunk_in = " ".join(list(chunk))
-            input_ids = self.tokenizer.encode(chunk_in)
-            input_ids = torch.as_tensor(input_ids)
-            input_ids = input_ids.unsqueeze(0).to(self.device)
+        seq_embeddings = []
+        chunk_ptr = 0
 
-            last_hidden_state = self.model(input_ids).last_hidden_state
+        for num_chunks in chunk_counts:
+            seq_hidden = hidden_states[chunk_ptr:chunk_ptr + num_chunks]
+            seq_mask = pooling_mask[chunk_ptr:chunk_ptr + num_chunks]
 
-            embedding_chunks.append(last_hidden_state)
+            hidden = seq_hidden.reshape(-1, seq_hidden.shape[-1])
+            mask = seq_mask.reshape(-1).bool()
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+            masked_hidden = hidden[mask]
+            seq_embeddings.append(agg_fn(masked_hidden, dim=0))
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
+            chunk_ptr += num_chunks
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for SpliceBERT.")
+        return torch.stack(seq_embeddings, dim=0)
+
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using SpliceBERT.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            SpliceBERT embeddings with shape (batch_size, 512).
+        """
+        _, _ = cds, splice
+
+        if self.max_length == 510:
+            return self._embed_510(sequences, agg_fn)
+        else:
+            return self._embed_1024(sequences, agg_fn)

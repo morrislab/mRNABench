@@ -70,17 +70,15 @@ class DatasetEmbedder:
             Embeddings for current dataset chunk in original order.
         """
         dataset_chunk = self.get_dataset_chunk()
+        self.model.set_inference_mode()
 
         dataset_embeddings = []
         for _, row in tqdm(dataset_chunk.iterrows(), total=len(dataset_chunk)):
-            if self.model.is_sixtrack:
-                embedding = self.model.embed_sequence_sixtrack(
-                    row["sequence"],
-                    row["cds"].astype(np.int32),
-                    row["splice"].astype(np.int32)
-                )
-            else:
-                embedding = self.model.embed_sequence(row["sequence"])
+            embedding = self.model.embed(
+                [row["sequence"]],
+                cds=[row["cds"].astype(np.int32)],
+                splice=[row["splice"].astype(np.int32)]
+            )
             dataset_embeddings.append(embedding)
 
         embeddings = torch.cat(dataset_embeddings, dim=0)

@@ -1,5 +1,4 @@
 from collections.abc import Callable
-import warnings
 
 import numpy as np
 import torch
@@ -15,25 +14,19 @@ class RNAFM(EmbeddingModel):
     23 million ncRNA sequences. The primary competency for RNA-FM is ncRNA
     property and structural prediction.
 
-    mRNA-FM is a related model that is instead pre-trained on coding sequences.
-    It can only accept CDS regions (input must be multiple of 3).
-
     Link: https://github.com/ml4bio/RNA-FM/
     """
 
-    max_length = 1024
+    default_version = "rna-fm"
+    valid_versions = ["rna-fm"]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    max_length = 1024
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize RNA-FM Model.
 
         Args:
-            model_version: Version of RNA-FM to use. Valid versions are:
-                {"rna-fm", "mrna-fm"}.
+            model_version: Version of RNA-FM to use. Must be "rna-fm".
             device: PyTorch device used by model inference.
         """
         super().__init__(model_version, device)
@@ -50,141 +43,65 @@ class RNAFM(EmbeddingModel):
         old_hub_dir = torch.hub.get_dir()
         torch.hub.set_dir(hub_path)
 
-        if model_version == "rna-fm":
-            model, alphabet = fm.pretrained.rna_fm_t12()
-            self.is_sixtrack = False
-        elif model_version == "mrna-fm":
-            model, alphabet = fm.pretrained.mrna_fm_t12()
-            self.is_sixtrack = True
-        else:
-            torch.hub.set_dir(old_hub_dir)
-            raise ValueError("Unknown model version.")
+        model, alphabet = fm.pretrained.rna_fm_t12()
 
         torch.hub.set_dir(old_hub_dir)
 
-        self.model = model.to(device).eval()
+        self.model = model.to(device)
         self.batch_converter = alphabet.get_batch_converter()
 
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = torch.mean
-    ) -> torch.Tensor:
-        """Embed sequence using RNA-FM.
+        chunks: list[str],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Run forward pass on sequence chunks.
 
-        Due to RNA-FM's max context being shorter than most mRNAs, chunking is
-        used. Here, sequence is chunked, and start / end tokens are stripped
-        from the middle sequences. Representations are then averaged across
-        the sequence length dimension.
+        The fm library's batch_converter pads sequences to the longest in the
+        batch using the alphabet's padding_idx token.
 
         Args:
-            sequence: Sequence to embed.
-            agg_fn: Method used to aggregate across sequence dimension.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            RNA-FM representation of sequence with shape (1 x 640).
+            Tuple of (hidden_states, pooling_mask) tensors.
         """
-        sequence = sequence.replace("T", "U")
-        chunks = self.chunk_sequence(sequence, self.max_length - 2)
+        data = [("", chunk) for chunk in chunks]
+        _, _, tokens = self.batch_converter(data)
 
-        embedding_chunks = []
+        model_output = self.model(tokens.to(self.device), repr_layers=[12])
+        hidden_states = model_output["representations"][12]
 
+        batch_size, seq_len, _ = hidden_states.shape
+        pooling_mask = torch.zeros(batch_size, seq_len, device=self.device)
         for i, chunk in enumerate(chunks):
-            _, _, tokens = self.batch_converter([("", chunk)])
+            pooling_mask[i, 1:len(chunk) + 1] = 1
 
-            if i == 0:
-                tokens = tokens[:, :-1]
-            elif i == len(chunks) - 1:
-                tokens = tokens[:, 1:]
-            else:
-                tokens = tokens[:, 1:-1]
+        return hidden_states, pooling_mask
 
-            model_output = self.model(tokens.to(self.device), repr_layers=[12])
-            embedded_chunk = model_output["representations"][12]
-
-            embedding_chunks.append(embedded_chunk)
-
-        embedding = torch.cat(embedding_chunks, dim=1)
-
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(
+    def embed(
         self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using mRNA-FM.
-
-        Since mRNA-FM only accepts CDS, uses CDS track to extract CDS sequence
-        and generate representation from it. CDS sequence must be a multiple
-        of three.
+        """Embed sequences using RNA-FM.
 
         Args:
-            sequence: Sequence to embed.
-            cds: Binary encoding of first nucleotide of each codon in CDS.
-            splice: Binary encoding of splice site locations.
-            agg_fn: Method used to aggregate across sequence dimension.
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            mRNA-FM representation of CDS of sequence with shape (1 x H).
+            RNA-FM embeddings with shape (batch_size, 640).
         """
-        _ = splice  # unused
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
 
-        sequence = sequence.replace("T", "U")
-
-        cds_seq = self.get_cds(sequence, cds)
-
-        chunks = self.chunk_sequence(cds_seq, (self.max_length - 2) * 3)
-
-        embedding_chunks = []
-
-        for i, chunk in enumerate(chunks):
-            _, _, tokens = self.batch_converter([("", chunk)])
-
-            if i == 0:
-                tokens = tokens[:, :-1]
-            elif i == len(chunks) - 1:
-                tokens = tokens[:, 1:]
-            else:
-                tokens = tokens[:, 1:-1]
-
-            model_output = self.model(tokens.to(self.device), repr_layers=[12])
-            embedded_chunk = model_output["representations"][12]
-
-            embedding_chunks.append(embedded_chunk)
-
-        embedding = torch.cat(embedding_chunks, dim=1)
-
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
-
-    def get_cds(self, sequence: str, cds: np.ndarray) -> str:
-        """Get CDS region of sequence.
-
-        CDS must be a multiple of three. For anamolous sequences, returns as
-        much of the CDS as possible that is still a multiple of three.
-
-        Args:
-            sequence: Sequence to extract CDS region from.
-
-        Returns:
-            Sequence of CDS. Returns original sequence if no CDS found with
-            truncation to multiple of three.
-        """
-        if sum(cds) == 0:
-            warnings.warn("No CDS found. Returning truncated sequence.")
-            return sequence[:len(sequence) - (len(sequence) % 3)]
-
-        first_one_index = np.argmax(cds == 1)
-        last_one_index = (len(cds) - 1 - np.argmax(np.flip(cds) == 1)) + 2
-
-        proposed_cds = sequence[first_one_index:last_one_index + 1]
-
-        if len(proposed_cds) % 3 != 0:
-            warnings.warn("Irregular CDS. Returning truncated sequence.")
-            return proposed_cds[:-(len(proposed_cds) % 3)]
-
-        return proposed_cds
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 2,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

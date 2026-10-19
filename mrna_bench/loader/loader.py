@@ -9,24 +9,37 @@ if TYPE_CHECKING:
 
 def load_model(
     model_name: str,
-    model_version: str,
-    device: "torch.device",
+    model_version: str | None = None,
+    device: "torch.device | None" = None,
 ) -> "EmbeddingModel":
     """Load Embedding Model.
 
     Args:
         model_name: Name of model class.
-        model_version: Specific model version to load.
-        device: PyTorch device to load model to.
+        model_version: Specific model version to load. Defaults to model's
+            default_version if not specified.
+        device: PyTorch device to load model to. Defaults to CUDA if available.
 
     Returns:
-        Initialized EmbeddingModel.
+        Initialized EmbeddingModel in inference mode.
     """
     try:
+        import torch
         from mrna_bench.models import EmbeddingModel, MODEL_CATALOG
 
+        if device is None:
+            device = torch.device(
+                "cuda" if torch.cuda.is_available() else "cpu"
+            )
+
         model_class: Type[EmbeddingModel] = MODEL_CATALOG[model_name]
+
+        if model_version is None:
+            model_version = model_class.default_version
+
         model = model_class(model_version, device)
+
+        model.set_inference_mode()
 
     except ModuleNotFoundError:
         raise ModuleNotFoundError(
