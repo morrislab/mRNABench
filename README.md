@@ -45,8 +45,15 @@ conda create --name mrna_bench python=3.12
 conda activate mrna_bench
 
 pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.7.1
-pip install -e .[base_models]
+pip install psutil
+CUDNN=$(python -c "import nvidia.cudnn; print(nvidia.cudnn.__path__[0])")
+CUDNN_PATH=$CUDNN CPATH=$CUDNN/include LIBRARY_PATH=$CUDNN/lib \
+    pip install --no-build-isolation -e .[base_models]
 ```
+
+flash-attn, mamba-ssm and Transformer Engine build against the installed torch,
+and Transformer Engine also needs torch's cuDNN headers. Set the cuDNN variables
+only for this command: Transformer Engine fails to import if `CUDNN_PATH` stays set.
 
 After installation, disable FP8 for Evo2 (required for GPUs older than H100):
 ```bash
@@ -105,7 +112,7 @@ prober = (LinearProbeBuilder(dataset)
 metrics = prober.run_linear_probe(2541)
 print(metrics)
 ```
-`LinearProbeBuilder` now uses dataset metadata defaults for task, target,
+`LinearProbeBuilder` uses dataset metadata defaults for task, target,
 and split strategy. You only need to set these explicitly when you want to
 override defaults, for example:
 
@@ -119,6 +126,25 @@ prober = (LinearProbeBuilder(dataset)
 )
 ```
 
+Calling `.use_persister()` on the builder saves results to a SQLite database at
+`{dataset_path}/results.db`; re-running the same configuration overwrites its row.
+
+Models embed batches of sequences directly. `load_model` returns a model in
+inference mode; call `set_train_mode()` to enable gradients through the
+backbone, e.g. to train a head on top:
+
+```python
+model = mb.load_model("RiNALMo")  # default version and device
+model.set_train_mode()
+head = torch.nn.LazyLinear(1).to(model.device)
+
+embeddings = model.embed(["ACGTACGT", "ATGCCGTAATG"])  # (batch_size, H)
+loss = head(embeddings).sum()
+loss.backward()  # gradients reach the backbone weights
+
+model.set_inference_mode()
+```
+
 Also see the `scripts/` folder for example scripts that uses slurm to embed dataset chunks in parallel for reduce runtime, as well as an example of multi-seed linear probing.
 
 ## Model Catalog
@@ -128,8 +154,9 @@ The models supported by the `base_models` installation are catalogued below.
 
 | Model Name | Model Versions | Description | Citation |
 | :--------: | :------------- | ----------- | :------: |
-| **Orthrus** | `orthrus-large-6-track`<br>`orthrus-base-4-track` | Mamba-based RNA foundation model pre-trained using contrastive learning on 45M RNA transcripts to capture functional and evolutionary relationships. 6-track version incorporates CDS and splice site information. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
-| **RNA-FM** | `rna-fm`<br>`mrna-fm` | Transformer-based RNA foundation model pre-trained using MLM. RNA-FM trained on 23M ncRNA sequences, mRNA-FM trained on mRNA CDS regions using codon tokenizer. | [[Github]](https://github.com/ml4bio/RNA-FM) |
+| **Orthrus** | `orthrus-large-6-track`<br>`orthrus-large-4-track` | Mamba-based RNA foundation model pre-trained using contrastive learning on 45M RNA transcripts to capture functional and evolutionary relationships. 6-track version incorporates CDS and splice site information. | [[Code]](https://github.com/bowang-lab/Orthrus) [[Paper]](https://www.biorxiv.org/content/10.1101/2024.10.10.617658v2)|
+| **RNA-FM** | `rna-fm` | Transformer-based RNA foundation model pre-trained using MLM on 23M ncRNA sequences. | [[Github]](https://github.com/ml4bio/RNA-FM) |
+| **mRNA-FM** | `mrna-fm` | RNA-FM variant pre-trained on mRNA CDS regions using a codon tokenizer. Accepts CDS input only (length a multiple of 3). | [[Github]](https://github.com/ml4bio/RNA-FM) |
 | **SpliceBERT** | `SpliceBERT.1024nt`<br>`SpliceBERT-human.510nt`<br>`SpliceBERT.510nt` | Transformer-based RNA foundation model trained on 2M vertebrate mRNA sequences using MLM. Specialized for splice site prediction with human-only and context-length variants. | [[Github]](https://github.com/chenkenbio/SpliceBERT) |
 | **RiNALMo** | `rinalmo` | Transformer-based RNA foundation model trained on 36M ncRNA sequences using MLM with modern architectural improvements including RoPE, SwiGLU activations, and Flash Attention. | [[Github]](https://github.com/lbcb-sci/RiNALMo) |
 | **UTR-LM** | `utrlm-te_el`<br>`utrlm-mrl`<br>`utrlm-*-utronly` | Transformer-based RNA foundation model specialized for 5'UTR sequences. Pre-trained on random and endogenous UTR sequences from various species. UTR-only variants automatically extract 5'UTRs. | [[Github]](https://github.com/a96123155/UTR-LM) |
@@ -164,7 +191,7 @@ The models supported by the `base_models` installation are catalogued below.
 > Many of the model wrappers (3UTRBERT, RiNALMo, UTR-LM, RNA-MSM, RNAErnie) use reimplementations from the `multimolecule` package. See their [website](https://multimolecule.danling.org/) for more details.
 
 ### Adding a new model
-All models should inherit from the template `EmbeddingModel`. Each model file should lazily load dependencies within its `__init__` methods so each model can be used individually without install all other models. Models must implement `get_model_short_name(model_version)` which fetches the internal name for the model. This must be unique for every model version and must not contain underscores. Models should implement either `embed_sequence` or `embed_sequence_sixtrack` (see code for method signature). New models should be added to `MODEL_CATALOG`.
+All models should inherit from the template `EmbeddingModel`. Each model file should lazily load dependencies within its `__init__` methods so each model can be used individually without install all other models. Models must define `default_version` and `valid_versions`, implement `get_model_short_name(model_version)`, which returns the internal name for the model (unique for every model version, no underscores), and implement `embed(sequences, cds, splice, agg_fn)`, which embeds a batch of sequences into a `(batch_size, H)` tensor without blocking gradients (see code for method signature). New models should be added to `MODEL_CATALOG`.
 
 ## Dataset Catalog
 The current datasets catalogued are:
@@ -266,5 +293,8 @@ conda create --name mrna_bench_dev python=3.12
 conda activate mrna_bench_dev
 
 pip install --index-url https://download.pytorch.org/whl/cu126 torch==2.7.1
-pip install -e .[base_models,dev]
+pip install psutil
+CUDNN=$(python -c "import nvidia.cudnn; print(nvidia.cudnn.__path__[0])")
+CUDNN_PATH=$CUDNN CPATH=$CUDNN/include LIBRARY_PATH=$CUDNN/lib \
+    pip install --no-build-isolation -e .[base_models,dev]
 ```
