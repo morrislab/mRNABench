@@ -1,7 +1,6 @@
 import pytest
 
 pytest.importorskip("torch")
-pytest.importorskip("evo2")
 import torch
 from mrna_bench.models.evo2 import Evo2
 
@@ -23,8 +22,7 @@ def test_evo2_forward(model):
     """Test Evo2 forward pass."""
     out = model.embed_sequence("ATGATG")
     # Evo2 concatenates middle + last layer embeddings
-    # evo2_1b_base has hidden_dim=2048, so 2048*2=4096
-    assert out.shape == (1, 4096)
+    assert out.shape == (1, 2 * model.model.config.hidden_size)
 
 
 def test_evo2_max_length(device):
@@ -42,7 +40,7 @@ def test_evo2_embed_batch(model):
     ]
 
     batch_output = model.embed(sequences).cpu()
-    assert batch_output.shape == (2, 4096)
+    assert batch_output.shape == (2, 2 * model.model.config.hidden_size)
 
     for i, seq in enumerate(sequences):
         single_output = model.embed_sequence(seq).cpu()

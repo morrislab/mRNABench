@@ -1,9 +1,11 @@
 from .benchmark_dataset import BenchmarkDataset
 
+from .apa_isoform import APAIsoform
 from .eclip_binding import eCLIPBindingK562, eCLIPBindingHepG2
 from .go_bio_proc import GOBiologicalProcess
 from .go_cell_comp import GOCellularComponent
 from .go_mol_func import GOMolecularFunction
+from .ires_classification import IRESClassification
 from .mirna_target import MiRNATarget
 from .mrl_hl_lbkwk import MRLHLLBKWK
 from .mrl_sample import (
@@ -25,11 +27,13 @@ from .vep_traitgym import VEPTraitGymComplex, VEPTraitGymMendelian
 
 
 DATASET_CATALOG: dict[str, type[BenchmarkDataset]] = {
+    "apa-isoform": APAIsoform,
     "eclip-binding-k562": eCLIPBindingK562,
     "eclip-binding-hepg2": eCLIPBindingHepG2,
     "go-bp": GOBiologicalProcess,
     "go-cc": GOCellularComponent,
     "go-mf": GOMolecularFunction,
+    "ires-classification": IRESClassification,
     "rnahl-human": RNAHalfLifeHuman,
     "rnahl-mouse": RNAHalfLifeMouse,
     "rna-loc-fazal": RNALocalizationFazal,
@@ -50,12 +54,13 @@ DATASET_CATALOG: dict[str, type[BenchmarkDataset]] = {
     "vep-traitgym-mendelian": VEPTraitGymMendelian,
 }
 
-DATASET_INFO: dict[str, dict[str, str | list[str]]] = {
+DATASET_INFO: dict[str, dict[str, str | list[str] | bool]] = {
     name: {
         "dataset": cls.METADATA.dataset_name,
         "task": cls.METADATA.task,
         "target_col": cls.METADATA.target_col,
         "default_split_type": cls.METADATA.default_split_type,
+        "vep": cls.METADATA.vep,
     }
     for name, cls in DATASET_CATALOG.items()
 }

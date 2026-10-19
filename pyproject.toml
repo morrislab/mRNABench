@@ -37,18 +37,20 @@ Repository = "https://github.com/morrislab/mRNABench"
 base_models = [
     "torch==2.7.1",
     "transformers==4.57.6",
-    "transformer_engine[pytorch]==2.5.0",
     "flash-attn==2.7.4.post1",
     "mamba-ssm==2.2.5",
     "rna-fm==0.2.2",
     "accelerate==1.8.1",
     "multimolecule==0.0.8",
     "protobuf",
-    "evo-model==0.4",
-    "evo2==0.4.0",
+    "alphagenome-pytorch==0.3.1",
     "borzoi-pytorch==0.4.2",
     "enformer-pytorch==0.8.10",
     "ViennaRNA==2.7.0"
+]
+# FP8 input projections for Evo2 on GPUs with compute capability 8.9+.
+fp8 = [
+    "transformer_engine[pytorch]==2.5.0",
 ]
 dev = [
     "mypy",

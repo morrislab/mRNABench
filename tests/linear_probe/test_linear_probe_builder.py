@@ -160,3 +160,11 @@ def test_build(mock_builder: LinearProbeBuilder):
             mock_builder.use_persister()
             mock_builder.build()
             mock_persister.assert_called_once()
+
+
+def test_builder_sets_is_vep_flag(mock_dataset : BenchmarkDataset):
+    """Test that LinearProbeBuilder reads is_vep from dataset metadata."""
+    mock_dataset.metadata.vep = True
+    builder = LinearProbeBuilder(mock_dataset)
+
+    assert builder.is_vep is True

@@ -1,7 +1,6 @@
 import pytest
 
 pytest.importorskip("torch")
-pytest.importorskip("evo")
 import torch
 from mrna_bench.models.evo1 import Evo1
 

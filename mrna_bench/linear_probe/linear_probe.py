@@ -48,7 +48,8 @@ class LinearProbe:
         splitter: DataSplitter,
         evaluator: LinearProbeEvaluator,
         eval_all_splits: bool,
-        persister: LinearProbePersister | None = None
+        persister: LinearProbePersister | None = None,
+        is_vep: bool = False
     ):
         """Initialize LinearProbe.
 
@@ -72,8 +73,14 @@ class LinearProbe:
         if target_col not in data_df.columns:
             raise ValueError("Target column not found in dataframe.")
 
-        self.data_df = data_df
+        self.data_df = data_df.copy()
         self.data_df["embeddings"] = list(embeddings)
+        self.is_vep = is_vep
+
+        if self.is_vep:
+            from mrna_bench.linear_probe.vep import compute_vep_deltas
+
+            self.data_df = compute_vep_deltas(self.data_df)
 
         self.task = task
         self.target_col = target_col

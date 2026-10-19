@@ -39,6 +39,38 @@ def linear_probe() -> LinearProbe:
 
 
 @pytest.fixture
+def linear_probe_vep() -> LinearProbe:
+    """Return a LinearProbe instance for VEP."""
+    data_df = pd.DataFrame({
+        "transcript_id": ["tx1", "tx1"],
+        "description": ["wild-type", "chr1:10 A:T"],
+        "target": [0, 1],
+    })
+    embeddings = np.array([
+        [1.0, 1.0],
+        [3.0, 4.0],
+    ])
+    target_col = "target"
+    task = "reg_lin"
+    splitter = Mock()
+    evaluator = Mock()
+    evaluator.evaluate_linear_probe = Mock()
+
+    eval_all_splits = True
+
+    return LinearProbe(
+        data_df=data_df,
+        embeddings=embeddings,
+        target_col=target_col,
+        task=task,
+        splitter=splitter,
+        evaluator=evaluator,
+        eval_all_splits=eval_all_splits,
+        is_vep=True,
+    )
+
+
+@pytest.fixture
 def linear_probe_persister(linear_probe: LinearProbe) -> LinearProbe:
     """Return a LinearProbe instance with a persister."""
     persister = Mock()
@@ -182,3 +214,16 @@ def test_linear_probe_no_persister_persist(linear_probe: LinearProbe):
 
         with pytest.raises(RuntimeError):
             linear_probe.run_linear_probe(random_seed=42, persist=True)
+
+
+def test_linear_probe_applies_vep_transform(
+    linear_probe_vep: LinearProbe,
+):
+    """Test that LinearProbe applies VEP transformation to data_df."""
+    assert len(linear_probe_vep.data_df) == 1
+
+    np.testing.assert_array_equal(
+        linear_probe_vep.data_df.iloc[0]["embeddings"],
+        np.array([2.0, 3.0])
+    )
+

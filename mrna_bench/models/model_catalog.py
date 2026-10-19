@@ -1,5 +1,6 @@
 from typing import Type
 
+from .alphagenome import AlphaGenome
 from .borzoi import Borzoi
 from .codonbert import CodonBERT
 from .dnabert import DNABERT2
@@ -8,12 +9,15 @@ from .enformer import Enformer
 from .ernierna import ERNIERNA
 from .evo1 import Evo1
 from .evo2 import Evo2
+from .generanno import GENERanno
+from .generator import GENERator
 from .helix_mrna import HelixmRNAWrapper
 from .hyenadna import HyenaDNA
 from .mrnabert import mRNABERT
 from .naive_baseline import NaiveBaseline, NaiveBaselineSixTrack
 from .naive_mamba import NaiveMamba
 from .nucleotide_transformer import NucleotideTransformer
+from .nucleotide_transformer_v3 import NucleotideTransformerV3
 from .omnigenome import OmniGenome
 from .orthrus import Orthrus
 from .mrnafm import MRNAFM
@@ -31,6 +35,7 @@ from .embedding_model import EmbeddingModel
 
 
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
+    "AlphaGenome": AlphaGenome,
     "Borzoi": Borzoi,
     "CodonBERT": CodonBERT,
     "DNABERT-S": DNABERTS,
@@ -39,6 +44,8 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "ERNIE-RNA": ERNIERNA,
     "Evo1": Evo1,
     "Evo2": Evo2,
+    "GENERanno": GENERanno,
+    "GENERator": GENERator,
     "Helix-mRNA": HelixmRNAWrapper,
     "HyenaDNA": HyenaDNA,
     "mRNABERT": mRNABERT,
@@ -47,6 +54,7 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "NaiveBaselineSixTrack": NaiveBaselineSixTrack,
     "NaiveMamba": NaiveMamba,
     "NucleotideTransformer": NucleotideTransformer,
+    "NucleotideTransformerV3": NucleotideTransformerV3,
     "RiNALMo": RiNALMo,
     "OmniGenome": OmniGenome,
     "Orthrus": Orthrus,

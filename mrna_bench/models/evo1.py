@@ -2,9 +2,8 @@ from collections.abc import Callable
 
 import numpy as np
 import torch
-from torch import nn
 
-from mrna_bench import set_model_cache_var, revert_model_cache_var
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -15,6 +14,9 @@ class Evo1(EmbeddingModel):
     OpenGenome dataset using an autoregressive scheme at single nucleotide,
     byte level resolution. Owing to its StripedHyena backbone, it has a near
     linear scaling of compute and memory relative to its context window.
+
+    Checkpoints are loaded from HuggingFace ports of the original releases,
+    which bundle their own model code.
 
     Note: StripedHyena's convolutions don't fully isolate sequences in batched
     mode even with padding mask. This implementation uses single-sequence
@@ -30,7 +32,21 @@ class Evo1(EmbeddingModel):
         "evo-1-131k-base",
     ]
 
-    max_length = 8_192
+    # Ported repo and pinned revision for each version.
+    version_to_repo = {
+        "evo-1.5-8k-base": (
+            "Taykhoom/Evo1-1.5-7B-8K",
+            "5b63c84c2b8473d425379dad5becb1411e19c782",
+        ),
+        "evo-1-8k-base": (
+            "Taykhoom/Evo1-1-7B-8K",
+            "ae7474e07803c37f2e5111f0a054669902e7dc35",
+        ),
+        "evo-1-131k-base": (
+            "Taykhoom/Evo1-1-7B-131K",
+            "f997f205f1a21fd4580a97562b44760317b55978",
+        ),
+    }
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize Evo1.
@@ -46,28 +62,26 @@ class Evo1(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            old_hf_cache = set_model_cache_var()
-            from evo import Evo
+            from transformers import AutoModel, AutoTokenizer
         except ImportError:
-            revert_model_cache_var(old_hf_cache)
-            raise ImportError("Evo must be installed to use this model.")
+            raise ImportError(
+                "Install base_models optional dependency to use Evo1."
+            )
 
-        evo_model = Evo(model_version)
-        self.model = evo_model.model.to(device)
-        self._char_tokenizer = evo_model.tokenizer
-        self.tokenizer = evo_model.tokenizer.tokenize
+        repo_id, revision = self.version_to_repo[model_version]
+        hub_kwargs = {
+            "revision": revision,
+            "cache_dir": get_model_weights_path(),
+            "trust_remote_code": True,
+        }
 
-        class IdentityEmbedding(nn.Module):
-            def unembed(self, u):
-                return u
-
-        # need to return the embedding, not logits
-        self.model.unembed = IdentityEmbedding()
-
-        if model_version == "evo-1-131k-base":
-            self.max_length = 131_072
-
-        revert_model_cache_var(old_hf_cache)
+        self.tokenizer = AutoTokenizer.from_pretrained(repo_id, **hub_kwargs)
+        self.model = AutoModel.from_pretrained(
+            repo_id,
+            attn_implementation="flash_attention_2",
+            **hub_kwargs,
+        ).to(device)
+        self.max_length = self.tokenizer.model_max_length
 
     def embed_sequence(
         self,
@@ -93,20 +107,13 @@ class Evo1(EmbeddingModel):
         embedding_chunks = []
 
         for chunk in chunks:
-            input_ids = torch.tensor(
-                self.tokenizer(chunk),
-                dtype=torch.int,
-            ).unsqueeze(0).to(self.device)
+            toks = self.tokenizer([chunk], return_tensors="pt").to(self.device)
+            outputs = self.model(**toks)
+            embedding_chunks.append(outputs.last_hidden_state[0])
 
-            embeddings, _ = self.model(input_ids)
-            chunk_embedding = agg_fn(embeddings[0], dim=0)
-            embedding_chunks.append(chunk_embedding)
-
-        if len(embedding_chunks) == 1:
-            return embedding_chunks[0].unsqueeze(0).float()
-
-        all_chunks = torch.stack(embedding_chunks, dim=0)
-        return agg_fn(all_chunks, dim=0).unsqueeze(0).float()
+        return agg_fn(
+            torch.cat(embedding_chunks, dim=0), dim=0
+        ).float().unsqueeze(0)
 
     def embed(
         self,
