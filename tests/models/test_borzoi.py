@@ -30,10 +30,7 @@ def test_borzoi_forward(borzoi):
 
 def test_borzoi_embed_batch(borzoi):
     """Test batch embed matches individual embeddings."""
-    # Note: Borzoi uses self.models (list) not self.model, so we set eval manually
-    for m in borzoi.models:
-        m.eval()
-    torch.set_grad_enabled(False)
+    borzoi.set_inference_mode()
     sequences = [
         "ACGT" * 50000,
         "ACGT" * 60000,
@@ -64,8 +61,8 @@ def test_borzoi_padding_logic(borzoi):
 
     mock_model = Mock()
     mock_model.get_embs_after_crop = Mock(side_effect=side_effect)
-    original_models = borzoi.models
-    borzoi.models = [mock_model]
+    original_models = borzoi.model
+    borzoi.model = [mock_model]
 
     try:
         short_seq = "ACGT" * 1000
@@ -83,7 +80,7 @@ def test_borzoi_padding_logic(borzoi):
         first_bin_val = output[0, 0, 0].item()
         assert first_bin_val == expected_start_bin
     finally:
-        borzoi.models = original_models
+        borzoi.model = original_models
 
 
 def test_borzoi_single_vs_ensemble():

@@ -81,8 +81,9 @@ class Borzoi(EmbeddingModel):
         else:
             self.dtype = torch.float32
 
-        # load ensemble if base model name is given
-        self.models = []
+        # load ensemble if base model name is given; a ModuleList lets the
+        # base class switch train/inference mode on all replicates
+        self.model = torch.nn.ModuleList()
 
         if model_version in ["borzoi", "flashzoi"]:
             replicate_template = "{}-replicate-{{}}".format(model_version)
@@ -107,7 +108,7 @@ class Borzoi(EmbeddingModel):
             # Avoid cropping as we handle padding ourselves per chunk
             model_i.crop = torch.nn.Identity()
 
-            self.models.append(model_i)
+            self.model.append(model_i)
 
     def embed_sequence(
         self,
@@ -156,7 +157,7 @@ class Borzoi(EmbeddingModel):
 
             # average embeddings across model replicates
             replicate_embeds = [
-                m.get_embs_after_crop(batch) for m in self.models
+                m.get_embs_after_crop(batch) for m in self.model
             ]
             embedded_chunk = torch.stack(replicate_embeds).mean(dim=0)
 
