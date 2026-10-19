@@ -26,18 +26,30 @@ class MixerModel(nn.Module):
         super().__init__()
 
         try:
-            from mamba_ssm.modules.mamba_simple import Mamba, Block
+            from mamba_ssm.modules.mamba_simple import Mamba
+            from mamba_ssm.modules.block import Block
         except ImportError:
-            raise ImportError(
-                "Install base_models optional dependency to use NaiveMamba."
-            )
+            try:
+                from mamba_ssm.modules.mamba_simple import Block, Mamba
+            except ImportError:
+                raise ImportError(
+                    "Install base_models optional dependency to use NaiveMamba."
+                )
+
+        # Feature detection for mamba-ssm version compatibility
+        has_mlp = "mlp_cls" in Block.__init__.__code__.co_varnames
 
         self.embedding = nn.Linear(input_dim, d_model)
 
         blocks = []
         for i in range(n_layer):
             mix_cls = partial(Mamba, layer_idx=i)
-            block = Block(d_model, mix_cls)
+            if has_mlp:
+                # mamba-ssm >= 2.0: requires mlp_cls
+                block = Block(d_model, mix_cls, mlp_cls=nn.Identity)
+            else:
+                # mamba-ssm < 2.0: only mixer_cls
+                block = Block(d_model, mix_cls)
             block.layer_idx = i
             blocks.append(block)
         self.layers = nn.ModuleList(blocks)
