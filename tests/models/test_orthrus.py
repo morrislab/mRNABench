@@ -24,7 +24,7 @@ def orthrus_6(device) -> Orthrus:
 @pytest.fixture(scope="module")
 def orthrus_4(device) -> Orthrus:
     """Get Orthrus 4-track model."""
-    return Orthrus("orthrus-base-4-track", device)
+    return Orthrus("orthrus-large-4-track", device)
 
 
 def test_orthrus_forward_six(orthrus_6):
@@ -44,7 +44,7 @@ def test_orthrus_forward_four(orthrus_4):
 
     out = orthrus_4.embed(sequences)
 
-    assert out.shape == (2, 256)
+    assert out.shape == (2, 512)
 
 
 def test_orthrus_single_sequence_six(orthrus_6):
@@ -64,7 +64,7 @@ def test_orthrus_single_sequence_four(orthrus_4):
 
     out = orthrus_4.embed_sequence(sequence)
 
-    assert out.shape == (1, 256)
+    assert out.shape == (1, 512)
 
 
 def test_orthrus_six_requires_tracks(orthrus_6):
