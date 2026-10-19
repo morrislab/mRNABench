@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 
 import numpy as np
@@ -43,19 +44,33 @@ class UTRBERT(EmbeddingModel):
 
         try:
             from huggingface_hub import hf_hub_download
-            from multimolecule import RnaTokenizer, UtrBertModel
+            from multimolecule import RnaTokenizer, UtrBertConfig, UtrBertModel
             from safetensors.torch import load_file
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use 3UTRBERT."
             )
 
+        # The checkpoint's extra_special_tokens is a list (transformers 5
+        # format); transformers 4.57 expects a dict. It only lists <null>.
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version),
-            cache_dir=get_model_weights_path()
+            cache_dir=get_model_weights_path(),
+            extra_special_tokens={}
         )
+        # transformers 4.57 logs each loaded config, which builds a default
+        # UtrBertConfig; multimolecule 0.0.8 rejects that without nmers, so
+        # build the config here and pass it in.
+        config_file = hf_hub_download(
+            "multimolecule/{}".format(model_version),
+            "config.json",
+            cache_dir=get_model_weights_path(),
+        )
+        with open(config_file) as f:
+            config = UtrBertConfig(**json.load(f))
         self.model = UtrBertModel.from_pretrained(
             "multimolecule/{}".format(model_version),
+            config=config,
             cache_dir=get_model_weights_path()
         ).to(device)
 

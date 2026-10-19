@@ -66,6 +66,9 @@ class Borzoi(EmbeddingModel):
         try:
             from borzoi_pytorch import Borzoi
             from borzoi_pytorch.config_borzoi import BorzoiConfig
+            from borzoi_pytorch.pytorch_borzoi_transformer import (
+                get_positional_embed,
+            )
         except ImportError:
             if "borzoi" in model_version:
                 raise ImportError("Borzoi missing required dependencies.")
@@ -103,7 +106,18 @@ class Borzoi(EmbeddingModel):
                 "johahi/{}".format(version),
                 cache_dir=get_model_weights_path(),
                 config=cfg
-            ).to(device, dtype=self.dtype)
+            )
+
+            # from_pretrained builds the model on the meta device, and the
+            # non-persistent relative position buffers are not in the
+            # checkpoint, so recompute them as the module's __init__ does.
+            for module in model_i.modules():
+                if "positions" in module._non_persistent_buffers_set:
+                    module.positions = get_positional_embed(
+                        4096, module.num_rel_pos_features, "cpu"
+                    )
+
+            model_i = model_i.to(device, dtype=self.dtype)
 
             # Avoid cropping as we handle padding ourselves per chunk
             model_i.crop = torch.nn.Identity()

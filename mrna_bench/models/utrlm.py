@@ -50,9 +50,12 @@ class UTRLM(EmbeddingModel):
                 "Install base_models optional dependency to use UTR-LM."
             )
 
+        # The checkpoint's extra_special_tokens is a list (transformers 5
+        # format); transformers 4.57 expects a dict. It only lists <null>.
         self.tokenizer = RnaTokenizer.from_pretrained(
             "multimolecule/{}".format(model_version),
-            cache_dir=get_model_weights_path()
+            cache_dir=get_model_weights_path(),
+            extra_special_tokens={}
         )
 
         self.model = UtrLmModel.from_pretrained(

@@ -72,7 +72,19 @@ class PlantRNAFM(EmbeddingModel):
             padding=True,
         ).to(self.device)
 
-        hidden_states = self.model(**toks).last_hidden_state
+        # The model's token_dropout rescales embeddings by each sequence's
+        # mask-token ratio, and its config marks U as the mask token. The
+        # model's forward no longer passes attention_mask to the embedding
+        # layer, so padded sequences were rescaled by their padded length;
+        # compute the embeddings with the mask and pass them in directly.
+        inputs_embeds = self.model.embeddings(
+            input_ids=toks["input_ids"],
+            attention_mask=toks["attention_mask"],
+        )
+        hidden_states = self.model(
+            inputs_embeds=inputs_embeds,
+            attention_mask=toks["attention_mask"],
+        ).last_hidden_state
         pooling_mask = toks["attention_mask"].clone()
 
         pooling_mask[:, 0] = 0
