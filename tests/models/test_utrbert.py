@@ -1,9 +1,6 @@
-from collections import namedtuple
-
 import pytest
-from unittest.mock import patch
 
-import numpy as np
+pytest.importorskip("torch")
 import torch
 
 from mrna_bench.models.utrbert import UTRBERT
@@ -17,141 +14,66 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def utrbert3mer(device) -> UTRBERT:
+def model(device) -> UTRBERT:
     """Get UTR-BERT model with 3mer tokenization."""
     return UTRBERT("utrbert-3mer", device)
 
 
-@pytest.fixture(scope="module")
-def utrbert6mer(device) -> UTRBERT:
-    """Get UTR-BERT model with 6mer tokenization."""
-    return UTRBERT("utrbert-6mer", device)
+def test_utrbert_forward(model):
+    """Test 3'UTR-BERT initialization and forward pass."""
+    model.set_inference_mode()
+    text = "ACUUUGGCCA"
+    output = model.embed([text]).cpu()
+    assert output.shape == (1, 768)
 
 
-@pytest.fixture(scope="module")
-def utrbert_utronly(device) -> UTRBERT:
-    """Get UTR-BERT model."""
-    return UTRBERT("utrbert-3mer-utronly", device)
+def test_utrbert_forward_dna_input(model):
+    """Test 3'UTR-BERT forward pass with DNA input (T instead of U)."""
+    model.set_inference_mode()
+    text_rna = "ACUUUGGCCA"
+    text_dna = "ACTTTGGCCA"
+
+    output_rna = model.embed([text_rna]).cpu()
+    output_dna = model.embed([text_dna]).cpu()
+
+    assert torch.allclose(output_rna, output_dna, atol=1e-5)
 
 
-def test_utrbert_forward(utrbert3mer):
-    """Test 3'UTR-BERT forward pass."""
-    assert utrbert3mer.is_sixtrack is False
+def test_utrbert_embed_batch(model):
+    """Test batch embed matches individual embeddings."""
+    model.set_inference_mode()
+    sequences = [
+        "ACUUUGGCCA",
+        "GGCCAAUUGG",
+        "UUUAAAGGGCCC",
+    ]
 
-    input_seq = "ATGATG"
+    batch_output = model.embed(sequences).cpu()
+    assert batch_output.shape == (3, 768)
 
-    with patch.object(
-        utrbert3mer,
-        "tokenizer",
-        wraps=utrbert3mer.tokenizer
-    ) as mock:
-        output = utrbert3mer.embed_sequence(input_seq)
-        mock.assert_called_once_with("AUGAUG", return_tensors="pt")
-
-        assert output.shape == (1, 768)
-
-
-def test_utrbert_get_utr(utrbert_utronly):
-    """Test helper method from 3'UTR-BERT to retrieve 3'UTR region."""
-    input_seq = "ATGATGATG"
-
-    cds_1 = np.array([0, 1, 0, 0, 0, 0, 0, 0, 0])
-
-    utr1 = utrbert_utronly.get_threeprime_utr(input_seq, cds_1)
-    assert utr1 == "TGATG"
-
-    cds_2 = np.array([0, 0, 0, 0, 0, 0, 0, 0, 0])
-    utr2 = utrbert_utronly.get_threeprime_utr(input_seq, cds_2)
-    assert utr2 == input_seq
-
-    # If UTR is shorter than kmers, return whole sequence
-    cds_3 = np.array([0, 0, 0, 0, 0, 1, 0, 0, 0])
-    utr3 = utrbert_utronly.get_threeprime_utr(input_seq, cds_3)
-    assert utr3 == input_seq
+    for i, seq in enumerate(sequences):
+        single_output = model.embed([seq]).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-5
+        ), "Mismatch at sequence {}".format(i)
 
 
-def test_utrbert_utronly_forward(utrbert_utronly):
-    """Test 3'UTR-BERT utr only forward pass."""
-    assert utrbert_utronly.is_sixtrack is True
+def test_utrbert_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
 
-    input_seq = "ATGATG"
+    out = model.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
 
-    with patch.object(
-        utrbert_utronly,
-        "tokenizer",
-        wraps=utrbert_utronly.tokenizer
-    ) as mock:
-        output = utrbert_utronly.embed_sequence_sixtrack(
-            input_seq,
-            np.array([1, 0, 0, 0, 0, 0]),
-            np.array([0] * len(input_seq))
-        )
-        mock.assert_called_once_with("AUG", return_tensors="pt")
+    loss = out.sum()
+    loss.backward()
 
-        assert output.shape == (1, 768)
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
 
-
-def test_utrbert_forward_chunked_3mer(utrbert3mer):
-    """Test 3'UTR-BERT forward pass with chunked sequence."""
-    spillover = 100
-    input_seq = "A" * (utrbert3mer.max_length + spillover)
-
-    token_len = len(input_seq) - (utrbert3mer.kmer_size - 1)
-
-    # Check that all only first token (CLS) is used for aggregation
-    ground_truth = torch.zeros(1, 768)
-
-    def side_effect(input_ids, attention_mask):
-        if mock.call_count == 1:
-            assert input_ids.shape[1] == utrbert3mer.max_length
-        elif mock.call_count == 2:
-            assert input_ids.shape[1] == token_len - utrbert3mer.max_length + 4
-        else:
-            raise AssertionError("Unexpected call count")
-
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 768)
-
-        mock_out = {"hidden_states": [pos]}
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        mock_out = MockOut(last_hidden_state=pos)
-        return mock_out
-
-    with patch.object(utrbert3mer, "model", side_effect=side_effect) as mock:
-        output = utrbert3mer.embed_sequence(input_seq)
-
-        assert torch.allclose(output, ground_truth)
-
-
-def test_utrbert_forward_chunked_6mer(utrbert6mer):
-    """Test 3'UTR-BERT forward pass with chunked sequence."""
-    spillover = 100
-    input_seq = "A" * (utrbert6mer.max_length + spillover)
-
-    token_len = len(input_seq) - (utrbert6mer.kmer_size - 1)
-
-    # Check that all only first token (CLS) is used for aggregation
-    ground_truth = torch.zeros(1, 768)
-
-    def side_effect(input_ids, attention_mask):
-        if mock.call_count == 1:
-            assert input_ids.shape[1] == utrbert6mer.max_length
-        elif mock.call_count == 2:
-            assert input_ids.shape[1] == token_len - utrbert6mer.max_length + 4
-        else:
-            raise AssertionError("Unexpected call count")
-
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 768)
-
-        mock_out = {"hidden_states": [pos]}
-
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        mock_out = MockOut(last_hidden_state=pos)
-        return mock_out
-
-    with patch.object(utrbert6mer, "model", side_effect=side_effect) as mock:
-        output = utrbert6mer.embed_sequence(input_seq)
-
-        assert torch.allclose(output, ground_truth)
+    assert has_grad, "No gradients flowed to model parameters"

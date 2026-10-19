@@ -1,6 +1,7 @@
 from collections.abc import Callable
 import math
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -25,14 +26,12 @@ class Enformer(EmbeddingModel):
     Link: https://github.com/lucidrains/enformer-pytorch
     """
 
+    default_version = "enformer-official-rough"
+    valid_versions = ["enformer-official-rough"]
+
     prediction_window = 114_688  # embedding is of the center 114688 bases
     max_length = 196_608  # can take sequences up to 196608 bases
     bin_size = 128  # embedding is in 128 base bins
-
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version.replace("_", "-")
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize Enformer.
@@ -53,9 +52,8 @@ class Enformer(EmbeddingModel):
         self.model = from_pretrained(
             f'EleutherAI/{model_version}',
             cache_dir=get_model_weights_path()
-        ).to(device).eval()
+        ).to(device)
 
-    @torch.inference_mode()
     def embed_sequence(
         self,
         sequence: str,
@@ -110,6 +108,32 @@ class Enformer(EmbeddingModel):
         aggregate_embedding = agg_fn(embedding, dim=2)
         return aggregate_embedding
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice):
-        """Not supported."""
-        raise NotImplementedError("Six track not possible with Enformer.")
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using Enformer.
+
+        Processes sequences one at a time due to memory constraints
+        at 196k bp sequence lengths.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
+
+        Returns:
+            Enformer embeddings with shape (batch_size, embedding_dim).
+        """
+        _, _ = cds, splice
+
+        all_embeddings = []
+        for sequence in sequences:
+            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
+            all_embeddings.append(embedding)
+
+        return torch.cat(all_embeddings, dim=0)

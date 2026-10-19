@@ -1,9 +1,32 @@
 from collections.abc import Callable
+import warnings
 
+import numpy as np
 import torch
 
-from mrna_bench import set_model_cache_var, revert_model_cache_var
+from mrna_bench import get_model_weights_path
 from mrna_bench.models.embedding_model import EmbeddingModel
+
+
+def fp8_available(device: torch.device) -> bool:
+    """Check whether FP8 input projections can run on the device.
+
+    Args:
+        device: PyTorch device the model runs on.
+
+    Returns:
+        True if TransformerEngine is installed and the GPU supports FP8
+        (compute capability 8.9 or higher).
+    """
+    if device.type != "cuda":
+        return False
+
+    try:
+        import transformer_engine.pytorch  # noqa: F401
+    except ImportError:
+        return False
+
+    return torch.cuda.get_device_capability(device) >= (8, 9)
 
 
 class Evo2(EmbeddingModel):
@@ -16,22 +39,54 @@ class Evo2(EmbeddingModel):
     nucleotides in length while the larger variants can handle sequences up
     to 1 million nucleotides in length.
 
+    Checkpoints are loaded from HuggingFace ports of the Arc Institute
+    releases, which bundle their own model code.
+
     Link: https://github.com/ArcInstitute/evo2
     """
 
-    max_length = 8_192
-    version_to_middle_layer = {
-        "evo2_40b": "blocks.25.pre_norm",
-        "evo2_7b": "blocks.16.pre_norm",
-        "evo2_40b_base": "blocks.25.pre_norm",
-        "evo2_7b_base": "blocks.16.pre_norm",
-        "evo2_1b_base": "blocks.12.pre_norm"
-    }
+    default_version = "evo2_7b"
+    valid_versions = [
+        "evo2_40b",
+        "evo2_20b",
+        "evo2_7b",
+        "evo2_7b_262k",
+        "evo2_40b_base",
+        "evo2_7b_base",
+        "evo2_1b_base",
+    ]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version.replace("_", "-")
+    # Ported repo and pinned revision for each version.
+    version_to_repo = {
+        "evo2_40b": (
+            "Taykhoom/Evo2-40B-1M",
+            "9d14ad59e9808b98142c178909139314b2d63c2e",
+        ),
+        "evo2_20b": (
+            "Taykhoom/Evo2-20B-1M",
+            "d4b70970a14ce40384fb60f0e914840e8eacd5c9",
+        ),
+        "evo2_7b": (
+            "Taykhoom/Evo2-7B-1M",
+            "98c6c51ed7f2a0b8f7af47c1939a4db3cc093a6f",
+        ),
+        "evo2_7b_262k": (
+            "Taykhoom/Evo2-7B-262K",
+            "fdea0b5a4b9e81ce902b8ac4c4989ced03dc3f65",
+        ),
+        "evo2_40b_base": (
+            "Taykhoom/Evo2-40B-8K",
+            "a8738015ecff63ea951de4cad98b04fa0ec1dda1",
+        ),
+        "evo2_7b_base": (
+            "Taykhoom/Evo2-7B-8K",
+            "56efa143b72aaf6440a32d4face2a9a21a136666",
+        ),
+        "evo2_1b_base": (
+            "Taykhoom/Evo2-1B-8K",
+            "bd8075a818d6dedf9ea6c04416283f39d2bac21c",
+        ),
+    }
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize Evo2.
@@ -39,7 +94,9 @@ class Evo2(EmbeddingModel):
         Args:
             model_version: Version of model used. Valid versions: {
                 "evo2_40b",
+                "evo2_20b",
                 "evo2_7b",
+                "evo2_7b_262k",
                 "evo2_40b_base",
                 "evo2_7b_base",
                 "evo2_1b_base",
@@ -49,78 +106,105 @@ class Evo2(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            old_hf_cache = set_model_cache_var()
-            from evo2 import Evo2
+            from transformers import AutoConfig, AutoModel, AutoTokenizer
         except ImportError:
-            revert_model_cache_var(old_hf_cache)
-            raise ImportError("Evo2 must be installed to use this model.")
+            raise ImportError(
+                "Install base_models optional dependency to use Evo2."
+            )
 
-        self.model = Evo2(model_version)
-        self.tokenizer = self.model.tokenizer.tokenize
+        repo_id, revision = self.version_to_repo[model_version]
+        hub_kwargs = {
+            "revision": revision,
+            "cache_dir": get_model_weights_path(),
+            "trust_remote_code": True,
+        }
 
-        # we will only take the middle and last layer output for simplicity
-        self.embedding_layers = [
-            self.version_to_middle_layer[model_version],
-            'norm'
-        ]
+        config = AutoConfig.from_pretrained(repo_id, **hub_kwargs)
+        if config.use_fp8_input_projections and not fp8_available(device):
+            warnings.warn(
+                "FP8 input projections need TransformerEngine and a GPU with "
+                "compute capability 8.9+; running them in bf16 instead. "
+                "Embeddings will differ from the FP8 reference model."
+            )
+            config.use_fp8_input_projections = False
 
-        if model_version in ["evo2_40b", "evo2_7b"]:
-            self.max_length = 1_000_000
+        self.tokenizer = AutoTokenizer.from_pretrained(repo_id, **hub_kwargs)
+        self.model = AutoModel.from_pretrained(
+            repo_id,
+            config=config,
+            attn_implementation="flash_attention_2",
+            **hub_kwargs,
+        ).to(device)
+        self.max_length = self.tokenizer.model_max_length
 
-        revert_model_cache_var(old_hf_cache)
+        # Embed with the middle block's pre-norm output and the final norm.
+        self.middle_layer_idx = config.num_layers // 2
+        self.middle_block = self.model.backbone.blocks[self.middle_layer_idx]
 
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using Evo2.
+        """Embed a single sequence using Evo2.
 
         Args:
-            sequence: Sequence to be embedded.
+            sequence: Sequence to embed.
+            cds: Unused.
+            splice: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Evo2 embedding of sequence with shape (1 x H).
+            Embedding with shape (1, 2 * hidden_dim).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length)
+        _, _ = cds, splice
 
+        chunks = self.chunk_sequence(sequence, self.max_length)
         embedding_chunks = []
 
-        with torch.inference_mode():
+        for chunk in chunks:
+            toks = self.tokenizer([chunk], return_tensors="pt").to(self.device)
+            outputs = self.model(**toks, output_hidden_states=True)
 
-            for i, chunk in enumerate(chunks):
+            # hidden_states[i] is the input to block i.
+            middle = self.middle_block.pre_norm(
+                outputs.hidden_states[self.middle_layer_idx]
+            )
+            embedding_chunks.append(
+                torch.cat([middle, outputs.last_hidden_state], dim=-1)[0]
+            )
 
-                input_ids = torch.tensor(
-                    self.tokenizer(chunk),
-                    dtype=torch.int
-                ).unsqueeze(0).to(self.device)
+        return agg_fn(
+            torch.cat(embedding_chunks, dim=0), dim=0
+        ).float().unsqueeze(0)
 
-                _, embeddings = self.model(
-                    input_ids=input_ids,
-                    return_embeddings=True,
-                    layer_names=self.embedding_layers
-                )
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using Evo2.
 
-                embedding_chunks.append(embeddings)
+        Processes sequences one at a time: StripedHyena's convolutions don't
+        fully isolate sequences in a padded batch.
 
-        aggregate_embeddings = []
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
 
-        # embedding is of type bfloat16, need to convert to float32
-        # since numpy does not support bfloat16
-        for layer_name in sorted(self.embedding_layers):
-            n_chunks = len(embedding_chunks)
-            layer_chunks = [
-                embedding_chunks[i][layer_name] for i in range(n_chunks)
-            ]
-            agg_chunks = agg_fn(torch.cat(layer_chunks, dim=1), dim=1)
-            aggregate_embeddings.append(agg_chunks.float().cpu())
+        Returns:
+            Evo2 embeddings with shape (batch_size, 2 * hidden_dim).
+        """
+        _, _ = cds, splice
 
-        # concatenate the embeddings across the layers
-        aggregate_embedding = torch.cat(aggregate_embeddings, dim=1)
+        all_embeddings = []
+        for sequence in sequences:
+            all_embeddings.append(self.embed_sequence(sequence, agg_fn=agg_fn))
 
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(self, sequence, cds, splice):
-        """Not supported."""
-        raise NotImplementedError("Six track not possible with Evo2.")
+        return torch.cat(all_embeddings, dim=0)

@@ -22,12 +22,30 @@ def borzoi(device) -> Borzoi:
 
 def test_borzoi_forward(borzoi):
     """Test Borzoi forward pass."""
-    assert borzoi.is_sixtrack is False
-
     text = "ACGT" * 50000
     output = borzoi.embed_sequence(text)
     assert output.shape[0] == 1
     assert output.shape[1] == 1536
+
+
+def test_borzoi_embed_batch(borzoi):
+    """Test batch embed matches individual embeddings."""
+    borzoi.set_inference_mode()
+    sequences = [
+        "ACGT" * 50000,
+        "ACGT" * 60000,
+    ]
+
+    batch_output = borzoi.embed(sequences).cpu()
+    assert batch_output.shape == (2, 1536)
+
+    for i, seq in enumerate(sequences):
+        single_output = borzoi.embed_sequence(seq).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-4
+        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
 
 
 def test_borzoi_padding_logic(borzoi):
@@ -43,8 +61,8 @@ def test_borzoi_padding_logic(borzoi):
 
     mock_model = Mock()
     mock_model.get_embs_after_crop = Mock(side_effect=side_effect)
-    original_models = borzoi.models
-    borzoi.models = [mock_model]
+    original_models = borzoi.model
+    borzoi.model = [mock_model]
 
     try:
         short_seq = "ACGT" * 1000
@@ -62,7 +80,7 @@ def test_borzoi_padding_logic(borzoi):
         first_bin_val = output[0, 0, 0].item()
         assert first_bin_val == expected_start_bin
     finally:
-        borzoi.models = original_models
+        borzoi.model = original_models
 
 
 def test_borzoi_single_vs_ensemble():

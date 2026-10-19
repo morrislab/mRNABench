@@ -21,21 +21,27 @@ def mrnabert(device) -> mRNABERT:
     return mRNABERT("mRNABERT", device)
 
 
-def test_mrnabert_forward_six(mrnabert):
-    """Test mRNABERT forward pass using six track input."""
-    sequence = "GGGAAA" + "ATGGCATAA" + "CCCGGG"
+def make_cds(sequence: str, utr5_len: int, utr3_len: int) -> np.ndarray:
+    """Mark codon starts between the UTRs."""
     cds = np.zeros(len(sequence), dtype=np.int32)
-    cds[6:15:3] = 1
-
-    out = mrnabert.embed_sequence_sixtrack(
-        sequence, cds, np.zeros(len(sequence))
-    )
-
-    assert mrnabert.is_sixtrack is True
-    assert out.shape == (1, 768)
+    cds[utr5_len:len(sequence) - utr3_len:3] = 1
+    return cds
 
 
-def test_mrnabert_four_track_unsupported(mrnabert):
-    """Test mRNABERT rejects four track input."""
-    with pytest.raises(NotImplementedError):
-        mrnabert.embed_sequence("ATG", torch.mean)
+def test_mrnabert_requires_cds(mrnabert):
+    """Test mRNABERT raises error when CDS is not provided."""
+    with pytest.raises(ValueError, match="mRNABERT requires cds"):
+        mrnabert.embed(["ATGATG"])
+
+
+def test_mrnabert_forward_batch(mrnabert):
+    """Test mRNABERT embeds a ragged batch with CDS tracks."""
+    sequences = [
+        "GGGAAA" + "ATGGCATAA" + "CCCGGG",
+        "ACGT" + "ATG" + "GCA" * 10 + "TAA" + "TTTT",
+    ]
+    cds = [make_cds(sequences[0], 6, 6), make_cds(sequences[1], 4, 4)]
+
+    out = mrnabert.embed(sequences, cds=cds)
+
+    assert out.shape == (2, 768)

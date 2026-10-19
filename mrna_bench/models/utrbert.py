@@ -1,3 +1,4 @@
+import json
 from collections.abc import Callable
 
 import numpy as np
@@ -14,63 +15,68 @@ class UTRBERT(EmbeddingModel):
     3'UTR regions of 100k RNA sequences from gencode using MLM. Various
     versions of 3UTRBERT are available with different k-mer sizes (3, 4, 5, 6).
 
-    This wrapper also offers the option to only use the 3'UTR region of the
-    sequence. This can be specified by adding '-utronly' to the end of the
-    model version.
-
     Link: https://github.com/yangyn533/3UTRBERT
 
     This wrapper uses the multimolecule implementation of 3UTRBERT:
     https://huggingface.co/multimolecule/utrbert-3mer
     """
 
-    max_length = 512
+    default_version = "utrbert-6mer"
+    valid_versions = [
+        "utrbert-3mer",
+        "utrbert-4mer",
+        "utrbert-5mer",
+        "utrbert-6mer",
+    ]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    max_length = 512
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize 3UTRBERT.
 
         Args:
             model_version: Version of model to load. Valid versions: {
-                "utrbert-3mer",
-                "utrbert-4mer",
-                "utrbert-5mer",
-                "utrbert-6mer",
-            }. Add '-utronly' to end of version to only use 3'UTR region.
+                "utrbert-3mer", "utrbert-4mer", "utrbert-5mer", "utrbert-6mer"
+            }
             device: PyTorch device to send model to.
         """
         super().__init__(model_version, device)
 
         try:
             from huggingface_hub import hf_hub_download
-            from multimolecule import RnaTokenizer, UtrBertModel
+            from multimolecule import RnaTokenizer, UtrBertConfig, UtrBertModel
             from safetensors.torch import load_file
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use 3UTRBERT."
             )
 
-        if "-utronly" in model_version:
-            self.is_sixtrack = True
-        else:
-            self.is_sixtrack = False
-
+        # The checkpoint's extra_special_tokens is a list (transformers 5
+        # format); transformers 4.57 expects a dict. It only lists <null>.
         self.tokenizer = RnaTokenizer.from_pretrained(
-            "multimolecule/{}".format(model_version.replace("-utronly", "")),
-            cache_dir=get_model_weights_path()
+            "multimolecule/{}".format(model_version),
+            cache_dir=get_model_weights_path(),
+            extra_special_tokens={}
         )
+        # transformers 4.57 logs each loaded config, which builds a default
+        # UtrBertConfig; multimolecule 0.0.8 rejects that without nmers, so
+        # build the config here and pass it in.
+        config_file = hf_hub_download(
+            "multimolecule/{}".format(model_version),
+            "config.json",
+            cache_dir=get_model_weights_path(),
+        )
+        with open(config_file) as f:
+            config = UtrBertConfig(**json.load(f))
         self.model = UtrBertModel.from_pretrained(
-            "multimolecule/{}".format(model_version.replace("-utronly", "")),
+            "multimolecule/{}".format(model_version),
+            config=config,
             cache_dir=get_model_weights_path()
         ).to(device)
 
-        # Checkpoint keys use "model.", not the "utrbert." 0.0.7 expects.
+        # multimolecule expects "utrbert." keys; the checkpoint uses "model.".
         checkpoint_file = hf_hub_download(
-            "multimolecule/{}".format(model_version.replace("-utronly", "")),
+            "multimolecule/{}".format(model_version),
             "model.safetensors",
             cache_dir=get_model_weights_path(),
         )
@@ -85,85 +91,58 @@ class UTRBERT(EmbeddingModel):
                 "Parameters absent from checkpoint: {}".format(missing)
             )
 
-        self.kmer_size = int(model_version.split("-")[1].replace("mer", ""))
-
-    def embed_sequence(
+    def _forward_chunks(
         self,
-        sequence: str,
-        agg_fn: Callable = torch.mean
-    ) -> torch.Tensor:
-        """Embed sequence using 3UTRBERT.
+        chunks: list[str],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Run forward pass on sequence chunks.
 
         Args:
-            sequence: Sequence to be embedded.
-            agg_fn: Function used to aggregate embedding across length dim.
+            chunks: List of sequence chunks to embed.
 
         Returns:
-            3UTRBERT embedding of sequence with shape (1 x 768).
+            Tuple of (hidden_states, pooling_mask) tensors.
         """
-        sequence = sequence.replace("T", "U")
-        tokens = self.tokenizer(sequence, return_tensors="pt")
-        input_ids = list(tokens["input_ids"][0][1:-1])
+        toks = self.tokenizer(
+            chunks,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
 
-        chunks = self.chunk_tokens(input_ids, self.max_length - 2)
+        hidden_states = self.model(**toks).last_hidden_state
 
-        embedding_chunks = []
+        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
 
-        for chunk in chunks:
-            chunk_ids = torch.Tensor([[1] + chunk + [2]])
-            chunk_attn = torch.Tensor([[1] * (len(chunk) + 2)])
+        return hidden_states, pooling_mask
 
-            toks = {
-                "input_ids": chunk_ids.long().to(self.device),
-                "attention_mask": chunk_attn.long().to(self.device)
-            }
-
-            cls_output = self.model(**toks).last_hidden_state[:, 0:1, :]
-            embedding_chunks.append(cls_output)
-
-        embedding = torch.cat(embedding_chunks, dim=1)
-
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
-
-    def embed_sequence_sixtrack(
+    def embed(
         self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
-        agg_fn: Callable = torch.mean
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using only 3'UTR region using 3UTRBERT.
+        """Embed sequences using 3UTRBERT.
 
         Args:
-            sequence: Sequence to be embedded.
-            cds: CDS indices.
+            sequences: List of sequences to embed.
+            cds: Unused.
             splice: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            3UTRBERT embedding of sequence with shape (1 x 768).
+            3UTRBERT embeddings with shape (batch_size, 768).
         """
-        _ = splice  # Unused
-        cds_sequence = self.get_threeprime_utr(sequence, cds)
-        return self.embed_sequence(cds_sequence, agg_fn)
+        _, _ = cds, splice
+        sequences = [s.replace("T", "U") for s in sequences]
 
-    def get_threeprime_utr(self, sequence: str, cds: np.ndarray) -> str:
-        """Get 3'UTR region of sequence.
-
-        Args:
-            sequence: Sequence to extract 3'UTR from.
-            cds: CDS indices.
-
-        Returns:
-            3'UTR region of sequence, or full sequence if no CDS found.
-        """
-        if sum(cds) == 0:
-            return sequence
-
-        cds_end = np.where(cds == 1)[0][-1] + 3
-
-        if len(sequence[cds_end:]) < self.kmer_size:
-            return sequence
-
-        return sequence[cds_end:]
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_length - 2,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )

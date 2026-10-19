@@ -16,17 +16,21 @@ class HelixmRNAWrapper(EmbeddingModel):
     Link: https://github.com/helicalAI/helical
     """
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    default_version = "helix-mrna"
+    valid_versions = ["helix-mrna"]
 
-    def __init__(self, model_version: str, device: torch.device):
+    def __init__(
+        self,
+        model_version: str,
+        device: torch.device,
+        batch_size: int = 32
+    ):
         """Initialize Helix-mRNA model.
 
         Args:
             model_version: Must be "helix-mrna".
             device: PyTorch device to send model to.
+            batch_size: Batch size for inference.
         """
         super().__init__(model_version, device)
 
@@ -36,66 +40,13 @@ class HelixmRNAWrapper(EmbeddingModel):
             raise ImportError("Helix-mRNA missing required dependencies.")
 
         helix_mrna_config = HelixmRNAConfig(
-            batch_size=1,
+            batch_size=batch_size,
             device=device
         )
 
         self.model = HelixmRNA(configurer=helix_mrna_config)
-        self.is_sixtrack = True
 
-    def embed_sequence(
-        self,
-        sequence: str,
-        agg_fn: Callable = torch.mean
-    ) -> torch.Tensor:
-        """Embed sequence using Helix-mRNA.
-
-        Args:
-            sequence: Sequence to embed.
-            agg_fn: Method used to aggregate across sequence dimension.
-
-        Returns:
-            Helix-mRNA representation of sequence with shape (1 x 256).
-        """
-        sequence = sequence.upper().replace("T", "U")
-
-        dataset = self.model.process_data(sequence)
-        rna_embeddings = torch.Tensor(self.model.get_embeddings(dataset))
-
-        return agg_fn(rna_embeddings, dim=1)
-
-    def embed_sequence_sixtrack(
-        self,
-        sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
-        agg_fn: Callable = torch.mean,
-    ) -> torch.Tensor:
-        """Embed sequence using Helix-mRNA.
-
-        Expects binary encoded tracks denoting the beginning of each codon
-        in the CDS and the 5' ends of each splice site.
-
-        Converts sequence to Helix-mRNA vocabulary by inserting an 'E' token
-        at the start of every codon.
-
-        Args:
-            sequence: Sequence to embed.
-            cds: CDS track for sequence to embed.
-            splice: Unused.
-            agg_fn: Method used to aggregate across sequence dimension.
-
-        Returns:
-            Helix-mRNA representation of sequence with shape (1 x 256).
-        """
-        _ = splice  # Unused
-
-        modified_sequence = self.tokenize_cds(sequence, cds)
-        embedding = self.embed_sequence(modified_sequence, agg_fn=agg_fn)
-
-        return embedding
-
-    def tokenize_cds(self, sequence: str, cds: np.ndarray) -> str:
+    def _tokenize_cds(self, sequence: str, cds: np.ndarray) -> str:
         """Convert sequence to Helix-mRNA vocab by inserting 'E' tokens."""
         modified_sequence = ""
         for i in range(len(sequence)):
@@ -104,3 +55,40 @@ class HelixmRNAWrapper(EmbeddingModel):
             modified_sequence += sequence[i]
 
         return modified_sequence
+
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Batch embed sequences using Helix-mRNA.
+
+        If cds is provided, inserts 'E' tokens at the start of each codon
+        to use Helix-mRNA's codon-aware vocabulary.
+
+        Args:
+            sequences: List of sequences to embed.
+            cds: List of binary encodings of first nucleotide of each codon.
+            splice: Unused.
+            agg_fn: Method used to aggregate across sequence dimension.
+
+        Returns:
+            Helix-mRNA embeddings with shape (batch_size, 256).
+        """
+        _ = splice  # Unused
+
+        if cds is not None:
+            sequences = [
+                self._tokenize_cds(seq, c).upper().replace("T", "U")
+                for seq, c in zip(sequences, cds)
+            ]
+        else:
+            sequences = [s.upper().replace("T", "U") for s in sequences]
+
+        dataset = self.model.process_data(sequences)
+        embeddings = torch.Tensor(self.model.get_embeddings(dataset))
+
+        # embeddings shape: (batch, seq_len, hidden)
+        return agg_fn(embeddings, dim=1)

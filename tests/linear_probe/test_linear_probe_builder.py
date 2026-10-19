@@ -125,7 +125,7 @@ def test_build_evaluator(mock_builder: LinearProbeBuilder):
 
 def test_use_persister(mock_builder: LinearProbeBuilder):
     """Check that use_persister sets persister."""
-    assert hasattr(mock_builder, "persister_flag") is False
+    assert mock_builder.persister_flag is False
 
     mock_builder.use_persister()
     assert mock_builder.persister_flag is True
@@ -134,6 +134,7 @@ def test_use_persister(mock_builder: LinearProbeBuilder):
 def test_build(mock_builder: LinearProbeBuilder):
     """Check that build returns a LinearProbe instance."""
     mock_builder.embeddings = Mock()
+    mock_builder.data_df = Mock(columns=["target"])
     mock_builder.model_short_name = "test_model"
     mock_builder.target_col = "target"
     mock_builder.task = "task"
@@ -159,3 +160,11 @@ def test_build(mock_builder: LinearProbeBuilder):
             mock_builder.use_persister()
             mock_builder.build()
             mock_persister.assert_called_once()
+
+
+def test_builder_sets_is_vep_flag(mock_dataset : BenchmarkDataset):
+    """Test that LinearProbeBuilder reads is_vep from dataset metadata."""
+    mock_dataset.metadata.vep = True
+    builder = LinearProbeBuilder(mock_dataset)
+
+    assert builder.is_vep is True

@@ -1,9 +1,9 @@
 from collections.abc import Callable
 
+import numpy as np
 import torch
-from torch import nn
 
-from mrna_bench import set_model_cache_var, revert_model_cache_var
+from mrna_bench import get_model_weights_path
 from mrna_bench.models import EmbeddingModel
 
 
@@ -15,16 +15,38 @@ class Evo1(EmbeddingModel):
     byte level resolution. Owing to its StripedHyena backbone, it has a near
     linear scaling of compute and memory relative to its context window.
 
+    Checkpoints are loaded from HuggingFace ports of the original releases,
+    which bundle their own model code.
+
+    Note: StripedHyena's convolutions don't fully isolate sequences in batched
+    mode even with padding mask. This implementation uses single-sequence
+    processing for consistency.
 
     Link: https://github.com/evo-design/evo
     """
 
-    max_length = 8_192
+    default_version = "evo-1.5-8k-base"
+    valid_versions = [
+        "evo-1.5-8k-base",
+        "evo-1-8k-base",
+        "evo-1-131k-base",
+    ]
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    # Ported repo and pinned revision for each version.
+    version_to_repo = {
+        "evo-1.5-8k-base": (
+            "Taykhoom/Evo1-1.5-7B-8K",
+            "5b63c84c2b8473d425379dad5becb1411e19c782",
+        ),
+        "evo-1-8k-base": (
+            "Taykhoom/Evo1-1-7B-8K",
+            "ae7474e07803c37f2e5111f0a054669902e7dc35",
+        ),
+        "evo-1-131k-base": (
+            "Taykhoom/Evo1-1-7B-131K",
+            "f997f205f1a21fd4580a97562b44760317b55978",
+        ),
+    }
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize Evo1.
@@ -40,65 +62,85 @@ class Evo1(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
-            old_hf_cache = set_model_cache_var()
-            from evo import Evo
+            from transformers import AutoModel, AutoTokenizer
         except ImportError:
-            revert_model_cache_var(old_hf_cache)
-            raise ImportError("Evo must be installed to use this model.")
+            raise ImportError(
+                "Install base_models optional dependency to use Evo1."
+            )
 
-        evo_model = Evo(model_version)
-        self.model = evo_model.model.to(device)
-        self.tokenizer = evo_model.tokenizer.tokenize
+        repo_id, revision = self.version_to_repo[model_version]
+        hub_kwargs = {
+            "revision": revision,
+            "cache_dir": get_model_weights_path(),
+            "trust_remote_code": True,
+        }
 
-        class IdentityEmbedding(nn.Module):
-            def unembed(self, u):
-                return u
-
-        # need to return the embedding, not logits
-        self.model.unembed = IdentityEmbedding()
-
-        if model_version == "evo-1-131k-base":
-            self.max_length = 131_072
-
-        revert_model_cache_var(old_hf_cache)
+        self.tokenizer = AutoTokenizer.from_pretrained(repo_id, **hub_kwargs)
+        self.model = AutoModel.from_pretrained(
+            repo_id,
+            attn_implementation="flash_attention_2",
+            **hub_kwargs,
+        ).to(device)
+        self.max_length = self.tokenizer.model_max_length
 
     def embed_sequence(
         self,
         sequence: str,
-        agg_fn: Callable = torch.mean
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using Evo1.
+        """Embed a single sequence using Evo1.
 
         Args:
-            sequence: Sequence to be embedded.
+            sequence: Sequence to embed.
+            cds: Unused.
+            splice: Unused.
             agg_fn: Function used to aggregate embedding across length dim.
 
         Returns:
-            Evo1 embedding of sequence with shape (1 x H).
+            Evo1 embedding with shape (1, 4096).
         """
-        chunks = self.chunk_sequence(sequence, self.max_length)
+        _, _ = cds, splice
 
+        chunks = self.chunk_sequence(sequence, self.max_length)
         embedding_chunks = []
 
-        with torch.inference_mode():
+        for chunk in chunks:
+            toks = self.tokenizer([chunk], return_tensors="pt").to(self.device)
+            outputs = self.model(**toks)
+            embedding_chunks.append(outputs.last_hidden_state[0])
 
-            for i, chunk in enumerate(chunks):
+        return agg_fn(
+            torch.cat(embedding_chunks, dim=0), dim=0
+        ).float().unsqueeze(0)
 
-                input_ids = torch.tensor(
-                    self.tokenizer(chunk),
-                    dtype=torch.int
-                ).unsqueeze(0).to(self.device)
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences using Evo1.
 
-                # (batch, length, embed dim)
-                embeddings, _ = self.model(input_ids)
+        Processes sequences one at a time due to StripedHyena's architectural
+        limitation with padding (convolutions don't fully isolate sequences).
 
-                embedding_chunks.append(embeddings)
+        Args:
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate embedding across length dim.
 
-        embedding = torch.cat(embedding_chunks, dim=1)
+        Returns:
+            Evo1 embeddings with shape (batch_size, 4096).
+        """
+        _, _ = cds, splice
 
-        aggregate_embedding = agg_fn(embedding, dim=1)
-        return aggregate_embedding
+        all_embeddings = []
+        for sequence in sequences:
+            embedding = self.embed_sequence(sequence, agg_fn=agg_fn)
+            all_embeddings.append(embedding)
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not possible with Evo1.")
+        return torch.cat(all_embeddings, dim=0)

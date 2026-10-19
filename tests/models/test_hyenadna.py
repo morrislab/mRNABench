@@ -1,7 +1,7 @@
 import pytest
 
 pytest.importorskip("torch")
-
+pytest.importorskip("transformers")
 import torch
 from mrna_bench.models.hyenadna import HyenaDNA
 
@@ -14,15 +14,59 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def hyenadna(device) -> HyenaDNA:
+def model(device) -> HyenaDNA:
     """Get HyenaDNA model."""
     return HyenaDNA("hyenadna-small-32k-seqlen-hf", device)
 
 
-def test_hyena_forward(hyenadna):
+def test_hyenadna_forward(model):
     """Test HyenaDNA forward pass."""
-    assert hyenadna.is_sixtrack is False
-    assert hyenadna.model.training is False
-
-    out = hyenadna.embed_sequence("ATGATG")
+    model.set_inference_mode()
+    out = model.embed_sequence("ATGATG")
     assert out.shape == (1, 256)
+
+
+def test_hyenadna_max_length(device):
+    """Test HyenaDNA max_length is set correctly."""
+    model_32k = HyenaDNA("hyenadna-small-32k-seqlen-hf", device)
+    assert model_32k.max_length == 32000
+
+
+def test_hyenadna_embed_batch(model):
+    """Test batch embed matches individual embeddings."""
+    model.set_inference_mode()
+    sequences = [
+        "ATGATG" * 10,
+        "ATGATG" * 50,
+        "ATGATG" * 100,
+    ]
+
+    batch_output = model.embed(sequences).cpu()
+    assert batch_output.shape == (3, 256)
+
+    for i, seq in enumerate(sequences):
+        single_output = model.embed_sequence(seq).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-4
+        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
+
+
+def test_hyenadna_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
+
+    out = model.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
+
+    loss = out.sum()
+    loss.backward()
+
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
+
+    assert has_grad, "No gradients flowed to model parameters"

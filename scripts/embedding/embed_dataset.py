@@ -31,7 +31,7 @@ if __name__ == "__main__":
 
     dataset = load_dataset(
         dataset_name=args.dataset_name,
-        force_redownload=args.force_recompute
+        force_redownload_hf=args.force_recompute
     )
 
     out_fn = get_embedding_filepath(

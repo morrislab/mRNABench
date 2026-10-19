@@ -1,19 +1,42 @@
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from typing import ClassVar, Protocol, runtime_checkable
 
 import numpy as np
 import torch
 
 
-class EmbeddingModel(ABC):
+@runtime_checkable
+class SupportsEmbedding(Protocol):
+    """Protocol defining the interface for embedding models."""
+
+    device: torch.device
+    model: torch.nn.Module
+
+    def embed(
+        self,
+        sequences: list[str],
+        cds: list[np.ndarray] | None,
+        splice: list[np.ndarray] | None,
+        agg_fn: Callable,
+    ) -> torch.Tensor:
+        """Embed sequences, optionally using cds/splice tracks."""
+        ...
+
+
+class EmbeddingModel(SupportsEmbedding, ABC):
     """Wrapper class for embedding models used to represent sequences."""
 
+    default_version: ClassVar[str]
+    valid_versions: ClassVar[list[str]]
+    model: torch.nn.Module
+
     @staticmethod
-    @abstractmethod
     def get_model_short_name(model_version: str) -> str:
         """Retrieve shortened name for model version.
 
-        Should not contain any underscores. Represent spaces with '-'.
+        Override in subclass if the version name needs custom transformation.
+        By default, replaces underscores with hyphens.
 
         Args:
             model_version: Version of model to fetch short name for.
@@ -21,7 +44,7 @@ class EmbeddingModel(ABC):
         Returns:
             Shortened name of model version.
         """
-        pass
+        return model_version.replace("_", "-")
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize EmbeddingModel.
@@ -29,42 +52,59 @@ class EmbeddingModel(ABC):
         Args:
             model_version: Version of embedding model to use.
             device: PyTorch device to send embedding model.
+
+        Raises:
+            ValueError: If model_version is not in valid_versions.
         """
+        if model_version not in self.valid_versions:
+            raise ValueError(
+                "Invalid model version: {}. Valid versions: {}".format(
+                    model_version, self.valid_versions
+                )
+            )
         self.model_version = model_version
         self.short_name = self.__class__.get_model_short_name(model_version)
         self.device = device
 
-        self.is_sixtrack = False
+    def set_inference_mode(self):
+        """Set model to inference mode with gradients disabled."""
+        self.model.eval()
+        torch.set_grad_enabled(False)
 
-        print("Disabling autograd for inference.")
-        torch.autograd.set_grad_enabled(False)
+    def set_train_mode(self):
+        """Set model to training mode with gradients enabled."""
+        self.model.train()
+        torch.set_grad_enabled(True)
 
     @abstractmethod
-    def embed_sequence(
+    def embed(
         self,
-        sequence: str,
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence.
+        """Embed sequences, optionally using cds/splice tracks.
 
         Args:
-            sequence: String of nucleotides to embed (uses DNA bases).
+            sequences: List of nucleotide sequences to embed (uses DNA bases).
+            cds: List of binary encodings of first nucleotide of each codon.
+            splice: List of binary encodings of splice site locations.
             agg_fn: Method used to aggregate across sequence dimension.
 
         Returns:
-            Embedded sequence with shape (1 x H).
+            Embedded sequences with shape (batch_size x H).
         """
         pass
 
-    @abstractmethod
-    def embed_sequence_sixtrack(
+    def embed_sequence(
         self,
         sequence: str,
-        cds: np.ndarray,
-        splice: np.ndarray,
+        cds: np.ndarray | None = None,
+        splice: np.ndarray | None = None,
         agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence incorporating splice and cds information.
+        """Legacy wrapper for embed with a single sequence.
 
         Args:
             sequence: String of nucleotides to embed (uses DNA bases).
@@ -75,7 +115,9 @@ class EmbeddingModel(ABC):
         Returns:
             Embedded sequence with shape (1 x H).
         """
-        pass
+        cds_list = [cds] if cds is not None else None
+        splice_list = [splice] if splice is not None else None
+        return self.embed([sequence], cds_list, splice_list, agg_fn)
 
     def chunk_sequence(self, sequence: str, chunk_length: int) -> list[str]:
         """Split sequence into chunks of specified length with given overlap.
@@ -114,3 +156,54 @@ class EmbeddingModel(ABC):
             chunks.append(chunk)
 
         return chunks
+
+    def _embed_with_chunking(
+        self,
+        sequences: list[str],
+        max_chunk_length: int,
+        embed_fn: Callable[[list[str]], tuple[torch.Tensor, torch.Tensor]],
+        agg_fn: Callable = torch.mean,
+    ) -> torch.Tensor:
+        """Embed sequences with chunking and reassembly.
+
+        Handles the common pattern of chunking long sequences, running a
+        single forward pass, and reassembling per-sequence embeddings.
+
+        Args:
+            sequences: List of sequences to embed.
+            max_chunk_length: Maximum chunk length in nucleotides.
+            embed_fn: Function that takes a list of sequence chunks and returns
+                (hidden_states, pooling_mask) tensors. The pooling_mask
+                indicates which tokens to include in aggregation
+                (excludes padding and special tokens like CLS/SEP/EOS).
+            agg_fn: Function to aggregate token embeddings (default: mean).
+
+        Returns:
+            Embeddings with shape (num_sequences, hidden_dim).
+        """
+        chunks = []
+        chunk_counts = []
+
+        for seq in sequences:
+            seq_chunks = self.chunk_sequence(seq, max_chunk_length)
+            chunks.extend(seq_chunks)
+            chunk_counts.append(len(seq_chunks))
+
+        hidden_states, pooling_mask = embed_fn(chunks)
+
+        seq_embeddings = []
+        chunk_ptr = 0
+
+        for num_chunks in chunk_counts:
+            seq_hidden = hidden_states[chunk_ptr:chunk_ptr + num_chunks]
+            seq_mask = pooling_mask[chunk_ptr:chunk_ptr + num_chunks]
+
+            hidden = seq_hidden.reshape(-1, seq_hidden.shape[-1])
+            mask = seq_mask.reshape(-1).bool()
+
+            masked_hidden = hidden[mask]
+            seq_embeddings.append(agg_fn(masked_hidden, dim=0))
+
+            chunk_ptr += num_chunks
+
+        return torch.stack(seq_embeddings, dim=0)
