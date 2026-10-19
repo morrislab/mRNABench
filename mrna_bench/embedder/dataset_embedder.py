@@ -266,10 +266,12 @@ class DatasetEmbedder:
             idx = 0
             for file_path in processed_files_paths:
                 with h5py.File(file_path, "r") as f:
-                    for _, emb in f["embeddings"].items():
+                    # h5py lists entries by name, so "10" comes before "2".
+                    grp = f["embeddings"]
+                    for name in sorted(grp, key=int):
                         out_grp.create_dataset(
                             str(idx),
-                            data=emb[:],
+                            data=grp[name][:],
                             compression="gzip"
                         )
                         idx += 1

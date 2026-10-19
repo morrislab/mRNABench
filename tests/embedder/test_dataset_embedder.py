@@ -152,6 +152,26 @@ def test_merged_chunks_keep_config(tmp_path):
     )
 
 
+def test_merged_ragged_chunks_keep_row_order(tmp_path):
+    """Merged ragged chunks keep row order past row 9 of a chunk."""
+    dataset = Mock(dataset_name="mockdata", embedding_dir=str(tmp_path))
+    dataset.data_df = pd.DataFrame({"row": range(24)})
+    for i in range(2):
+        chunk = DatasetEmbedder(
+            mock_model(), dataset, d_chunk_ind=i, d_num_chunks=2,
+            ragged_out=True,
+        )
+        rows = chunk.get_dataset_chunk()["row"]
+        chunk.persist_embeddings([torch.full((1, 2), float(r)) for r in rows])
+    chunk.merge_embeddings()
+
+    path = find_embedding_file(str(tmp_path), "mockmodel", "mockdata")
+    with h5py.File(path, "r") as merged:
+        grp = merged["embeddings"]
+        values = [float(grp[str(i)][0, 0]) for i in range(len(grp))]
+    assert values == list(range(24))
+
+
 def test_embedder_rejects_plain_functions():
     """Pooling must be a Pooling so it can be stored with the embeddings."""
     with pytest.raises(TypeError, match="Pooling"):
