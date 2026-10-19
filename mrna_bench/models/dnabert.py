@@ -1,5 +1,6 @@
 from collections.abc import Callable
 
+import numpy as np
 import torch
 
 from mrna_bench import get_model_weights_path
@@ -10,17 +11,15 @@ class DNABERT2(EmbeddingModel):
     """Inference wrapper for DNA-BERT2.
 
     DNABERT2 is a transformer-based DNA foundation model that uses BPE and
-    rotary positional encoding among other modern transformer improvements
+    ALiBi positional encoding among other modern transformer improvements
     to allow for efficient inference. DNABERT2 is pre-trained using MLM
     on multi-species genomic dataset.
 
     Link: https://github.com/MAGICS-LAB/DNABERT_2
     """
 
-    @staticmethod
-    def get_model_short_name(model_version: str) -> str:
-        """Get shortened name of model version."""
-        return model_version
+    default_version = "dnabert2"
+    valid_versions = ["dnabert2"]
 
     def __init__(self, model_version: str, device: torch.device):
         """Initialize DNABERT2 inference wrapper.
@@ -40,9 +39,6 @@ class DNABERT2(EmbeddingModel):
                 "Install base_models optional_dependency to use DNABERT2."
             )
 
-        if model_version != "dnabert2":
-            raise ValueError("Only dnabert2 model version available.")
-
         self.tokenizer = AutoTokenizer.from_pretrained(
             "quietflamingo/dnabert2-no-flashattention",
             trust_remote_code=True,
@@ -51,7 +47,8 @@ class DNABERT2(EmbeddingModel):
 
         config = BertConfig.from_pretrained(
             "quietflamingo/dnabert2-no-flashattention",
-            cache_dir=get_model_weights_path()
+            cache_dir=get_model_weights_path(),
+            add_pooling_layer=False
         )
 
         self.model = AutoModel.from_pretrained(
@@ -65,27 +62,48 @@ class DNABERT2(EmbeddingModel):
         # where additional non-DNABERT loading occurs.
         AutoModel._model_mapping.register(BertConfig, BertModel, exist_ok=True)
 
-    def embed_sequence(
+    def embed(
         self,
-        sequence: str,
-        agg_fn: Callable = torch.mean
+        sequences: list[str],
+        cds: list[np.ndarray] | None = None,
+        splice: list[np.ndarray] | None = None,
+        agg_fn: Callable = torch.mean,
     ) -> torch.Tensor:
-        """Embed sequence using DNABERT2.
+        """Embed sequences using DNABERT2.
+
+        ALiBi positional encoding allows for arbitrary sequence lengths.
 
         Args:
-            sequence: Sequence to embed.
-            agg_fn: Method used to aggregate across sequence dimension.
+            sequences: List of sequences to embed.
+            cds: Unused.
+            splice: Unused.
+            agg_fn: Function used to aggregate token embeddings.
 
         Returns:
-            DNABERT2 representation of sequence with shape (1 x 768).
+            Embeddings with shape (batch_size, 768).
         """
-        inputs = self.tokenizer(sequence, return_tensors="pt")["input_ids"]
-        inputs = inputs.to(self.device)
-        hidden_states = self.model(inputs)[0]
+        _, _ = cds, splice
 
-        embedding_mean = agg_fn(hidden_states, dim=1)
-        return embedding_mean
+        toks = self.tokenizer(
+            sequences,
+            return_tensors="pt",
+            padding=True,
+        ).to(self.device)
 
-    def embed_sequence_sixtrack(self, sequence, cds, splice, agg_fn):
-        """Not supported."""
-        raise NotImplementedError("Six track not available for DNABERT.")
+        hidden_states = self.model(**toks)[0]
+
+        # Build pooling mask excluding CLS (pos 0) and SEP (last real pos)
+        pooling_mask = toks["attention_mask"].clone()
+        pooling_mask[:, 0] = 0
+        seq_lengths = toks["attention_mask"].sum(dim=1).long()
+        for idx in range(pooling_mask.size(0)):
+            pooling_mask[idx, seq_lengths[idx] - 1] = 0
+
+        # Apply masked aggregation per sequence
+        embeddings = []
+        for i in range(hidden_states.size(0)):
+            mask = pooling_mask[i].bool()
+            masked_hidden = hidden_states[i][mask]
+            embeddings.append(agg_fn(masked_hidden, dim=0))
+
+        return torch.stack(embeddings, dim=0)

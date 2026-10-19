@@ -1,8 +1,6 @@
-from collections import namedtuple
-
 import pytest
-from unittest.mock import patch
 
+pytest.importorskip("torch")
 import torch
 
 from mrna_bench.models.rnamsm import RNAMSM
@@ -16,60 +14,66 @@ def device() -> torch.device:
 
 
 @pytest.fixture(scope="module")
-def rnamsm(device) -> RNAMSM:
+def model(device) -> RNAMSM:
     """Get RNA-MSM model."""
     return RNAMSM("rnamsm", device)
 
 
-def test_rnamsm_forward(rnamsm):
-    """Test RNA-MSM forward pass."""
-    assert rnamsm.is_sixtrack is False
-
-    text = "ACTTGGCCA"
-    output = rnamsm.embed_sequence(text)
+def test_rnamsm_forward(model):
+    """Test RNA-MSM initialization and forward pass."""
+    model.set_inference_mode()
+    text = "ACUUGGCCA"
+    output = model.embed([text]).cpu()
     assert output.shape == (1, 768)
 
 
-def test_rnamsm_forward_conversion(rnamsm):
-    """Test RNA-MSM forward pass converts T->U."""
-    text = "ACTTGGCCA"
+def test_rnamsm_forward_dna_input(model):
+    """Test RNA-MSM forward pass with DNA input (T instead of U)."""
+    model.set_inference_mode()
+    text_rna = "ACUUGGCCA"
+    text_dna = "ACTTGGCCA"
 
-    with patch.object(
-        rnamsm,
-        "chunk_sequence",
-        side_effect=rnamsm.chunk_sequence
-    ) as mock:
-        rnamsm.embed_sequence(text)
-        mock.assert_called_once_with("ACUUGGCCA", rnamsm.max_length - 2)
+    output_rna = model.embed([text_rna]).cpu()
+    output_dna = model.embed([text_dna]).cpu()
+
+    assert torch.allclose(output_rna, output_dna, atol=1e-5)
 
 
-def test_rnamsm_forward_chunked(rnamsm):
-    """Test RNA-MSM forward pass for chunked inputs."""
-    input_length = rnamsm.max_length + 100
-    text = "A" * input_length
+def test_rnamsm_embed_batch(model):
+    """Test batch embed matches individual embeddings."""
+    model.set_inference_mode()
+    sequences = [
+        "ACUUGGCCA",
+        "GGCCAAUUGG",
+        "UUUAAAGGGCCC",
+    ]
 
-    # Assume only two chunks. Adding constant of 4 accounts for sep/cls for
-    # both first and second chunk.
-    ground_truth_vals = torch.mean(torch.cat([
-        torch.arange(rnamsm.max_length).float(),
-        torch.arange((input_length - rnamsm.max_length) + 4).float()
-    ]))
+    batch_output = model.embed(sequences).cpu()
+    assert batch_output.shape == (3, 768)
 
-    def side_effect(input_ids, attention_mask):
-        if mock_forward.call_count == 1:
-            assert input_ids.shape[1] == rnamsm.max_length
-        else:
-            assert input_ids.shape[1] == input_length - rnamsm.max_length + 4
+    for i, seq in enumerate(sequences):
+        single_output = model.embed([seq]).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-5
+        ), "Mismatch at sequence {}".format(i)
 
-        pos = torch.arange(input_ids.shape[1]).unsqueeze(0).unsqueeze(-1)
-        pos = pos.float().repeat(1, 1, 768)
 
-        MockOut = namedtuple("MockOut", ["last_hidden_state"])
-        return MockOut(pos)
+def test_rnamsm_gradient_flow(model):
+    """Test that gradients can flow through the model."""
+    model.set_train_mode()
 
-    with patch("multimolecule.RnaMsmModel.forward") as mock_forward:
-        mock_forward.side_effect = side_effect
+    out = model.embed(["ATGATG"])
+    assert out.requires_grad, "Output should require gradients"
 
-        output = rnamsm.embed_sequence(text, agg_fn=torch.mean).cpu()
+    loss = out.sum()
+    loss.backward()
 
-        assert torch.allclose(output, ground_truth_vals)
+    has_grad = False
+    for param in model.model.parameters():
+        if param.grad is not None and param.grad.abs().sum() > 0:
+            has_grad = True
+            break
+
+    assert has_grad, "No gradients flowed to model parameters"

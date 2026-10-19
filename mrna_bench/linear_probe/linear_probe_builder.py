@@ -14,6 +14,8 @@ from mrna_bench.linear_probe.evaluator import LinearProbeEvaluator
 class LinearProbeBuilder:
     """Factory class for LinearProbeCore."""
 
+    _DEFAULT_SPLIT_RATIOS = (0.7, 0.15, 0.15)
+
     @staticmethod
     def load_persisted_embeddings(
         embedding_dir: str,
@@ -74,8 +76,57 @@ class LinearProbeBuilder:
         self.dataset = dataset
         self.data_df = dataset.data_df
 
-        # Set default values
-        self.target_col = "target"
+        metadata = getattr(dataset, "metadata", None)
+
+        self.target_col = self._resolve_default_target_col(metadata)
+        self.task = self._resolve_default_task(metadata)
+        self.split_type = self._resolve_default_split_type(metadata)
+        self.eval_all_splits = False
+
+        self.model_short_name: str | None = None
+        self.embeddings: np.ndarray | None = None
+        self.persister_flag = False
+
+        self.splitter = self._build_default_splitter(metadata)
+        self.evaluator = LinearProbeEvaluator(self.task)
+
+    @staticmethod
+    def _resolve_default_target_col(metadata: object | None) -> str:
+        if metadata is not None:
+            target_cols = getattr(metadata, "target_col", None)
+            if isinstance(target_cols, list) and len(target_cols) > 0:
+                return target_cols[0]
+        return "target"
+
+    @staticmethod
+    def _resolve_default_task(metadata: object | None) -> str:
+        if metadata is not None:
+            tasks = getattr(metadata, "task", None)
+            if isinstance(tasks, list):
+                for task in tasks:
+                    if task in LinearProbeEvaluator.valid_tasks:
+                        return task
+        return "regression"
+
+    @staticmethod
+    def _resolve_default_split_type(metadata: object | None) -> str:
+        if metadata is not None:
+            split_type = getattr(metadata, "default_split_type", None)
+            if isinstance(split_type, str) and split_type in SPLIT_CATALOG:
+                return split_type
+        return "default"
+
+    def _build_default_splitter(self, metadata: object | None):
+        split_args = {}
+        if self.split_type == "homology" and metadata is not None:
+            species = getattr(metadata, "species", None)
+            if isinstance(species, str) and species != "":
+                split_args["species"] = species
+
+        return SPLIT_CATALOG[self.split_type](
+            self._DEFAULT_SPLIT_RATIOS,
+            **split_args
+        )
 
     def fetch_embedding_by_model_instance(
         self,
@@ -136,6 +187,11 @@ class LinearProbeBuilder:
         embedding_name = embedding_name.replace(".npz", "")
 
         emb_fn_arr = embedding_name.split("_")
+
+        if len(emb_fn_arr) < 2:
+            raise ValueError(
+                "Invalid embedding filename format: {}".format(embedding_name)
+            )
 
         self.model_short_name = emb_fn_arr[1]
 
@@ -227,15 +283,61 @@ class LinearProbeBuilder:
         self.persister_flag = True
         return self
 
+    def validate(self) -> list[str]:
+        """Return a list of missing required fields before build."""
+        missing = []
+        if self.embeddings is None:
+            missing.append(
+                "embeddings (call fetch_embedding_by_model_* / *_filename "
+                "/ *_embedding_instance)"
+            )
+
+        if self.target_col not in self.data_df.columns:
+            missing.append(
+                "target_col '{}' (not found in dataset columns)".format(
+                    self.target_col
+                )
+            )
+
+        if self.persister_flag and self.model_short_name is None:
+            missing.append(
+                "model_short_name (required when persister is enabled)"
+            )
+
+        return missing
+
+    def status(self) -> dict[str, object]:
+        """Expose current builder state for easier interactive use."""
+        return {
+            "dataset_name": self.dataset.dataset_name,
+            "task": self.task,
+            "target_col": self.target_col,
+            "split_type": self.split_type,
+            "eval_all_splits": self.eval_all_splits,
+            "has_embeddings": self.embeddings is not None,
+            "model_short_name": self.model_short_name,
+            "persister_enabled": self.persister_flag,
+            "missing": self.validate(),
+        }
+
     def build(self) -> LinearProbe:
         """Build LinearProbe instance.
 
         Returns:
             LinearProbe instance with set parameters.
         """
+        missing = self.validate()
+        if len(missing) > 0:
+            raise ValueError(
+                "Cannot build LinearProbe; missing configuration: {}".format(
+                    "; ".join(missing)
+                )
+            )
+
         self.persister: LinearProbePersister | None = None
 
-        if hasattr(self, "persister_flag") and self.persister_flag:
+        if self.persister_flag:
+            assert self.model_short_name is not None
             self.persister = LinearProbePersister(
                 self.dataset,
                 self.model_short_name,

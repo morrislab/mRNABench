@@ -22,12 +22,30 @@ def enformer(device) -> Enformer:
 
 def test_enformer_forward(enformer):
     """Test Enformer forward pass."""
-    assert enformer.is_sixtrack is False
-
     text = "ACGT" * 25000
     output = enformer.embed_sequence(text)
     assert output.shape[0] == 1
     assert output.shape[1] == 3072
+
+
+def test_enformer_embed_batch(enformer):
+    """Test batch embed matches individual embeddings."""
+    enformer.set_inference_mode()
+    sequences = [
+        "ACGT" * 25000,
+        "ACGT" * 30000,
+    ]
+
+    batch_output = enformer.embed(sequences).cpu()
+    assert batch_output.shape == (2, 3072)
+
+    for i, seq in enumerate(sequences):
+        single_output = enformer.embed_sequence(seq).cpu()
+        assert torch.allclose(
+            batch_output[i:i + 1],
+            single_output,
+            atol=1e-4
+        ), "Mismatch at sequence {} (len {})".format(i, len(seq))
 
 
 def test_enformer_padding_logic(enformer):

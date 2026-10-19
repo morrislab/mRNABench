@@ -1,17 +1,20 @@
 import numpy as np
 import pandas as pd
 
-from mrna_bench.datasets import BenchmarkDataset
+from mrna_bench.datasets.benchmark_dataset import (
+    BenchmarkDataset,
+    DatasetMetadata,
+)
 from mrna_bench.utils import download_file
 from mrna_bench.datasets.dataset_utils import (
     create_sequence,
     create_cds_track,
-    create_splice_track
+    create_splice_track,
 )
 
+
 RNA_LOC_FAZAL_URL = (
-    "https://ars.els-cdn.com/content/image/"
-    "1-s2.0-S0092867419305550-mmc3.xlsx"
+    "https://ars.els-cdn.com/content/image/1-s2.0-S0092867419305550-mmc3.xlsx"
 )
 
 
@@ -25,17 +28,29 @@ class RNALocalizationFazal(BenchmarkDataset):
     and process it into a format compatible with the rest of mRNAbench.
     """
 
-    def __init__(self, force_redownload: bool = False):
+    METADATA = DatasetMetadata(
+        dataset_name="rna-loc-fazal",
+        species="human",
+        task=["multilabel"],
+        target_col=["target"],
+        default_split_type="homology",
+        benchmark_set="core",
+    )
+
+    def __init__(
+        self,
+        force_redownload_hf: bool = False,
+        force_rebuild_raw: bool = False,
+    ):
         """Initialize RNALocalizationFazal dataset.
 
         Args:
-            force_redownload: Force raw data download even if pre-existing.
+            force_redownload_hf: Force redownload from HuggingFace.
+            force_rebuild_raw: Force rebuild from raw data source.
         """
         super().__init__(
-            dataset_name="rna-loc-fazal",
-            species="human",
-            force_redownload=force_redownload,
-            hf_url=None
+            force_redownload_hf=force_redownload_hf,
+            force_rebuild_raw=force_rebuild_raw,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
@@ -46,6 +61,7 @@ class RNALocalizationFazal(BenchmarkDataset):
         """
         try:
             import genome_kit as gk
+
             genome = gk.Genome("gencode.v29")
         except ImportError:
             print(
@@ -57,37 +73,33 @@ class RNALocalizationFazal(BenchmarkDataset):
         print("Downloading raw data...")
         self.raw_data_path = download_file(
             RNA_LOC_FAZAL_URL,
-            self.raw_data_dir
+            self.raw_data_dir,
         )
 
         data = pd.read_excel(
             self.raw_data_path,
-            sheet_name='Gene lists and orphans'
+            sheet_name="Gene lists and orphans",
         )
 
-        data_cols = [
-            col for col in data.columns if 'log2FC' in col
-        ]
+        data_cols = [col for col in data.columns if "log2FC" in col]
 
-        data = data[['Ensembl_Gene', 'Common_Gene'] + data_cols]
+        data = data[["Ensembl_Gene", "Common_Gene"] + data_cols]
 
         # reverse log2FC and get proportion in compartments
         data[data_cols] = data[data_cols].apply(np.exp2)
-        data[data_cols] = data[data_cols].apply(
-            lambda x: x / x.sum(), axis=1
-        )
+        data[data_cols] = data[data_cols].apply(lambda x: x / x.sum(), axis=1)
 
         # create target array
-        data['target'] = data[data_cols].apply(lambda x: np.array(x), axis=1)
+        data["target"] = data[data_cols].apply(lambda x: np.array(x), axis=1)
 
         data.drop(columns=data_cols, inplace=True)
 
-        id_to_gene = {g.id.split('.')[0]: g for g in genome.genes}
+        id_to_gene = {g.id.split(".")[0]: g for g in genome.genes}
 
         df_data = []
 
         for index, row in data.iterrows():
-            gene: gk.Gene = id_to_gene.get(row['Ensembl_Gene'])
+            gene: gk.Gene = id_to_gene.get(row["Ensembl_Gene"])
 
             appris_transcripts = genome.appris_transcripts(gene)
 
@@ -103,15 +115,17 @@ class RNALocalizationFazal(BenchmarkDataset):
             splice = create_splice_track(principal)
             seq = create_sequence(principal, genome).upper()
 
-            df_data.append({
-                "transcript_id": principal.id,
-                "gene": gene.name,
-                "chromosome": principal.chrom.strip("chr"),
-                "sequence": seq,
-                "cds": cds,
-                "splice": splice,
-                "target": (row['target'] >= 0.125).astype(int),
-            })
+            df_data.append(
+                {
+                    "transcript_id": principal.id,
+                    "gene": gene.name,
+                    "chromosome": principal.chrom.strip("chr"),
+                    "sequence": seq,
+                    "cds": cds,
+                    "splice": splice,
+                    "target": (row["target"] >= 0.125).astype(int),
+                }
+            )
 
         df = pd.DataFrame(df_data)
 
