@@ -2,51 +2,50 @@
 
 ## Ietswaart RNA lifecycle dataset processing
 
-This directory contains the intermediate transcript tables used by mRNABench
-to construct `rna-lifecycle-ietswaart`.
+This directory contains the intermediate transcript tables we used to
+construct `rna-lifecycle-ietswaart`.
 
-For each transcript, mRNABench averages replicate coverage in the chromatin,
-cytoplasm, and polysome fractions, then normalizes those three values to sum to
-one. A compartment receives a positive label when its normalized coverage
-share is below that compartment's 33rd percentile across dataset rows. The
-target order is `[chromatin, cytoplasm, polysome]`.
+For each transcript, we average replicate coverage in the chromatin,
+cytoplasm, and polysome fractions, then normalize those three values to sum to
+one. Each label marks compartment depletion: a compartment receives a positive
+label when the transcript's normalized coverage share is below that
+compartment's 33rd percentile across dataset rows, meaning the transcript is
+under-represented in that compartment relative to other transcripts (not
+enrichment). The target order is `[chromatin, cytoplasm, polysome]`.
 
 ### Original direct-RNA data
 
 Ietswaart et al. generated direct RNA sequencing data from four K562 RNA
 fractions:
 
-- chromatin-associated RNA;
-- cytoplasmic RNA;
-- polysome-associated RNA; and
-- whole-cell (`total`) RNA.
+- chromatin-associated RNA
+- cytoplasmic RNA
+- polysome-associated RNA
+- whole-cell (`total`) RNA
 
-Each fraction has two biological replicates. Whole-cell RNA is used as an
-expression filter in the mRNABench processing.
+Each fraction has two biological replicates. We use whole-cell RNA as an
+expression filter.
 
 Oxford Nanopore sequencing records RNA molecules as electrical signal in FAST5
 files. Basecalling converts this signal into nucleotide sequences and quality
 scores in FASTQ format. Metadata in the GSE208225/SRP386439 FAST5 files
 records:
 
-- Guppy `5.1.13+b292f4d13`;
-- `rna_r9.4.1_70bps_fast.cfg`;
-- sequencing kit `SQK-RNA002`; and
-- flow cell `FLO-MIN106`.
+- Guppy `5.1.13+b292f4d13`
+- `rna_r9.4.1_70bps_fast.cfg`
+- sequencing kit `SQK-RNA002`
+- flow cell `FLO-MIN106`
 
-The paper reports retaining reads with a basecalling score above 7. Project
-correspondence records that the study authors supplied the complete
-localization FASTQ set directly for the mRNABench reprocessing. The files were
-subsequently copied to the mRNABench compute environment and used as the
-inputs described below. Public study records provide the associated sequencing
-accessions and FAST5 signal files.
+The paper reports retaining reads with a basecalling score above 7. The study
+authors sent us the full set of FASTQ files directly, and we used these as
+inputs. Public study records provide the associated sequencing accessions and
+FAST5 signal files.
 
-Researchers seeking the same consolidated FASTQ files can contact the original
-study authors.
+Contact the study authors for these FASTQ files.
 
 ### mRNABench FASTQ-to-table processing
 
-The mRNABench reprocessing used this input layout. `barcode01` through
+We used this input layout for the reprocessing. `barcode01` through
 `barcode08` are workflow directory identifiers, not molecular barcodes.
 
 | Directory | Fraction | Replicate | FASTQ |
@@ -60,25 +59,25 @@ The mRNABench reprocessing used this input layout. `barcode01` through
 | `barcode04` | Total | 1 | `K562_total_rep1_pass.fastq` |
 | `barcode08` | Total | 2 | `K562_total_rep2_pass.fastq` |
 
-The workflow was `wf-transcriptomes` v1.6.1 at Git revision
+We ran `wf-transcriptomes` v1.6.1 at Git revision
 `a33f3b967c797ce95262684ac4000d7897241e67`, with:
 
-- minimap2 2.24-r1122;
-- samtools 1.17;
-- bedtools 2.30.0;
-- seqkit 2.2.0;
-- StringTie 2.1.1;
-- gffcompare 0.11.2;
-- gffread 0.12.7; and
-- fastcat 0.10.2.
+- minimap2 2.24-r1122
+- samtools 1.17
+- bedtools 2.30.0
+- seqkit 2.2.0
+- StringTie 2.1.1
+- gffcompare 0.11.2
+- gffread 0.12.7
+- fastcat 0.10.2
 
-The reference inputs were the GENCODE v47 GRCh38 primary-assembly genome and
-annotation:
+As reference inputs, we used the GENCODE v47 GRCh38 primary-assembly genome
+and annotation:
 
 - `GRCh38.primary_assembly.genome.fa.gz`
 - `gencode.v47.annotation.gtf.gz`
 
-The completed run used:
+Our completed run used:
 
 ```bash
 nextflow run epi2me-labs/wf-transcriptomes \
@@ -103,9 +102,9 @@ nextflow run epi2me-labs/wf-transcriptomes \
   --out_dir /path/to/output
 ```
 
-For workflow compatibility, the sample sheet assigned `control` to chromatin
+For workflow compatibility, our sample sheet assigned `control` to chromatin
 and cytoplasm and `treated` to polysome and total. These values configure the
-optional differential-expression branch; dataset construction uses only the
+optional differential-expression branch; we build the dataset only from the
 per-sample transcript tables.
 
 The workflow:
@@ -150,20 +149,21 @@ transcript length.
 8. Normalize chromatin, cytoplasm, and polysome coverage within each row so the
    three proportions sum to one.
 9. Calculate the 33rd percentile independently for each fraction.
-10. Assign a positive label when a row's normalized coverage is strictly below
-    that fraction's 33rd percentile.
+10. Assign a positive (depleted) label when a row's normalized coverage is
+    strictly below that fraction's 33rd percentile. Each fraction therefore
+    labels roughly the most-depleted third of rows as positive.
 11. Add transcript sequence, CDS, splice, gene, and chromosome features from
     GenomeKit's GENCODE v47 annotation.
 
-The joins intentionally preserve the source rows, including many-to-many
-matches. The result contains 10,043 rows representing 9,957 unique transcript
-IDs. Repeated transcript IDs can have different coverage values and labels.
+We intentionally preserve the source rows in the joins, including
+many-to-many matches. The result contains 10,043 rows representing 9,957
+unique transcript IDs. Repeated transcript IDs can have different coverage values and labels.
 
 The final positive-label counts are 3,314 for chromatin, 3,314 for cytoplasm,
-and 3,312 for polysome. The reconstructed dataframe matches every ordered
-value in the
+and 3,312 for polysome. Our reconstructed dataframe is identical to the
+published
 [`morrislab/rna-lifecycle-ietswaart`](https://huggingface.co/datasets/morrislab/rna-lifecycle-ietswaart)
-dataset.
+dataset (same rows, same order).
 
 ### Stored source tables
 
@@ -176,43 +176,43 @@ archive on demand and runs the table-to-label processing above.
 
 `go_annotations.tsv.gz` stores the exact selected transcripts and GO
 assignments for the molecular-function, biological-process, and
-cellular-component tasks. The labels were collected by querying MyGene.info
+cellular-component tasks. We collected the labels by querying MyGene.info
 with human APPRIS gene symbols, retaining all evidence codes, requiring a
 direct three-edge `is_a` path from each branch root, and selecting the 20 most
 frequent terms.
 
 The MyGene.info records are from spring 2023, while the final class set is
 consistent with `go-basic.obo` release 2025-03-16. Historical API responses
-were not versioned, so the compact table freezes the published assignments
-without retaining the original 1.17 GB padded arrays.
+were not versioned, so we freeze the published assignments in this compact
+table rather than keeping the original 1.17 GB padded arrays.
 
 `build_go_dataset()` recreates sequence, CDS, splice, and chromosome features
-from GenomeKit's GENCODE v41 annotation. The resulting dataframes match every
-ordered value in the published GO parquets.
+from GenomeKit's GENCODE v41 annotation. The resulting dataframes are identical
+to the published GO parquets (same rows, same order).
 
 ## eCLIP RBP binding source tables
 
 `eclip_peakhood_transcript_tables.tar.gz` stores the four Peakhood
-`transcripts_with_sites` tables used for the K562 and HepG2 tasks. The
-benchmark retains transcripts selected by each `.sel_tr.tsv` table while
-assigning their RBP labels from the corresponding `.all_tr.tsv` table.
+`transcripts_with_sites` tables used for the K562 and HepG2 tasks. We keep
+the transcripts selected by each `.sel_tr.tsv` table and assign their RBP
+labels from the corresponding `.all_tr.tsv` table.
 GenomeKit's Ensembl v112 annotation supplies transcript sequences, CDS tracks,
 splice tracks, genes, and chromosomes.
 
-The tables came from
-[Peakhood](https://github.com/BackofenLab/Peakhood) runs over 244
+We produced the tables by running
+[Peakhood](https://github.com/BackofenLab/Peakhood) over 244
 [ENCODE](https://www.encodeproject.org/) RBP eCLIP datasets targeting 168
 unique proteins: 139 experiments in K562 and 105 in HepG2. For each experiment,
-the most recent BED file and the BAM files from which it was derived were
-downloaded. Peakhood used the Ensembl release 112 GTF, the UCSC hg38 genome,
+we downloaded the most recent BED file and the BAM files from which it was
+derived. Peakhood used the Ensembl release 112 GTF, the UCSC hg38 genome,
 and `--pre-merge`. For 223 paired-end experiments, it used only R2 reads with
 `--bam-pp-mode 2`; the remaining 21 single-end experiments used
 `--bam-pp-mode 1`.
 
-The ENCODE accessions, retrieval date, and Peakhood version were not retained,
-so "most recent" refers to the original download and a new portal query may
-select different BED or BAM files. The archived Peakhood output tables are the
-reproducible starting point for the benchmark builder.
+We do not have the ENCODE accessions, retrieval date, or Peakhood version from
+the original run, so "most recent" refers to the original download and a new
+portal query may select different BED or BAM files. We therefore rebuild the benchmark from the
+archived Peakhood output tables.
 
 The retained tables contain expanded collections of 98 K562 and 83 HepG2 RBPs;
 the smaller 40/36-RBP collections published with Peakhood do not reproduce the
