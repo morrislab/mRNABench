@@ -35,7 +35,9 @@ class RNABERT(EmbeddingModel):
         super().__init__(model_version, device)
 
         try:
+            from huggingface_hub import hf_hub_download
             from multimolecule import RnaTokenizer, RnaBertModel
+            from safetensors.torch import load_file
         except ImportError:
             raise ImportError(
                 "Install base_models optional dependency to use RNABERT."
@@ -50,6 +52,23 @@ class RNABERT(EmbeddingModel):
             "multimolecule/{}".format(model_version),
             cache_dir=get_model_weights_path()
         ).to(device)
+
+        # Checkpoint keys use "model.", not the "rnabert." 0.0.7 expects.
+        checkpoint_file = hf_hub_download(
+            "multimolecule/{}".format(model_version),
+            "model.safetensors",
+            cache_dir=get_model_weights_path(),
+        )
+        checkpoint = load_file(checkpoint_file)
+        weights = {
+            key.removeprefix("model."): value
+            for key, value in checkpoint.items()
+        }
+        missing, _ = self.model.load_state_dict(weights, strict=False)
+        if missing:
+            raise RuntimeError(
+                "Parameters absent from checkpoint: {}".format(missing)
+            )
 
     def _forward_chunks(
         self,
