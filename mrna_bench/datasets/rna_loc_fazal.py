@@ -12,6 +12,11 @@ from mrna_bench.datasets.dataset_utils import (
 )
 
 
+HF_URL = (
+    "https://huggingface.co/datasets/morrislab/"
+    "rna-loc-fazal/resolve/main/rna-loc-fazal.parquet"
+)
+
 RNA_LOC_FAZAL_URL = (
     "https://ftp.ncbi.nlm.nih.gov/geo/series/GSE116nnn/GSE116008/suppl/"
     "GSE116008_APEX_seq_deseq2_all_data_polyA_hek293t.txt.gz"
@@ -78,6 +83,7 @@ class RNALocalizationFazal(BenchmarkDataset):
         super().__init__(
             force_redownload_hf=force_redownload_hf,
             force_rebuild_raw=force_rebuild_raw,
+            hf_url=HF_URL,
         )
 
     def _get_data_from_raw(self) -> pd.DataFrame:
