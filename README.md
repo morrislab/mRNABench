@@ -55,6 +55,9 @@ mb.update_data_path("/absolute/path/to/mrnabench-data")
 mb.update_model_weights_path("/absolute/path/to/model-weights")
 ```
 
+`MRNA_BENCH_DATA_PATH` and `MRNA_BENCH_MODEL_WEIGHTS_PATH` override these
+paths for a single run, for example to use a scratch directory.
+
 ## Quick example
 
 ```python

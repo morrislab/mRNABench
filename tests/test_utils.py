@@ -79,3 +79,19 @@ def test_download_file_cleans_interrupted_partial(tmp_path, monkeypatch):
 
     assert not (tmp_path / "source.bin").exists()
     assert not (tmp_path / "source.bin.part").exists()
+
+
+def test_data_path_env_overrides_config(tmp_path, monkeypatch):
+    """MRNA_BENCH_DATA_PATH takes precedence over the configured path."""
+    from mrna_bench import get_data_path
+
+    monkeypatch.setenv("MRNA_BENCH_DATA_PATH", str(tmp_path))
+    assert get_data_path() == str(tmp_path)
+
+
+def test_model_weights_path_env_overrides_config(tmp_path, monkeypatch):
+    """MRNA_BENCH_MODEL_WEIGHTS_PATH takes precedence over the config."""
+    from mrna_bench import get_model_weights_path
+
+    monkeypatch.setenv("MRNA_BENCH_MODEL_WEIGHTS_PATH", str(tmp_path))
+    assert get_model_weights_path() == str(tmp_path)

@@ -108,11 +108,14 @@ class DataManager:
     def get_data_path(self) -> str:
         """Load data_dir_path from config.
 
-        Throws exception if config is not yet initialized.
+        The MRNA_BENCH_DATA_PATH environment variable, when set, takes
+        precedence over the config. Throws exception if neither is set.
 
         Returns:
             Path to data storage directory.
         """
+        if os.environ.get("MRNA_BENCH_DATA_PATH"):
+            return os.environ["MRNA_BENCH_DATA_PATH"]
         if os.path.exists(self.config_path):
             with open(self.config_path) as stream:
                 return yaml.safe_load(stream)["data_path"]
@@ -154,12 +157,15 @@ class DataManager:
     def get_model_weights_path(self) -> str:
         """Load model_weights_path from config.
 
-        Returns default path if config is not yet initialized, which uses the
-        data path as the root.
+        The MRNA_BENCH_MODEL_WEIGHTS_PATH environment variable, when set,
+        takes precedence over the config. Returns default path if config is
+        not yet initialized, which uses the data path as the root.
 
         Returns:
             Path to model weights storage directory.
         """
+        if os.environ.get("MRNA_BENCH_MODEL_WEIGHTS_PATH"):
+            return os.environ["MRNA_BENCH_MODEL_WEIGHTS_PATH"]
         c_init = os.path.exists(self.config_path)
         if c_init:
             with open(self.config_path) as f:
