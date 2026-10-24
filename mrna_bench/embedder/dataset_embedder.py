@@ -1,5 +1,8 @@
 from pathlib import Path
+import fcntl
 import json
+import os
+import uuid
 
 import numpy as np
 import pandas as pd
@@ -162,8 +165,12 @@ class DatasetEmbedder:
             for emb in embeddings
         ]
 
+        suffix = ".h5" if self.ragged_out else ".npz"
+        path = Path(out_path + suffix)
+        tmp_path = self._temporary_path(path)
+
         if self.ragged_out:
-            with h5py.File(out_path + ".h5", "w") as f:
+            with h5py.File(tmp_path, "w") as f:
                 f.attrs["config"] = json.dumps(self.config)
                 grp = f.create_group("embeddings")
                 for i, emb in enumerate(embeddings):
@@ -176,75 +183,61 @@ class DatasetEmbedder:
         else:
             embeddings_tensor = torch.stack(embeddings, dim=0)
             np.savez_compressed(
-                out_path + ".npz",
+                tmp_path,
                 embedding=embeddings_tensor.numpy(),
                 config=json.dumps(self.config),
             )
+        os.replace(tmp_path, path)
+
+    @staticmethod
+    def _temporary_path(path: Path) -> Path:
+        """Get a hidden name to write a file under before renaming it.
+
+        Renaming a complete file into place means neither a reader nor a job
+        killed while writing ever leaves a partly written file at path.
+
+        Args:
+            path: Final file path.
+
+        Returns:
+            Unique hidden path in the same directory.
+        """
+        return path.with_name(".{}.{}.tmp{}".format(
+            path.stem, uuid.uuid4().hex[:8], path.suffix
+        ))
 
     def merge_embeddings(self):
-        """Merge persisted processed dataset chunks into single file.
+        """Merge persisted dataset chunks into a single file.
 
-        Process will only complete if all chunks are finished processing.
+        Merges only once every chunk is persisted. Holds a file lock, so
+        that jobs finishing their chunks at the same time merge once.
         """
-        all_chunks = list(range(self.d_num_chunks))
-        processed_files_paths = []
-        processed_chunk_inds = []
-
-        base = "{}_{}_{}_".format(
+        suffix = ".h5" if self.ragged_out else ".npz"
+        chunk_paths = [
+            Path(get_embedding_filepath(
+                self.dataset.embedding_dir,
+                self.model.short_name,
+                self.dataset.dataset_name,
+                self.config_hash,
+                i,
+                self.d_num_chunks,
+            ) + suffix)
+            for i in range(self.d_num_chunks)
+        ]
+        lock_path = Path(self.dataset.embedding_dir) / "{}_{}_{}.lock".format(
             self.dataset.dataset_name,
             self.model.short_name,
             self.config_hash,
         )
-
-        glob_patterns = [
-            base + "*.npz",
-            base + "*.h5"
-        ]
-
-        # Check that all chunks are processed
-        for glob_pattern in glob_patterns:
-            for file in Path(self.dataset.embedding_dir).glob(glob_pattern):
-                if not file.is_file():
-                    continue
-
-                file_name_arr = file.stem.split("_")
-                if len(file_name_arr) < 4:
-                    continue  # merged file, skip
-
-                start, end = map(int, file_name_arr[3].split("-"))
-                if end != self.d_num_chunks:
-                    continue
-
-                processed_chunk_inds.append(start)
-                processed_files_paths.append(file)
-
-        if len(set(all_chunks) - set(processed_chunk_inds)) > 0:
-            return
-
-        print("All embedding chunks computed. Merging.")
-
-        processed_files_paths = sorted(
-            processed_files_paths,
-            key=lambda x: int(Path(x).stem.split("_")[-1].split("-")[0])
-        )
-
-        suffixes = set([file.suffix for file in processed_files_paths])
-        if len(suffixes) != 1:
-            raise ValueError(
-                "Inconsistent file types found when merging embeddings."
-            )
-
-        suffix = suffixes.pop()
-
-        if suffix == ".h5":
-            self._merge_h5(processed_files_paths)
-        elif suffix == ".npz":
-            self._merge_npz(processed_files_paths)
-        else:
-            raise ValueError(
-                f"Unsupported file type {suffix} found when merging "
-                "embeddings."
-            )
+        with open(lock_path, "w") as lock_fh:
+            fcntl.flock(lock_fh, fcntl.LOCK_EX)
+            if not all(path.exists() for path in chunk_paths):
+                return
+            print("All embedding chunks computed. Merging.")
+            if self.ragged_out:
+                self._merge_h5(chunk_paths)
+            else:
+                self._merge_npz(chunk_paths)
 
     def _merge_h5(self, processed_files_paths):
         """Merge .h5 embedding files.
@@ -252,14 +245,15 @@ class DatasetEmbedder:
         Args:
             processed_files_paths: List of file paths to merge.
         """
-        out_fn = get_embedding_filepath(
+        out_path = Path(get_embedding_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name,
             self.config_hash,
-        ) + ".h5"
+        ) + ".h5")
+        tmp_path = self._temporary_path(out_path)
 
-        with h5py.File(out_fn, "w") as out_f:
+        with h5py.File(tmp_path, "w") as out_f:
             out_f.attrs["config"] = json.dumps(self.config)
             out_grp = out_f.create_group("embeddings")
 
@@ -275,6 +269,7 @@ class DatasetEmbedder:
                             compression="gzip"
                         )
                         idx += 1
+        os.replace(tmp_path, out_path)
 
         for file in processed_files_paths:
             Path(file).unlink()
@@ -284,8 +279,22 @@ class DatasetEmbedder:
         cls,
         model: EmbeddingModel,
         data_df: pd.DataFrame,
+        embedding_dir: str = ".",
+        **kwargs,
     ) -> "DatasetEmbedder":
-        """Create a DatasetEmbedder from a custom sequence dataframe."""
+        """Create a DatasetEmbedder from a custom sequence dataframe.
+
+        Args:
+            model: Model used to embed sequences.
+            data_df: Dataframe with a "sequence" column, and optionally
+                "cds" and "splice" tracks.
+            embedding_dir: Directory embeddings are persisted to.
+            **kwargs: Other DatasetEmbedder arguments, such as agg_fn,
+                batch_size, d_chunk_ind and d_num_chunks.
+
+        Returns:
+            DatasetEmbedder for the dataframe.
+        """
         if "sequence" not in data_df:
             raise ValueError("DataFrame is missing required column: sequence")
 
@@ -303,14 +312,18 @@ class DatasetEmbedder:
             def __init__(self, dataframe: pd.DataFrame):
                 self.data_df = dataframe
                 self.dataset_name = "custom"
-                self.dataset_path = "custom"
-                self.embedding_dir = "custom"
+                self.dataset_path = embedding_dir
+                self.embedding_dir = embedding_dir
                 self.metadata = self.METADATA
 
             def _get_data_from_raw(self) -> pd.DataFrame:
                 raise NotImplementedError
 
-        return cls(model=model, dataset=MinimalBenchmarkDataset(data_df))
+        return cls(
+            model=model,
+            dataset=MinimalBenchmarkDataset(data_df),
+            **kwargs,
+        )
 
     def _merge_npz(self, processed_files_paths):
         """Merge .npz embedding files.
@@ -325,18 +338,20 @@ class DatasetEmbedder:
 
         all_embeddings = np.concatenate(embeddings, axis=0)
 
-        out_fn = get_embedding_filepath(
+        out_path = Path(get_embedding_filepath(
             self.dataset.embedding_dir,
             self.model.short_name,
             self.dataset.dataset_name,
             self.config_hash,
-        ) + ".npz"
+        ) + ".npz")
+        tmp_path = self._temporary_path(out_path)
 
         np.savez_compressed(
-            out_fn,
+            tmp_path,
             embedding=all_embeddings,
             config=json.dumps(self.config),
         )
+        os.replace(tmp_path, out_path)
 
         for file in processed_files_paths:
             Path(file).unlink()

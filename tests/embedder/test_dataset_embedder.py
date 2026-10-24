@@ -232,3 +232,42 @@ def test_from_dataframe_preserves_optional_tracks():
     assert embedder.dataset.data_df.equals(sequence_only)
     with pytest.raises(ValueError, match="sequence"):
         DatasetEmbedder.from_dataframe(model, pd.DataFrame({"cds": [[]]}))
+
+
+def test_from_dataframe_chunks_persist_and_merge(tmp_path):
+    """Custom dataframes take embedder options and merge their chunks."""
+    data_df = pd.DataFrame({"sequence": ["AC", "GT", "AA", "CC"]})
+    pooling = _WindowPool(2)
+    for i in range(2):
+        chunk = DatasetEmbedder.from_dataframe(
+            mock_model(), data_df, embedding_dir=str(tmp_path),
+            agg_fn=pooling, d_chunk_ind=i, d_num_chunks=2,
+        )
+        assert chunk.agg_fn == pooling
+        chunk.persist_embeddings([torch.full((1, 2), float(i))] * 2)
+    chunk.merge_embeddings()
+
+    path = find_embedding_file(
+        str(tmp_path), "mockmodel", "custom", pooling=pooling
+    )
+    np.testing.assert_array_equal(
+        np.load(path)["embedding"][:, 0, 0], [0, 0, 1, 1]
+    )
+
+
+def test_merge_twice_is_a_no_op(tmp_path):
+    """A second merge of finished chunks leaves the merged file alone."""
+    dataset = Mock(dataset_name="mockdata", embedding_dir=str(tmp_path))
+    dataset.data_df = list(range(4))
+    for i in range(2):
+        chunk = DatasetEmbedder(
+            mock_model(), dataset, d_chunk_ind=i, d_num_chunks=2,
+        )
+        chunk.persist_embeddings([torch.full((2,), float(i))] * 2)
+    chunk.merge_embeddings()
+    chunk.merge_embeddings()
+
+    path = find_embedding_file(str(tmp_path), "mockmodel", "mockdata")
+    np.testing.assert_array_equal(
+        np.load(path)["embedding"][:, 0], [0, 0, 1, 1]
+    )
