@@ -13,8 +13,8 @@ def test_every_model_declares_behaviors():
 def test_masked_lm_behaviors_match_retained_heads():
     """Masked-LM behavior is declared only where a head is retained."""
     masked_models = {
-        "AIDO.DNA",
-        "AIDO.RNA",
+        "GB.DNA",
+        "GB.RNA",
         "CodonBERT",
         "DNABERT",
         "DNABERT2",

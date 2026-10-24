@@ -8,25 +8,25 @@ from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
 from mrna_bench.models.pooling import MeanPool
 
 
-class AIDORNA(EmbeddingModel):
-    """Inference wrapper for AIDO.RNA.
+class GBRNA(EmbeddingModel):
+    """Inference wrapper for GB.RNA (formerly AIDO.RNA).
 
-    AIDO.RNA is a transformer-based RNA foundation model. It is trained using
+    GB.RNA is a transformer-based RNA foundation model. It is trained using
     masked language modelling on 42 million non-coding RNA sequences, with
     domain adaptation models available for protein coding sequences.
 
     Link: https://github.com/genbio-ai/ModelGenerator
     """
 
-    default_version = "AIDO.RNA-650M-CDS"
+    default_version = "GB.RNA-650M-CDS"
     valid_versions = [
-        "AIDO.RNA-650M",
-        "AIDO.RNA-650M-CDS",
-        "AIDO.RNA-1.6B",
-        "AIDO.RNA-1.6B-CDS",
-        "AIDO.RNA-1M-MARS",
-        "AIDO.RNA-25M-MARS",
-        "AIDO.RNA-300M-MARS",
+        "GB.RNA-650M",
+        "GB.RNA-650M-CDS",
+        "GB.RNA-1.6B",
+        "GB.RNA-1.6B-CDS",
+        "GB.RNA-1M-MARS",
+        "GB.RNA-25M-MARS",
+        "GB.RNA-300M-MARS",
     ]
     default_attn_implementation = "flash_attention_2"
     valid_attn_implementations = [
@@ -50,13 +50,13 @@ class AIDORNA(EmbeddingModel):
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
         short_name_map = {
-            "AIDO.RNA-650M": "aido-rna-650m",
-            "AIDO.RNA-650M-CDS": "aido-rna-650m-cds",
-            "AIDO.RNA-1.6B": "aido-rna-1b600m",
-            "AIDO.RNA-1.6B-CDS": "aido-rna-1b600m-cds",
-            "AIDO.RNA-1M-MARS": "aido-rna-mars-1m",
-            "AIDO.RNA-25M-MARS": "aido-rna-mars-25m",
-            "AIDO.RNA-300M-MARS": "aido-rna-mars-300m",
+            "GB.RNA-650M": "gb-rna-650m",
+            "GB.RNA-650M-CDS": "gb-rna-650m-cds",
+            "GB.RNA-1.6B": "gb-rna-1b600m",
+            "GB.RNA-1.6B-CDS": "gb-rna-1b600m-cds",
+            "GB.RNA-1M-MARS": "gb-rna-mars-1m",
+            "GB.RNA-25M-MARS": "gb-rna-mars-25m",
+            "GB.RNA-300M-MARS": "gb-rna-mars-300m",
         }
         return short_name_map[model_version]
 
@@ -66,17 +66,17 @@ class AIDORNA(EmbeddingModel):
         device: torch.device,
         attn_implementation: str | None,
     ):
-        """Initialize AIDO.RNA.
+        """Initialize GB.RNA.
 
         Args:
             model_version: Version of model used. Valid versions: {
-                "AIDO.RNA-650M",
-                "AIDO.RNA-650M-CDS",
-                "AIDO.RNA-1.6B",
-                "AIDO.RNA-1.6B-CDS",
-                "AIDO.RNA-1M-MARS",
-                "AIDO.RNA-25M-MARS",
-                "AIDO.RNA-300M-MARS",
+                "GB.RNA-650M",
+                "GB.RNA-650M-CDS",
+                "GB.RNA-1.6B",
+                "GB.RNA-1.6B-CDS",
+                "GB.RNA-1M-MARS",
+                "GB.RNA-25M-MARS",
+                "GB.RNA-300M-MARS",
             }
             device: PyTorch device to send model to.
             attn_implementation: Attention backend.
@@ -91,7 +91,7 @@ class AIDORNA(EmbeddingModel):
             from transformers import AutoModelForMaskedLM, AutoTokenizer
         except ImportError:
             raise ImportError(
-                "Install base_models optional_dependency to use AIDO.RNA."
+                "Install base_models optional_dependency to use GB.RNA."
             )
 
         hub_id = "Taykhoom/{}".format(model_version)
@@ -116,7 +116,7 @@ class AIDORNA(EmbeddingModel):
         self.sequence_score_chunk_length = self.max_length - 2
 
     def _tokenizer_text(self, sequence: str) -> str:
-        """Write RNA bases in the DNA alphabet the AIDO.RNA tokenizer reads.
+        """Write RNA bases in the DNA alphabet the GB.RNA tokenizer reads.
 
         Args:
             sequence: Nucleotide sequence.
@@ -133,7 +133,7 @@ class AIDORNA(EmbeddingModel):
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
-        """Embed sequences using AIDO.RNA.
+        """Embed sequences using GB.RNA.
 
         Args:
             sequences: List of sequences to embed.
@@ -167,7 +167,7 @@ class AIDORNA(EmbeddingModel):
         dict[str, list[list[torch.Tensor]]],
         dict[str, list[list[torch.Tensor]] | None],
     ]:
-        """Extract per-layer representations from AIDO.RNA.
+        """Extract per-layer representations from GB.RNA.
 
         Args:
             sequences: RNA sequences.

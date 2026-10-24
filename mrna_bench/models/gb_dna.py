@@ -8,10 +8,10 @@ from mrna_bench.models.embedding_model import EmbeddingModel, ModelBehavior
 from mrna_bench.models.pooling import MeanPool
 
 
-class AIDODNA(EmbeddingModel):
-    """Inference wrapper for AIDO.DNA.
+class GBDNA(EmbeddingModel):
+    """Inference wrapper for GB.DNA (formerly AIDO.DNA).
 
-    AIDO.DNA is a transformer-based DNA foundation model. It uses a BERT-style
+    GB.DNA is a transformer-based DNA foundation model. It uses a BERT-style
     encoder-only architecture with single-nucleotide tokenization and a context
     length of 4000 nucleotides, trained with masked language modelling on 10.6
     billion nucleotides from 796 species. It enables genome mining, in silico
@@ -20,12 +20,12 @@ class AIDODNA(EmbeddingModel):
     Link: https://github.com/genbio-ai/ModelGenerator
     """
 
-    default_version = "AIDO.DNA-300M"
+    default_version = "GB.DNA-300M"
     valid_versions = [
-        "AIDO.DNA-300M",
-        "AIDO.DNA-7B",
+        "GB.DNA-300M",
+        "GB.DNA-7B",
     ]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",
@@ -46,8 +46,8 @@ class AIDODNA(EmbeddingModel):
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""
         short_name_map = {
-            "AIDO.DNA-300M": "aido-dna-300m",
-            "AIDO.DNA-7B": "aido-dna-7b",
+            "GB.DNA-300M": "gb-dna-300m",
+            "GB.DNA-7B": "gb-dna-7b",
         }
         return short_name_map[model_version]
 
@@ -57,12 +57,12 @@ class AIDODNA(EmbeddingModel):
         device: torch.device,
         attn_implementation: str | None,
     ):
-        """Initialize AIDO.DNA.
+        """Initialize GB.DNA.
 
         Args:
             model_version: Version of model used. Valid versions: {
-                "AIDO.DNA-300M",
-                "AIDO.DNA-7B",
+                "GB.DNA-300M",
+                "GB.DNA-7B",
             }
             device: PyTorch device to send model to.
             attn_implementation: Attention backend.
@@ -77,7 +77,7 @@ class AIDODNA(EmbeddingModel):
             from transformers import AutoModelForMaskedLM, AutoTokenizer
         except ImportError:
             raise ImportError(
-                "Install base_models optional_dependency to use AIDO.DNA."
+                "Install base_models optional_dependency to use GB.DNA."
             )
 
         hub_id = "Taykhoom/{}".format(model_version)
@@ -102,7 +102,7 @@ class AIDODNA(EmbeddingModel):
         self.sequence_score_chunk_length = self.max_length - 2
 
     def _tokenizer_text(self, sequence: str) -> str:
-        """Write RNA bases in the DNA alphabet the AIDO.DNA tokenizer reads.
+        """Write RNA bases in the DNA alphabet the GB.DNA tokenizer reads.
 
         Args:
             sequence: Nucleotide sequence.
@@ -119,7 +119,7 @@ class AIDODNA(EmbeddingModel):
         splice: list[np.ndarray] | None = None,
         agg_fn: Callable = MeanPool()
     ) -> list[torch.Tensor]:
-        """Embed sequences using AIDO.DNA.
+        """Embed sequences using GB.DNA.
 
         Args:
             sequences: List of sequences to embed.
@@ -153,7 +153,7 @@ class AIDODNA(EmbeddingModel):
         dict[str, list[list[torch.Tensor]]],
         dict[str, list[list[torch.Tensor]] | None],
     ]:
-        """Extract per-layer representations from AIDO.DNA.
+        """Extract per-layer representations from GB.DNA.
 
         Args:
             sequences: DNA sequences.

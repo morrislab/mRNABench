@@ -1,7 +1,5 @@
 from typing import Type
 
-from .aido_dna import AIDODNA
-from .aido_rna import AIDORNA
 from .alphagenome import AlphaGenome
 from .borzoi import Borzoi
 from .carbon import Carbon
@@ -11,6 +9,8 @@ from .dnabert import DNABERT
 from .dnabert_s import DNABERTS
 from .enformer import Enformer
 from .ernierna import ERNIERNA
+from .gb_dna import GBDNA
+from .gb_rna import GBRNA
 from .genalm import GenaLM
 from .glm2 import GLM2
 from .evo1 import Evo1
@@ -42,8 +42,6 @@ from .embedding_model import EmbeddingModel
 
 
 MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
-    "AIDO.DNA": AIDODNA,
-    "AIDO.RNA": AIDORNA,
     "AlphaGenome": AlphaGenome,
     "Borzoi": Borzoi,
     "Carbon": Carbon,
@@ -54,6 +52,8 @@ MODEL_CATALOG: dict[str, Type[EmbeddingModel]] = {
     "Enformer": Enformer,
     "ERNIE-RNA": ERNIERNA,
     "Evo1": Evo1,
+    "GB.DNA": GBDNA,
+    "GB.RNA": GBRNA,
     "GENA-LM": GenaLM,
     "gLM2": GLM2,
     "Evo2": Evo2,

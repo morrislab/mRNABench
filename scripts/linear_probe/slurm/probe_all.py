@@ -52,8 +52,8 @@ if __name__ == "__main__":
             "evo2-40b-base",
             "evo2-40b",
             "replicate", # skip the individual borzoi and flashzoi replicate models
-            "aido-dna",
-            "aido-rna-mars",
+            "gb-dna",
+            "gb-rna-mars",
             "carbon",
             "utrlm-base",
             "utrlm-ss",
