@@ -348,16 +348,23 @@ class EmbeddingModel(ABC):
         """
         pass
 
-    def chunk_sequence(self, sequence: str, chunk_length: int) -> list[str]:
+    def chunk_sequence(
+        self,
+        sequence: str,
+        chunk_length: int | None,
+    ) -> list[str]:
         """Split a sequence into consecutive chunks.
 
         Args:
             sequence: Sequence to chunk.
             chunk_length: Length of each chunk; the last may be shorter.
+                None keeps the sequence whole.
 
         Returns:
             Sequence chunks.
         """
+        if chunk_length is None:
+            return [sequence]
         return [
             sequence[i:i + chunk_length]
             for i in range(0, len(sequence), chunk_length)
@@ -384,27 +391,34 @@ class EmbeddingModel(ABC):
 
     def _embed_with_chunking(
         self,
-        sequences: list[str],
-        max_chunk_length: int,
-        embed_fn: Callable[[list[str]], tuple[torch.Tensor, torch.Tensor]],
+        sequences: list,
+        max_chunk_length: int | None,
+        embed_fn: Callable[[list], tuple[torch.Tensor, torch.Tensor]],
         agg_fn: Callable = MeanPool(),
+        chunk_fn: Callable[[Any], list] | None = None,
     ) -> list[torch.Tensor]:
         """Embed chunks of all sequences in one batch and pool per sequence.
 
         Args:
-            sequences: List of sequences to embed.
-            max_chunk_length: Maximum chunk length in nucleotides.
+            sequences: Sequences to embed, or any items chunk_fn accepts.
+            max_chunk_length: Maximum chunk length in nucleotides when
+                chunk_fn is not given; None keeps sequences whole.
             embed_fn: Maps a list of chunks to (hidden_states, pooling_mask),
                 as _forward_chunks does.
             agg_fn: Function to aggregate token embeddings.
+            chunk_fn: Splits one item of sequences into chunks. Defaults to
+                chunk_sequence() with max_chunk_length.
 
         Returns:
             One embedding per sequence.
         """
-        chunks = [self.chunk_sequence(s, max_chunk_length) for s in sequences]
-        hidden_states, pooling_mask = embed_fn(
-            [chunk for seq_chunks in chunks for chunk in seq_chunks]
-        )
+        chunks = [
+            chunk_fn(s) if chunk_fn is not None
+            else self.chunk_sequence(s, max_chunk_length)
+            for s in sequences
+        ]
+        flat_chunks = [chunk for seq_chunks in chunks for chunk in seq_chunks]
+        hidden_states, pooling_mask = embed_fn(flat_chunks)
 
         embeddings = []
         start = 0
@@ -1105,7 +1119,7 @@ class EmbeddingModel(ABC):
         self,
         sequences: list,
         tokenize_fn: Callable[[list], dict[str, torch.Tensor]] | None = None,
-        max_chunk_length: int = 0,
+        max_chunk_length: int | None = None,
         layers: list[int | str] | None = None,
         return_attentions: bool = False,
         offload_to_cpu: bool = True,

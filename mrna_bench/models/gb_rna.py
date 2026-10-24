@@ -28,7 +28,7 @@ class GBRNA(EmbeddingModel):
         "GB.RNA-25M-MARS",
         "GB.RNA-300M-MARS",
     ]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",

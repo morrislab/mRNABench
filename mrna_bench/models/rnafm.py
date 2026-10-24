@@ -20,7 +20,7 @@ class RNAFM(EmbeddingModel):
 
     default_version = "RNA-FM"
     valid_versions = ["RNA-FM"]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",

@@ -174,10 +174,10 @@ class Evo1(EmbeddingModel):
             toks = self.tokenize([chunk for _, _, chunk in records])
             outputs = self.model(
                 **toks,
-                output_hidden_states=True,
+                output_hidden_states=False,
                 use_cache=False,
             )
-            hidden_states = outputs.hidden_states[-1]
+            hidden_states = outputs.last_hidden_state
             lengths = toks["attention_mask"].sum(dim=1)
 
             for batch_idx, (sequence_idx, chunk_idx, _) in enumerate(records):

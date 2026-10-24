@@ -9,6 +9,7 @@ from tests.model_utils import (
     assert_raw_batch_matches_single,
     embed_one,
 )
+from mrna_bench.models.embedding_model import EmbeddingModel
 from mrna_bench.models.nucleotide_transformer import NucleotideTransformer
 
 
@@ -137,3 +138,21 @@ def test_nt_extract_attention_weights(model):
     assert w.dim() == 3
     assert w.shape[1] == w.shape[2]
     assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)
+
+
+def test_nt_chunks_fit_max_length(model):
+    """Chunk tails and N bases tokenized base by base still fit the model."""
+    chunk_length = (model.max_length - 2) * 6
+    tail = "ACGTAC" * (model.max_length - 5) + "ACGTA"
+    with_n = ("ACGTAN" * (model.max_length // 6 + 1))[:chunk_length - 1]
+
+    for sequence in [tail, with_n, "ACGTAC" * model.max_length + tail]:
+        chunks = model.chunk_sequence(sequence, chunk_length)
+        assert "".join(chunks) == sequence
+        for chunk in chunks:
+            assert len(model.tokenizer(chunk)["input_ids"]) <= model.max_length
+
+    plain = "ACGTAC" * model.max_length
+    assert model.chunk_sequence(plain, chunk_length) == (
+        EmbeddingModel.chunk_sequence(model, plain, chunk_length)
+    )

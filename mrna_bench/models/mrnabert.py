@@ -101,8 +101,8 @@ class mRNABERT(EmbeddingModel):
             dtype=dtype,
         ).to(self.device)
         self._set_logits_model(language_model)
-        # ALiBi allows arbitrary lengths; model_max_length (from config) caps
-        # the chunk size to avoid quadratic-memory OOM.
+        # ALiBi handles any length; set to chunk on smaller GPUs
+        self.max_chunk_length: int | None = None
         self.max_length = self.tokenizer.model_max_length
 
     def tokenize(
@@ -195,36 +195,45 @@ class mRNABERT(EmbeddingModel):
 
         self._warn_batch_size_reproducibility(len(sequences))
 
-        chunks = []
-        chunk_cds = []
-        chunk_counts = []
-        for sequence, cds_track in zip(sequences, cds):
-            seq_chunks = self.chunk_sequence_cds_aware(
-                sequence, cds_track, self.max_length - 2
-            )
-            for chunk_tokens, chunk_track in seq_chunks:
-                chunks.append("".join(chunk_tokens))
-                chunk_cds.append(chunk_track)
-            chunk_counts.append(len(seq_chunks))
+        return self._embed_with_chunking(
+            sequences=list(zip(sequences, cds)),
+            max_chunk_length=self.max_chunk_length,
+            embed_fn=self._forward_cds_chunks,
+            agg_fn=agg_fn,
+            chunk_fn=self._chunk_cds,
+        )
 
-        tokens = self.tokenize(chunks, chunk_cds)
+    def _chunk_cds(self, item: tuple) -> list[tuple]:
+        """Split a (sequence, cds) item without cutting codons.
+
+        Args:
+            item: Sequence and its CDS track.
+
+        Returns:
+            (token list, cds) chunks; one chunk unless max_chunk_length is
+            set.
+        """
+        sequence, cds = item
+        if self.max_chunk_length is None:
+            return [(list(sequence), cds)]
+        return self.chunk_sequence_cds_aware(
+            sequence, cds, self.max_chunk_length
+        )
+
+    def _forward_cds_chunks(
+        self,
+        chunks: list[tuple],
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass for a batch of (token list, cds) chunks."""
+        tokens = self.tokenize(
+            ["".join(chunk) for chunk, _ in chunks],
+            [cds for _, cds in chunks],
+        )
         hidden_states = self.model(
             input_ids=tokens["input_ids"],
             attention_mask=tokens["attention_mask"],
         ).last_hidden_state
-        pooling_mask = self.pooling_mask(tokens)
-
-        embeddings = []
-        chunk_start = 0
-        for chunk_count in chunk_counts:
-            chunk_end = chunk_start + chunk_count
-            hidden = hidden_states[chunk_start:chunk_end].reshape(
-                -1, hidden_states.shape[-1]
-            )
-            mask = pooling_mask[chunk_start:chunk_end].reshape(-1).bool()
-            embeddings.append(agg_fn(hidden[mask]))
-            chunk_start = chunk_end
-        return embeddings
+        return hidden_states, self.pooling_mask(tokens)
 
     def chunk_sequence_cds_aware(
         self,
@@ -350,11 +359,6 @@ class mRNABERT(EmbeddingModel):
         self._validate_score_tracks(sequences, cds, None)
         _ = splice
 
-        def _chunk(seq_cds: tuple) -> list[tuple]:
-            return self.chunk_sequence_cds_aware(
-                seq_cds[0], seq_cds[1], self.max_length - 2
-            )
-
         return self._standard_hf_extract(
             sequences=list(zip(sequences, cds)),
             tokenize_fn=lambda items: self.tokenize(
@@ -363,5 +367,5 @@ class mRNABERT(EmbeddingModel):
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,
-            chunk_fn=_chunk,
+            chunk_fn=self._chunk_cds,
         )

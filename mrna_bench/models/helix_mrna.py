@@ -24,7 +24,7 @@ class HelixmRNA(EmbeddingModel):
 
     default_version = "helix-mrna"
     valid_versions = ["helix-mrna"]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",

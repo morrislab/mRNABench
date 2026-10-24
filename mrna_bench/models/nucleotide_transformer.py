@@ -119,6 +119,38 @@ class NucleotideTransformer(EmbeddingModel):
         self.max_length = self.tokenizer.model_max_length
         self.sequence_score_chunk_length = (self.max_length - 2) * 6
 
+    def chunk_sequence(
+        self,
+        sequence: str,
+        chunk_length: int | None,
+    ) -> list[str]:
+        """Split a sequence into consecutive chunks that fit the model.
+
+        The tokenizer reads 6-mers, but leftover bases at the end of a chunk
+        and the bases around an N become one token each, so a chunk can
+        exceed max_length tokens. Such chunks are split in two at a 6-mer
+        boundary until they fit.
+
+        Args:
+            sequence: Sequence to chunk.
+            chunk_length: Length of each chunk; the last may be shorter.
+                None keeps the sequence whole.
+
+        Returns:
+            Sequence chunks.
+        """
+        chunks = []
+        for chunk in super().chunk_sequence(sequence, chunk_length):
+            chunks.extend(self._fit_chunk(chunk))
+        return chunks
+
+    def _fit_chunk(self, chunk: str) -> list[str]:
+        """Split a chunk until each piece fits max_length tokens."""
+        if len(self.tokenizer(chunk)["input_ids"]) <= self.max_length:
+            return [chunk]
+        cut = len(chunk) // 12 * 6
+        return self._fit_chunk(chunk[:cut]) + self._fit_chunk(chunk[cut:])
+
     def tokenize(
         self,
         sequences: list[str],

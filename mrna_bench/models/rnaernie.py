@@ -20,7 +20,7 @@ class RNAErnie(EmbeddingModel):
 
     default_version = "RNAErnie"
     valid_versions = ["RNAErnie", "RNAErnie2"]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",

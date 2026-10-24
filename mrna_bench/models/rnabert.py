@@ -20,7 +20,7 @@ class RNABERT(EmbeddingModel):
 
     default_version = "RNABERT"
     valid_versions = ["RNABERT"]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",

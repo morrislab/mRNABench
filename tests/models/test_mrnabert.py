@@ -247,3 +247,26 @@ def test_mrnabert_extract_attention_weights(model):
     assert w.dim() == 3
     assert w.shape[1] == w.shape[2]
     assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)
+
+
+@torch.no_grad()
+def test_max_chunk_length_chunks_without_cutting_codons(model):
+    """Setting max_chunk_length chunks at codon boundaries."""
+    sequence = "AAC" + "ATGGCTAAA" * 30 + "TTG"
+    cds = np.zeros(len(sequence), dtype=int)
+    cds[3:-3:3] = 1
+    whole = model.embed([sequence], cds=[cds])[0]
+    try:
+        model.max_chunk_length = len(sequence)
+        assert torch.equal(model.embed([sequence], cds=[cds])[0], whole)
+        model.max_chunk_length = 50
+        chunks = model._chunk_cds((sequence, cds))
+        chunked = model.embed([sequence], cds=[cds])[0]
+    finally:
+        model.max_chunk_length = None
+    assert len(chunks) > 1
+    assert all(len(c) <= 50 for c, _ in chunks)
+    starts = np.cumsum([0] + [len(c) for c, _ in chunks[:-1]])
+    assert all(start < 3 or (start - 3) % 3 == 0 for start in starts)
+    assert chunked.shape == whole.shape
+

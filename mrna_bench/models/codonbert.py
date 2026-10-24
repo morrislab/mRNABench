@@ -23,7 +23,7 @@ class CodonBERT(EmbeddingModel):
 
     default_version = "CodonBERT"
     valid_versions = ["CodonBERT"]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",

@@ -136,3 +136,19 @@ def test_dnabert_extract_attention_weights(dnabert2):
     assert w.dim() == 3
     assert w.shape[1] == w.shape[2]
     assert torch.allclose(w.sum(-1), torch.ones_like(w.sum(-1)), atol=1e-6)
+
+
+@torch.no_grad()
+def test_max_chunk_length_chunks_long_sequences(dnabert2):
+    """Setting max_chunk_length chunks; long enough matches no chunking."""
+    sequence = "ATGCGTACGTTAGC" * 20
+    whole = dnabert2.embed([sequence])[0]
+    try:
+        dnabert2.max_chunk_length = len(sequence)
+        assert torch.equal(dnabert2.embed([sequence])[0], whole)
+        dnabert2.max_chunk_length = 50
+        chunked = dnabert2.embed([sequence])[0]
+    finally:
+        dnabert2.max_chunk_length = None
+    assert chunked.shape == whole.shape
+    assert not torch.equal(chunked, whole)

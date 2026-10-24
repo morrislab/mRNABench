@@ -21,7 +21,7 @@ class MRNAFM(EmbeddingModel):
 
     default_version = "mRNA-FM"
     valid_versions = ["mRNA-FM"]
-    default_attn_implementation = "flash_attention_2"
+    default_attn_implementation = "sdpa"
     valid_attn_implementations = [
         "eager",
         "sdpa",

@@ -91,8 +91,8 @@ class DNABERTS(EmbeddingModel):
             attn_implementation=self.attn_implementation,
             dtype=dtype,
         ).to(self.device)
-        # ALiBi allows arbitrary lengths; model_max_length (from config) caps
-        # the chunk size to avoid quadratic-memory OOM.
+        # ALiBi handles any length; set to chunk on smaller GPUs
+        self.max_chunk_length: int | None = None
         self.max_length = self.tokenizer.model_max_length
 
     def embed(
@@ -119,11 +119,12 @@ class DNABERTS(EmbeddingModel):
         _, _ = cds, splice
         self._warn_batch_size_reproducibility(len(sequences))
 
-        hidden_states, pooling_mask = self._forward_chunks(sequences)
-        return [
-            agg_fn(hidden[mask])
-            for hidden, mask in zip(hidden_states, pooling_mask)
-        ]
+        return self._embed_with_chunking(
+            sequences=sequences,
+            max_chunk_length=self.max_chunk_length,
+            embed_fn=self._forward_chunks,
+            agg_fn=agg_fn,
+        )
 
     def extract(
         self,
@@ -157,7 +158,7 @@ class DNABERTS(EmbeddingModel):
 
         return self._standard_hf_extract(
             sequences=sequences,
-            max_chunk_length=self.max_length,
+            max_chunk_length=self.max_chunk_length,
             layers=layers,
             return_attentions=return_attentions,
             offload_to_cpu=offload_to_cpu,

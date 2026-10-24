@@ -39,6 +39,9 @@ class Evo2(EmbeddingModel):
         "Evo2-40B-1M",
     ]
     final_layer_pattern = r"norm"
+    # Most chunks per forward call when embedding; None runs all chunks of a
+    # length bucket at once. Lower it to fit very long sequences in memory.
+    max_chunks_per_forward: int | None = None
     default_attn_implementation = "flash_attention_2"
     valid_attn_implementations = [
         "eager",
@@ -201,7 +204,13 @@ class Evo2(EmbeddingModel):
         chunks_by_sequence: list[list[tuple[int, torch.Tensor]]] = [
             [] for _ in sequences
         ]
-        for records in buckets.values():
+        step = self.max_chunks_per_forward
+        batches = [
+            records[i:i + (step or len(records))]
+            for records in buckets.values()
+            for i in range(0, len(records), step or len(records))
+        ]
+        for records in batches:
             toks = self.tokenize([chunk for _, _, chunk in records])
             outputs, captured = self._run_with_layer_capture(
                 [self.middle_layer_path],
