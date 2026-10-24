@@ -162,11 +162,12 @@ class MiRNATarget(BenchmarkDataset):
 
                 # Add transcript object column to the filtered group
                 if not filtered_group.empty:
-                    filtered_group["transcript_obj"] = (
-                        filtered_group["mRNA"]
-                        .str.split(".")
-                        .str[0]
-                        .map(transcript_id_to_obj)
+                    tx_ids = filtered_group["mRNA"].str.split(".").str[0]
+                    filtered_group["transcript_obj"] = tx_ids.map(
+                        transcript_id_to_obj
+                    )
+                    filtered_group["priority"] = tx_ids.map(
+                        top_tx_ids.index
                     )
                     df_filtered.append(filtered_group)
 
@@ -216,8 +217,9 @@ class MiRNATarget(BenchmarkDataset):
         has_top_mirna = df[MIRNA_TARGETS_WITH_PREFIX].sum(axis=1) > 0
         df_subset = df[has_top_mirna]
 
-        # Select one transcript per gene
+        # Select the highest priority transcript with top miRNA sites
         df_subset.dropna(subset=["transcript_obj"], inplace=True)
+        df_subset = df_subset.sort_values(["gene ID", "priority"])
         df_subset = df_subset.groupby("gene ID").first().reset_index()
 
         print(
