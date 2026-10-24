@@ -37,6 +37,7 @@ class IRESClassification(BenchmarkDataset):
         task=["classification"],
         target_col=["target"],
         default_split_type="default",
+        valid_split_types=("default", "kmer", "hard-kmer"),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )

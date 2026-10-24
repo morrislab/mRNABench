@@ -171,3 +171,46 @@ def test_embedding_vep_requires_compatible_sequence_region():
             return behavior == ModelBehavior.EMBEDDING
 
     assert metadata.compatible_evaluations(CDSOnly()) == ()
+
+
+def _metadata(**kwargs) -> DatasetMetadata:
+    return DatasetMetadata(
+        dataset_name="test",
+        species="human",
+        task=["regression"],
+        target_col=["target"],
+        benchmark_set="core",
+        evaluations=("linear_probe",),
+        **kwargs,
+    )
+
+
+def test_valid_split_types_default_to_default_split():
+    """Without valid_split_types, only the default split type is valid."""
+    assert _metadata(default_split_type="homology").valid_split_types == (
+        "homology",
+    )
+
+
+def test_valid_split_types_are_validated():
+    """valid_split_types must name known splits and include the default."""
+    with pytest.raises(ValueError, match="must include the default"):
+        _metadata(default_split_type="homology", valid_split_types=("kmer",))
+    with pytest.raises(ValueError, match="must include the default"):
+        _metadata(
+            default_split_type="default",
+            valid_split_types=("default", "random"),
+        )
+
+
+def test_catalog_split_types():
+    """Every catalog dataset lists its splits; TraitGym defaults to default."""
+    from mrna_bench.datasets import DATASET_INFO
+
+    for name, info in DATASET_INFO.items():
+        assert info["default_split_type"] in info["valid_split_types"], name
+    assert DATASET_INFO["vep-traitgym-complex"]["default_split_type"] == (
+        "default"
+    )
+    assert DATASET_INFO["mrl-hl-lbkwk"]["valid_split_types"] == ["default"]
+    assert "homology" not in DATASET_INFO["apa-isoform"]["valid_split_types"]

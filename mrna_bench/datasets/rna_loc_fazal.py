@@ -65,6 +65,9 @@ class RNALocalizationFazal(BenchmarkDataset):
         task=["multilabel"],
         target_col=["target"],
         default_split_type="homology",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )

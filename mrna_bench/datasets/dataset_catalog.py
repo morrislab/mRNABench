@@ -72,6 +72,7 @@ DATASET_INFO: dict[str, dict[str, Any]] = {
             for evaluation in cls.METADATA.evaluations
         ],
         "default_split_type": cls.METADATA.default_split_type,
+        "valid_split_types": list(cls.METADATA.valid_split_types),
     }
     for name, cls in DATASET_CATALOG.items()
 }

@@ -16,6 +16,14 @@ class Orthrus(EmbeddingModel):
 
     lora_target_modules = ["in_proj", "out_proj", "x_proj", "dt_proj"]
 
+    # versions are set per checkpoint in __init__
+    valid_versions: list[str] = []
+
+    @classmethod
+    def behaviors_for_version(cls, model_version: str):
+        """Every checkpoint version only embeds."""
+        return cls.supported_behaviors
+
     @staticmethod
     def get_model_short_name(model_version: str) -> str:
         """Get shortened name of model version."""

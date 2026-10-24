@@ -295,6 +295,9 @@ class RNAStabilitySiegelJurkat(RNAStabilitySiegel):
             "target_reference",
         ],
         default_split_type="chromosome",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="extended",
         evaluations=("linear_probe", "embedding_vep", "likelihood_vep"),
         variant_region="utr",
@@ -314,6 +317,9 @@ class RNAStabilitySiegelBeas2B(RNAStabilitySiegel):
             "target_reference",
         ],
         default_split_type="chromosome",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="extended",
         evaluations=("linear_probe", "embedding_vep", "likelihood_vep"),
         variant_region="utr",

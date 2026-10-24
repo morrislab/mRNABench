@@ -49,6 +49,7 @@ class DatasetMetadata:
     evaluations: tuple[EvaluationMethod | str, ...]
     variant_region: str | None = None
     vep_target_col: str | None = None
+    valid_split_types: tuple[str, ...] = ()
 
     @property
     def is_vep(self) -> bool:
@@ -76,6 +77,16 @@ class DatasetMetadata:
                 raise ValueError(
                     "{} must be one of {}".format(field_name, options)
                 )
+
+        split_types = self.valid_split_types or (self.default_split_type,)
+        if self.default_split_type not in split_types or any(
+            split_type not in SPLIT_CATALOG for split_type in split_types
+        ):
+            raise ValueError(
+                "valid_split_types must include the default split type and "
+                "only contain split types in SPLIT_CATALOG."
+            )
+        object.__setattr__(self, "valid_split_types", split_types)
 
         for t in self.task:
             if t not in VALID_TASKS:

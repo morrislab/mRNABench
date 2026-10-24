@@ -232,6 +232,9 @@ class UTRVariantsBohnUTR5(UTRVariantsBohn):
         task=["classification"],
         target_col=["target"],
         default_split_type="default",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="core",
         evaluations=("linear_probe", "embedding_vep", "likelihood_vep"),
         variant_region="utr",
@@ -268,6 +271,9 @@ class UTRVariantsBohnUTR3(UTRVariantsBohn):
         task=["classification"],
         target_col=["target"],
         default_split_type="default",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="core",
         evaluations=("linear_probe", "embedding_vep", "likelihood_vep"),
         variant_region="utr",

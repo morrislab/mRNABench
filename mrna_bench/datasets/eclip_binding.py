@@ -456,6 +456,9 @@ class eCLIPBindingK562(eCLIPBinding):
         task=["classification"],
         target_col=ECLIP_K562_TOP_RBPS_LIST,
         default_split_type="homology",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )
@@ -490,6 +493,9 @@ class eCLIPBindingHepG2(eCLIPBinding):
         task=["classification"],
         target_col=ECLIP_HEPG2_TOP_RBPS_LIST,
         default_split_type="homology",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )

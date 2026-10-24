@@ -63,6 +63,9 @@ class MiRNATarget(BenchmarkDataset):
         task=["classification"],
         target_col=MIRNA_TARGETS_WITH_PREFIX,
         default_split_type="homology",
+        valid_split_types=(
+            "default", "homology", "kmer", "chromosome", "hard-kmer"
+        ),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )

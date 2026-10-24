@@ -270,6 +270,7 @@ class MRLSampleEGFP(MRLSample):
             "target_mrl_egfp_unmod",
         ],
         default_split_type="default",
+        valid_split_types=("default", "kmer", "hard-kmer"),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )
@@ -394,6 +395,7 @@ class MRLSampleMCherry(MRLSample):
         task=["regression"],
         target_col=["target_mrl_mcherry"],
         default_split_type="default",
+        valid_split_types=("default", "kmer", "hard-kmer"),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )
@@ -428,6 +430,7 @@ class MRLSampleDesigned(MRLSample):
         task=["regression"],
         target_col=["target_mrl_designed"],
         default_split_type="default",
+        valid_split_types=("default", "kmer", "hard-kmer"),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )
@@ -462,6 +465,7 @@ class MRLSampleVarying(MRLSample):
         task=["regression"],
         target_col=["target_mrl_varying_length"],
         default_split_type="default",
+        valid_split_types=("default", "kmer", "hard-kmer"),
         benchmark_set="core",
         evaluations=("linear_probe",),
     )

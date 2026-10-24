@@ -7,11 +7,9 @@ from mrna_bench.embedder import get_embedding_config
 from mrna_bench.linear_probe import LinearProbe
 from mrna_bench.models import ModelBehavior
 from mrna_bench.models.model_catalog import MODEL_VERSION_MAP, MODEL_CATALOG
-from mrna_bench.data_splitter.split_catalog import SPLIT_CATALOG
 from mrna_bench.persister import ResultsPersister
 from mrna_bench.zeroshot import EmbeddingDeltaScorer, LikelihoodRatioScorer
 
-split_types = list(SPLIT_CATALOG.keys())
 
 random_seeds = [2541, 413, 411, 412, 2547, 321, 421, 311, 2516, 2515]
 
@@ -256,12 +254,8 @@ if __name__ == "__main__":
                         # ----------------------------
                         if args.canonical_split:
                             valid_split_types = [DATASET_INFO[dataset_name]["default_split_type"]]
-                        elif "mrl-sample" in dataset_name or "apa-isoform" in dataset_name or "ires-classification" in dataset_name:
-                            valid_split_types = ["default", "hard-kmer", "kmer"]
-                        elif "mrl-hl-lbkwk" in dataset_name:
-                            valid_split_types = ["default"]
                         else:
-                            valid_split_types = split_types
+                            valid_split_types = DATASET_INFO[dataset_name]["valid_split_types"]
 
                         for split_type in valid_split_types:
 
