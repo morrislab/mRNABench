@@ -12,19 +12,28 @@ from sklearn.linear_model import (
 )
 from sklearn.multioutput import MultiOutputClassifier
 from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler
 
 from mrna_bench.linear_probe.linear_probe import LinearProbe, to_torch
 
 
 def test_regression_model_names_are_distinct():
-    """Regressor names map to OLS and standardized RidgeCV."""
+    """Regressor names map to OLS and RidgeCV."""
     assert isinstance(
         LinearProbe.regression_models["ols"](),
         LinearRegression,
     )
-    assert isinstance(
-        LinearProbe.regression_models["ridge"]()[-1],
-        RidgeCV,
+    assert isinstance(LinearProbe.regression_models["ridge"](), RidgeCV)
+
+
+def test_standardize_adds_a_scaler_and_its_own_probe_config():
+    """Standardization is off by default and changes the probe config."""
+    assert isinstance(LinearProbe.make_model("regression"), RidgeCV)
+    scaled = LinearProbe.make_model("regression", standardize=True)
+    assert isinstance(scaled[0], StandardScaler)
+    assert isinstance(scaled[-1], RidgeCV)
+    assert LinearProbe.get_probe_config("regression") != (
+        LinearProbe.get_probe_config("regression", standardize=True)
     )
 
 
@@ -145,7 +154,8 @@ def test_linear_probe_persister(
         mock_splitter.get_all_splits_df.return_value = split_dataframes
 
         linear_probe_persister.eval_all_splits = False
-        checkpoint = linear_probe_persister.persister.get_checkpoint_path(42)
+        persister = linear_probe_persister.persister
+        checkpoint = persister.get_checkpoint_path(42)
         linear_probe_persister.run_linear_probe(random_seed=42, persist=True)
 
         linear_probe_persister.persister.persist_run_results.assert_called()

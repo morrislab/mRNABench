@@ -56,6 +56,7 @@ class LinearProbeBuilder(EmbeddingFetcher):
         self.target_col = self._resolve_default_target_col(metadata)
         self.task = self._resolve_default_task(metadata)
         self.regressor = "ridge"
+        self.standardize = False
         self.split_type = self._resolve_default_split_type(metadata)
         self.is_vep = self._target_uses_vep(
             metadata,
@@ -203,6 +204,15 @@ class LinearProbeBuilder(EmbeddingFetcher):
         self.regressor = regressor
         return self
 
+    def use_standardization(self) -> "LinearProbeBuilder":
+        """Standardize each feature before fitting the probe.
+
+        Returns:
+            LinearProbeBuilder with standardization set.
+        """
+        self.standardize = True
+        return self
+
     def use_persister(self) -> "LinearProbeBuilder":
         """Indicate that persister for LinearProbe should be built.
 
@@ -245,6 +255,7 @@ class LinearProbeBuilder(EmbeddingFetcher):
             "dataset_name": self.dataset.dataset_name,
             "task": self.task,
             "regressor": self.regressor,
+            "standardize": self.standardize,
             "vep": self.is_vep,
             "target_col": self.target_col,
             "split_type": self.split_type,
@@ -259,8 +270,8 @@ class LinearProbeBuilder(EmbeddingFetcher):
         """Get the probe config that build() persists with results.
 
         Returns:
-            Probe config of the current task, regressor, feature view and
-            data splitter.
+            Probe config of the current task, regressor, feature view,
+            data splitter and standardization.
         """
         if self.splitter is None:
             self.splitter = self._build_default_splitter(
@@ -271,6 +282,7 @@ class LinearProbeBuilder(EmbeddingFetcher):
             self.regressor,
             self.get_feature_view(),
             self.splitter.config,
+            self.standardize,
         )
 
     def build(self) -> LinearProbe:
@@ -334,4 +346,5 @@ class LinearProbeBuilder(EmbeddingFetcher):
             self.eval_all_splits,
             self.persister,
             self.regressor,
+            self.standardize,
         )

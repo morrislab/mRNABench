@@ -92,18 +92,22 @@ class LinearProbe:
     to a disk.
     """
 
-    # Penalized probes standardize the embeddings so that one penalty grid
-    # suits every model, whatever the scale of its embeddings.
+    # Embeddings are probed as they are; standardize=True puts a
+    # StandardScaler in front of the estimator.
     regression_models = {
         "ols": lambda: LinearRegression(n_jobs=-1),
-        "ridge": lambda: make_pipeline(
-            StandardScaler(),
-            RidgeCV(alphas=np.logspace(-3, 6, 10)),
-        ),
+        "ridge": lambda: RidgeCV(alphas=np.logspace(-3, 6, 10)),
     }
     linear_models = {
-        "classification": lambda: make_pipeline(
-            StandardScaler(),
+        "classification": lambda: LogisticRegressionCV(
+            Cs=np.logspace(-5, 2, 8),
+            cv=5,
+            scoring="neg_log_loss",
+            max_iter=5000,
+            l1_ratios=(0,),
+            use_legacy_attributes=False,
+        ),
+        "multilabel": lambda: MultiOutputClassifier(
             LogisticRegressionCV(
                 Cs=np.logspace(-5, 2, 8),
                 cv=5,
@@ -112,20 +116,7 @@ class LinearProbe:
                 l1_ratios=(0,),
                 use_legacy_attributes=False,
             ),
-        ),
-        "multilabel": lambda: make_pipeline(
-            StandardScaler(),
-            MultiOutputClassifier(
-                LogisticRegressionCV(
-                    Cs=np.logspace(-5, 2, 8),
-                    cv=5,
-                    scoring="neg_log_loss",
-                    max_iter=5000,
-                    l1_ratios=(0,),
-                    use_legacy_attributes=False,
-                ),
-                n_jobs=-1,
-            ),
+            n_jobs=-1,
         ),
     }
 
@@ -140,6 +131,7 @@ class LinearProbe:
         eval_all_splits: bool,
         persister: ResultsPersister | None = None,
         regressor: str = "ridge",
+        standardize: bool = False,
     ):
         """Initialize LinearProbe.
 
@@ -157,6 +149,7 @@ class LinearProbe:
             persister: Persister object for linear probing results.
                 If not provided, results will not be saved.
             regressor: Regression estimator, either ``ols`` or ``ridge``.
+            standardize: Standardize each feature before fitting.
         """
         valid_tasks = {*self.linear_models, "regression"}
         if task not in valid_tasks:
@@ -172,6 +165,7 @@ class LinearProbe:
 
         self.task = task
         self.regressor = regressor
+        self.standardize = standardize
         self.target_col = target_col
 
         self.splitter = splitter
@@ -247,7 +241,7 @@ class LinearProbe:
         Returns:
             Dictionary of linear probing metrics per split.
         """
-        model = self.make_model(self.task, self.regressor)
+        model = self.make_model(self.task, self.regressor, self.standardize)
         splits = self.get_df_splits(random_seed, dropna)
 
         np.random.seed(random_seed)
@@ -293,20 +287,29 @@ class LinearProbe:
         return metrics
 
     @classmethod
-    def make_model(cls, task: str, regressor: str = "ridge") -> BaseEstimator:
+    def make_model(
+        cls,
+        task: str,
+        regressor: str = "ridge",
+        standardize: bool = False,
+    ) -> BaseEstimator:
         """Create the unfitted estimator for a task.
 
         Args:
             task: Linear probing task.
             regressor: Regression estimator, either ``ols`` or ``ridge``.
+            standardize: Put a StandardScaler in front of the estimator.
 
         Returns:
             Unfitted scikit-learn estimator.
         """
         if task == "regression":
-            return cls.regression_models[regressor]()
+            model = cls.regression_models[regressor]()
         else:
-            return cls.linear_models[task]()
+            model = cls.linear_models[task]()
+        if standardize:
+            return make_pipeline(StandardScaler(), model)
+        return model
 
     @classmethod
     def get_probe_config(
@@ -315,6 +318,7 @@ class LinearProbe:
         regressor: str = "ridge",
         feature_view: str | None = None,
         splitter_config: dict | None = None,
+        standardize: bool = False,
     ) -> dict:
         """Get the probe config persisted with results.
 
@@ -323,12 +327,13 @@ class LinearProbe:
             regressor: Regression estimator, either ``ols`` or ``ridge``.
             feature_view: Feature view of the embeddings probed.
             splitter_config: Data splitter settings, see DataSplitter.config.
+            standardize: Whether features are standardized before fitting.
 
         Returns:
             Config holding the estimator's repr, which lists its settings,
             and the feature view and splitter settings when given.
         """
-        estimator = repr(cls.make_model(task, regressor))
+        estimator = repr(cls.make_model(task, regressor, standardize))
         config: dict = {"estimator": " ".join(estimator.split())}
         if feature_view is not None:
             config["features"] = feature_view
