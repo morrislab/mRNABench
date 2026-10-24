@@ -69,6 +69,7 @@ class ZeroShotBuilder(EmbeddingFetcher):
         self.model_short_name: str | None = None
         self.embeddings: np.ndarray | None = None
         self.embedding_config: dict | None = None
+        self.feature_view: str | None = None
         self.scoring_fn: Callable[[np.ndarray], np.ndarray] | None = None
 
         self.model: EmbeddingModel | None = None
@@ -270,7 +271,10 @@ class ZeroShotBuilder(EmbeddingFetcher):
             }
         else:
             assert self.embeddings is not None
-            scorer = EmbeddingDeltaScorer(self.scoring_fn)
+            scorer = EmbeddingDeltaScorer(
+                self.scoring_fn,
+                self.get_feature_view(),
+            )
             data_df = self.dataset.data_df.copy()
             data_df["embeddings"] = list(self.embeddings)
             pairs_df = self.dataset.get_vep_pairs(data_df, ("embeddings",))

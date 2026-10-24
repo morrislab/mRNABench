@@ -341,3 +341,40 @@ def test_builder_defers_default_splitter(mock_dataset: BenchmarkDataset):
 
     build_splitter.assert_not_called()
     assert builder.splitter is None
+
+
+def _mean_max_builder(tmp_path) -> LinearProbeBuilder:
+    from mrna_bench.models.pooling import MeanMaxPool
+
+    rng = np.random.default_rng(0)
+    dataset = Mock()
+    dataset.__class__ = BenchmarkDataset
+    dataset.dataset_name = "mockdata"
+    dataset.dataset_path = str(tmp_path)
+    dataset.checkpoint_dir = str(tmp_path)
+    dataset.metadata = SimpleNamespace(
+        default_split_type="default", vep_task_spec=None, is_vep=False,
+        target_col=["a", "b"], task=["classification"],
+    )
+    dataset.data_df = pd.DataFrame({
+        "a": rng.integers(0, 2, 60), "b": rng.integers(0, 2, 60),
+    })
+    builder = LinearProbeBuilder(dataset)
+    return builder.fetch_embedding_by_embedding_instance(
+        "mockmodel", rng.normal(size=(60, 8)),
+        {"pooling": MeanMaxPool().config, "layer": "final"},
+    )
+
+
+def test_select_features_sets_view_and_probe_config(tmp_path):
+    """Each feature view selects its columns and its own probe config."""
+    configs = {}
+    for view, width in [("mean", 4), ("max", 4), ("mean+max", 8)]:
+        builder = _mean_max_builder(tmp_path)
+        if view != "mean+max":
+            builder.select_features(view)
+        assert builder.embeddings.shape == (60, width)
+        assert builder.get_feature_view() == view
+        configs[view] = builder.probe_config()
+        assert configs[view]["features"] == view
+    assert len({get_config_hash(c) for c in configs.values()}) == 3

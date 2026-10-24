@@ -66,6 +66,7 @@ class LinearProbeBuilder(EmbeddingFetcher):
         self.model_short_name: str | None = None
         self.embeddings: np.ndarray | None = None
         self.embedding_config: dict | None = None
+        self.feature_view: str | None = None
         self.persister_flag = False
 
         self.splitter: DataSplitter | None = None
@@ -254,16 +255,31 @@ class LinearProbeBuilder(EmbeddingFetcher):
             "missing": self.validate(),
         }
 
+    def probe_config(self) -> dict:
+        """Get the probe config that build() persists with results.
+
+        Returns:
+            Probe config of the current task, regressor, feature view and
+            data splitter.
+        """
+        if self.splitter is None:
+            self.splitter = self._build_default_splitter(
+                getattr(self.dataset, "metadata", None)
+            )
+        return LinearProbe.get_probe_config(
+            self.task,
+            self.regressor,
+            self.get_feature_view(),
+            self.splitter.config,
+        )
+
     def build(self) -> LinearProbe:
         """Build a LinearProbe instance.
 
         Returns:
             Configured linear probe ready to run.
         """
-        if self.splitter is None:
-            self.splitter = self._build_default_splitter(
-                getattr(self.dataset, "metadata", None)
-            )
+        probe_config = self.probe_config()
 
         missing = self.validate()
         if len(missing) > 0:
@@ -286,7 +302,7 @@ class LinearProbeBuilder(EmbeddingFetcher):
                 self.target_col,
                 self.split_type,
                 self.embedding_config,
-                LinearProbe.get_probe_config(self.task, self.regressor),
+                probe_config,
             )
 
         assert self.embeddings is not None

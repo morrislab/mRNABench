@@ -459,3 +459,20 @@ def test_splitter_rejects_invalid_ensembl_version(tmp_path, version):
             similarity_threshold=40,
             ensembl_version=version,
         )
+
+
+def test_splitter_config_records_threshold_and_map(tmp_path):
+    """The splitter config tells generated and custom maps apart."""
+    source = tmp_path / "custom.tsv"
+    _paralog_df().to_csv(source, sep="\t", index=False)
+
+    splitter = HomologySplitter(
+        species="human",
+        homology_map_path=str(tmp_path),
+        homology_source_path=str(source),
+        similarity_threshold=20,
+    )
+
+    assert splitter.config["similarity_threshold"] == 20
+    assert splitter.config["map"].startswith("custom-")
+    assert splitter.config["ensembl_version"] == 110

@@ -13,7 +13,11 @@ from mrna_bench.embedder.embedder_utils import (
     read_embedding_config,
 )
 from mrna_bench.models import EmbeddingModel
-from mrna_bench.models.pooling import MeanPool, Pooling
+from mrna_bench.models.pooling import (
+    MeanPool,
+    Pooling,
+    get_pooling_class,
+)
 
 
 class EmbeddingFetcher:
@@ -21,13 +25,15 @@ class EmbeddingFetcher:
 
     The builder sets ``dataset``. Each fetch method sets the embeddings,
     the embedding config stored with them, and the model short name, and
-    returns the builder.
+    returns the builder. select_features() then keeps one feature view of
+    embeddings that hold several, such as MeanMaxPool embeddings.
     """
 
     dataset: BenchmarkDataset
     model_short_name: str | None
     embeddings: Any
     embedding_config: dict | None
+    feature_view: str | None = None
 
     @staticmethod
     def load_persisted_embeddings(
@@ -157,4 +163,43 @@ class EmbeddingFetcher:
         self.model_short_name = model_short_name
         self.embeddings = embeddings
         self.embedding_config = embedding_config
+        self.feature_view = None
         return self
+
+    def select_features(self, view: str) -> Self:
+        """Keep one feature view of the fetched embeddings.
+
+        Args:
+            view: Feature view, one of the views of the pooling that made
+                the embeddings (see Pooling.views).
+
+        Returns:
+            Builder with embeddings of the selected view.
+        """
+        if self.embedding_config is None:
+            raise ValueError("Selecting features needs the embedding config.")
+        if self.feature_view is not None:
+            raise ValueError("A feature view is already selected.")
+
+        pooling = get_pooling_class(self.embedding_config["pooling"])
+        if pooling is None:
+            raise ValueError("Unknown pooling in the embedding config.")
+        self.embeddings = pooling.select_view(
+            np.asarray(self.embeddings), view
+        )
+        self.feature_view = view
+        return self
+
+    def get_feature_view(self) -> str | None:
+        """Get the feature view of the embeddings, persisted with results.
+
+        Returns:
+            The selected view, otherwise the view holding every feature of
+            the pooling, or None if the pooling is unknown.
+        """
+        if self.feature_view is not None:
+            return self.feature_view
+        if self.embedding_config is None:
+            return None
+        pooling = get_pooling_class(self.embedding_config.get("pooling", {}))
+        return pooling.views[0] if pooling and pooling.views else None

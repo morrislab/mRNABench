@@ -19,6 +19,15 @@ class DataSplitter(ABC):
         """
         self.default_split_ratio = default_split_ratio
 
+    @property
+    def config(self) -> dict:
+        """Settings beyond the split type that change the splits.
+
+        Persisted with results, so that results from different settings of
+        the same split type are kept apart.
+        """
+        return {}
+
     @abstractmethod
     def split_df(
         self,

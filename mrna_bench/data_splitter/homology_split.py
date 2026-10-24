@@ -453,16 +453,22 @@ class HomologySplitter(DataSplitter):
             self.homology_map_path,
             "ensembl-{}".format(ensembl_version),
         )
+        map_source = "published"
         if homology_source_path is not None:
             source_hash = hashlib.sha256()
             with open(homology_source_path, "rb") as source:
                 for chunk in iter(lambda: source.read(1024 * 1024), b""):
                     source_hash.update(chunk)
-            release_dir /= "custom-{}".format(
-                source_hash.hexdigest()[:12]
-            )
+            map_source = "custom-{}".format(source_hash.hexdigest()[:12])
+            release_dir /= map_source
         elif on_the_fly:
-            release_dir /= "generated"
+            map_source = "generated"
+            release_dir /= map_source
+        self._config = {
+            "similarity_threshold": threshold,
+            "map": map_source,
+            "ensembl_version": ensembl_version,
+        }
         map_dir = release_dir / "sim-{:g}pct".format(threshold)
         map_dir.mkdir(parents=True, exist_ok=True)
         map_path = map_dir / "{}.csv".format(cache_name)
@@ -501,6 +507,11 @@ class HomologySplitter(DataSplitter):
             self.homology_df = pd.read_csv(map_path)
 
         _validate_homology_map(self.homology_df)
+
+    @property
+    def config(self) -> dict:
+        """Similarity threshold, map source and Ensembl release used."""
+        return dict(self._config)
 
     def _ensure_published_map(
         self,

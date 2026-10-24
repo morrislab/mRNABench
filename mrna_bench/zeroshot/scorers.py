@@ -31,6 +31,7 @@ class EmbeddingDeltaScorer:
     def __init__(
         self,
         scoring_fn: Callable[[np.ndarray], np.ndarray] | None = None,
+        feature_view: str | None = None,
     ):
         """Initialize EmbeddingDeltaScorer.
 
@@ -38,30 +39,39 @@ class EmbeddingDeltaScorer:
             scoring_fn: Function mapping an (N, D) matrix of alt minus ref
                 embeddings to (N,) scores. Defaults to the row-wise L2 norm,
                 which has no sign.
+            feature_view: Feature view of the embeddings scored.
         """
         self.scoring_fn = scoring_fn
+        self.feature_view = feature_view
 
     @staticmethod
     def get_probe_config(
         scoring_fn: Callable[[np.ndarray], np.ndarray] | None = None,
+        feature_view: str | None = None,
     ) -> dict:
         """Get the probe config persisted with results.
 
         Args:
             scoring_fn: Scoring function, None for the L2 norm.
+            feature_view: Feature view of the embeddings scored.
 
         Returns:
-            Config naming the score.
+            Config naming the score, and the feature view when given.
         """
         if scoring_fn is None:
-            return {"score": "l2_norm"}
+            config = {"score": "l2_norm"}
         else:
-            return {"score": getattr(scoring_fn, "__name__", repr(scoring_fn))}
+            config = {
+                "score": getattr(scoring_fn, "__name__", repr(scoring_fn))
+            }
+        if feature_view is not None:
+            config["features"] = feature_view
+        return config
 
     @property
     def probe_config(self) -> dict:
         """Probe config of this scorer."""
-        return self.get_probe_config(self.scoring_fn)
+        return self.get_probe_config(self.scoring_fn, self.feature_view)
 
     @property
     def signed(self) -> bool:

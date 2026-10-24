@@ -145,9 +145,15 @@ def test_linear_probe_persister(
         mock_splitter.get_all_splits_df.return_value = split_dataframes
 
         linear_probe_persister.eval_all_splits = False
+        checkpoint = linear_probe_persister.persister.get_checkpoint_path(42)
         linear_probe_persister.run_linear_probe(random_seed=42, persist=True)
 
         linear_probe_persister.persister.persist_run_results.assert_called()
+        assert not checkpoint.exists()
+        linear_probe_persister.run_linear_probe(
+            random_seed=42, persist=True, save_checkpoint=True
+        )
+        assert checkpoint.exists()
         linear_probe_persister.persister.persist_run_results.reset_mock()
         linear_probe_persister.run_linear_probe(random_seed=42, persist=False)
         linear_probe_persister.persister.persist_run_results.assert_not_called()
@@ -201,3 +207,20 @@ def test_torch_checkpoint_matches_sklearn(model, y, tmp_path):
     else:
         expected = model.predict(X).reshape(len(X), -1)
     np.testing.assert_allclose(out, expected, rtol=1e-4, atol=1e-5)
+
+
+def test_probe_config_records_view_and_splitter():
+    """Feature views and splitter settings give distinct probe configs."""
+    mean = LinearProbe.get_probe_config("regression", feature_view="mean")
+    max_ = LinearProbe.get_probe_config("regression", feature_view="max")
+    homology = LinearProbe.get_probe_config(
+        "regression",
+        feature_view="mean",
+        splitter_config={"similarity_threshold": 20.0},
+    )
+
+    assert mean["features"] == "mean"
+    assert len({str(mean), str(max_), str(homology)}) == 3
+    assert "splitter" not in LinearProbe.get_probe_config(
+        "regression", splitter_config={}
+    )

@@ -233,6 +233,7 @@ class LinearProbe:
         random_seed: int = 2541,
         persist: bool = False,
         dropna: bool = True,
+        save_checkpoint: bool = False,
     ) -> dict[str, float]:
         """Perform data split and run linear probe.
 
@@ -240,6 +241,8 @@ class LinearProbe:
             random_seed: Random seed used for data split.
             persist: Save results to disk.
             dropna: Drop rows with NaN values in target column
+            save_checkpoint: Also save the fitted probe weights when
+                persisting results.
 
         Returns:
             Dictionary of linear probing metrics per split.
@@ -279,10 +282,11 @@ class LinearProbe:
                 random_seed,
                 fit_info=self._fit_info(model, splits),
             )
-            torch.save(
-                to_torch(model),
-                self.persister.get_checkpoint_path(random_seed),
-            )
+            if save_checkpoint:
+                torch.save(
+                    to_torch(model),
+                    self.persister.get_checkpoint_path(random_seed),
+                )
         elif persist and not self.persister:
             raise RuntimeError("Must provide persister to persist results.")
 
@@ -305,18 +309,32 @@ class LinearProbe:
             return cls.linear_models[task]()
 
     @classmethod
-    def get_probe_config(cls, task: str, regressor: str = "ridge") -> dict:
+    def get_probe_config(
+        cls,
+        task: str,
+        regressor: str = "ridge",
+        feature_view: str | None = None,
+        splitter_config: dict | None = None,
+    ) -> dict:
         """Get the probe config persisted with results.
 
         Args:
             task: Linear probing task.
             regressor: Regression estimator, either ``ols`` or ``ridge``.
+            feature_view: Feature view of the embeddings probed.
+            splitter_config: Data splitter settings, see DataSplitter.config.
 
         Returns:
-            Config holding the estimator's repr, which lists its settings.
+            Config holding the estimator's repr, which lists its settings,
+            and the feature view and splitter settings when given.
         """
         estimator = repr(cls.make_model(task, regressor))
-        return {"estimator": " ".join(estimator.split())}
+        config: dict = {"estimator": " ".join(estimator.split())}
+        if feature_view is not None:
+            config["features"] = feature_view
+        if splitter_config:
+            config["splitter"] = splitter_config
+        return config
 
     @staticmethod
     def _fit_info(model: BaseEstimator, splits: dict) -> dict:
